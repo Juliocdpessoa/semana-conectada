@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AguardandoAprovacaoRouteImport } from './routes/aguardando-aprovacao'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
@@ -18,6 +19,11 @@ import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authentica
 import { Route as AuthenticatedAtividadesRouteImport } from './routes/_authenticated/atividades'
 import { Route as AuthenticatedAdminUsuariosRouteImport } from './routes/_authenticated/admin/usuarios'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -64,6 +70,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/aguardando-aprovacao': typeof AguardandoAprovacaoRoute
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
@@ -73,6 +80,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/aguardando-aprovacao': typeof AguardandoAprovacaoRoute
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
@@ -84,6 +92,7 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/aguardando-aprovacao': typeof AguardandoAprovacaoRoute
   '/auth': typeof AuthRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/_authenticated/atividades': typeof AuthenticatedAtividadesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
@@ -95,6 +104,7 @@ export interface FileRouteTypes {
     | '/'
     | '/aguardando-aprovacao'
     | '/auth'
+    | '/sitemap.xml'
     | '/atividades'
     | '/historico'
     | '/planejamento'
@@ -104,6 +114,7 @@ export interface FileRouteTypes {
     | '/'
     | '/aguardando-aprovacao'
     | '/auth'
+    | '/sitemap.xml'
     | '/atividades'
     | '/historico'
     | '/planejamento'
@@ -114,6 +125,7 @@ export interface FileRouteTypes {
     | '/_authenticated'
     | '/aguardando-aprovacao'
     | '/auth'
+    | '/sitemap.xml'
     | '/_authenticated/atividades'
     | '/_authenticated/historico'
     | '/_authenticated/planejamento'
@@ -125,10 +137,18 @@ export interface RootRouteChildren {
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AguardandoAprovacaoRoute: typeof AguardandoAprovacaoRoute
   AuthRoute: typeof AuthRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -210,7 +230,18 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AguardandoAprovacaoRoute: AguardandoAprovacaoRoute,
   AuthRoute: AuthRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}
