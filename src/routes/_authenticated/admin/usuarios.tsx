@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { setUserApproval } from "@/lib/activities.functions";
 import { toast } from "sonner";
-import type { SessionInfo } from "../_authenticated";
+import type { SessionInfo } from "../route";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {

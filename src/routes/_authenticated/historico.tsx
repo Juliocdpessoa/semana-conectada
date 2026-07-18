@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import type { SessionInfo } from "../_authenticated";
+import type { SessionInfo } from "./route";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   beforeLoad: ({ context }) => {

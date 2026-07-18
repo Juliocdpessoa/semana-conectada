@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity } from "@/lib/activities.functions";
 import { toast } from "sonner";
 import { Zap } from "lucide-react";
-import type { SessionInfo } from "../_authenticated";
+import type { SessionInfo } from "./route";
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
   beforeLoad: ({ context }) => {

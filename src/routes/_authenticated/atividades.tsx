@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { updateActivity, bulkUpdateActivities } from "@/lib/activities.functions";
 import { toast } from "sonner";
 import { Search, X, Filter, Zap, CheckCircle2, AlertTriangle, Clock, RefreshCw } from "lucide-react";
-import type { SessionInfo } from "./_authenticated";
+import type { SessionInfo } from "./route";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
