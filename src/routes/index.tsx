@@ -70,7 +70,7 @@ function LandingPage() {
       </main>
 
       <footer className="border-t border-border py-5 text-center text-[11px] text-muted-foreground">
-        Controle Semanal · Normatel Engenharia · Uso interno
+        NEXO · Gestão integrada da manutenção · Normatel Engenharia · Uso interno
       </footer>
     </div>
   );
