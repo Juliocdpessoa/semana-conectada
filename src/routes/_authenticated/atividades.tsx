@@ -436,14 +436,11 @@ function Kpi({ label, value, icon }: { label: string; value: number | string; ic
 
 function StatusPill({ status }: { status: string }) {
   const styles: Record<string, string> = {
-    "Concluída": "border-success/40 bg-success/10 text-success",
-    "Em execução": "border-secondary/40 bg-secondary/10 text-secondary",
+    "EXECUTADO": "border-success/40 bg-success/10 text-success",
     "Sem apontamento": "border-border bg-muted text-muted-foreground",
-    "Impedida": "border-warning/50 bg-warning/15 text-warning-foreground",
-    "Não realizada": "border-destructive/40 bg-destructive/10 text-destructive",
-    "Reprogramada": "border-warning/40 bg-warning/10 text-warning-foreground",
-    "Cancelada": "border-border bg-muted text-muted-foreground line-through",
+    "NÃO EXECUTADO": "border-destructive/40 bg-destructive/10 text-destructive",
   };
+
   return <span className={`status-pill ${styles[status] ?? "border-border bg-muted text-muted-foreground"}`}>{status}</span>;
 }
 
