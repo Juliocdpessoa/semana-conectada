@@ -186,14 +186,27 @@ function PlanejamentoPage() {
           <p className="text-[12px] text-muted-foreground">
             Registre ordens surgidas fora do ciclo. Ficam destacadas com o indicador âmbar.
           </p>
-          <button
-            onClick={() => setShowImm(true)}
-            disabled={!activeWeek.data}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-[12px] font-semibold text-warning-foreground hover:bg-warning/25 disabled:opacity-50"
-          >
-            <Zap className="h-4 w-4" /> Cadastrar imediata
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowImm(true)}
+              disabled={!activeWeek.data}
+              className="inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-[12px] font-semibold text-warning-foreground hover:bg-warning/25 disabled:opacity-50"
+            >
+              <Zap className="h-4 w-4" /> Cadastrar imediata
+            </button>
+            <button
+              onClick={() => setShowImmImport(true)}
+              disabled={!activeWeek.data}
+              className="btn-ghost py-2 text-[12px]"
+            >
+              <Upload className="h-4 w-4" /> Importar imediatas
+            </button>
+            <button onClick={downloadImmediateTemplate} className="btn-ghost py-2 text-[12px]">
+              <FileDown className="h-4 w-4" /> Baixar modelo
+            </button>
+          </div>
         </Panel>
+
       </div>
 
       <div className="mt-5">
