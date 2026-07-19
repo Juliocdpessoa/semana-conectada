@@ -119,8 +119,8 @@ function AuthPage() {
               <BrandLogo className="h-8 w-auto" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
-              <div className="text-[11px] text-muted-foreground">Normatel · Manutenção</div>
+              <div className="text-sm font-semibold text-foreground">NEXO</div>
+              <div className="text-[11px] text-muted-foreground">Gestão integrada da manutenção</div>
             </div>
           </div>
 
