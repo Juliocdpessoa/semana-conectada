@@ -81,8 +81,8 @@ function AuthedLayout() {
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-2.5 sm:px-6">
           {/* Marca */}
           <Link to="/atividades" className="flex items-center gap-2.5">
-            <div className="grid h-8 shrink-0 place-items-center rounded-md bg-white px-1.5">
-              <BrandLogo className="h-5 w-auto" />
+            <div className="grid h-9 shrink-0 place-items-center rounded-md border border-border/40 bg-white px-2.5 shadow-sm">
+              <BrandLogo className="h-6 w-auto" />
             </div>
             <div className="hidden leading-tight sm:block">
               <div className="text-[13px] font-semibold">Controle Semanal</div>

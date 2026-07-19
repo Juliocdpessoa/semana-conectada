@@ -18,8 +18,8 @@ function LandingPage() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-6 py-3">
           <div className="flex items-center gap-2.5">
-            <div className="inline-flex items-center rounded-md bg-sidebar px-2.5 py-1.5">
-              <BrandLogo className="h-5 w-auto" />
+            <div className="inline-flex items-center rounded-md border border-border/70 bg-white px-3 py-1.5 shadow-sm">
+              <BrandLogo className="h-6 w-auto" />
             </div>
             <div className="hidden sm:block leading-tight">
               <div className="text-[13px] font-semibold text-foreground">Controle Semanal</div>
