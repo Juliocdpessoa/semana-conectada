@@ -4,10 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
-import { createImmediateActivity } from "@/lib/activities.functions";
+import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
 import { importWeek, activateWeek } from "@/lib/week-import.functions";
 import { toast } from "sonner";
-import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown } from "lucide-react";
 import type { SessionInfo } from "./route";
 import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
 
@@ -18,6 +18,17 @@ export const Route = createFileRoute("/_authenticated/planejamento")({
   },
   component: PlanejamentoPage,
 });
+
+// Colunas do modelo de programação semanal (mesma estrutura da planilha importada)
+const IMMEDIATE_COLUMNS = [
+  "Ordem", "Nº", "Nota", "Op", "Subop", "TxtDesc.Oper.",
+  "Gerência", "Área op", "Localização", "Local",
+  "CenTrab", "Gr pl", "Trab", "Dur n",
+  "Data início", "Hora início", "Data fim", "Hora fim",
+  "Tipo de Nota", "Confirmação",
+] as const;
+type ImmCol = (typeof IMMEDIATE_COLUMNS)[number];
+
 
 const COLUMN_HEADERS = [
   "Ordem", "Nota", "Descrição", "Área", "Especialidade", "Data", "Turno", "Equipe",
@@ -87,7 +98,9 @@ function toISODate(v: any): string | null {
 function PlanejamentoPage() {
   const qc = useQueryClient();
   const [showImm, setShowImm] = useState(false);
+  const [showImmImport, setShowImmImport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+
 
   const activeWeek = useQuery({
     queryKey: ["active-week"],
@@ -173,14 +186,27 @@ function PlanejamentoPage() {
           <p className="text-[12px] text-muted-foreground">
             Registre ordens surgidas fora do ciclo. Ficam destacadas com o indicador âmbar.
           </p>
-          <button
-            onClick={() => setShowImm(true)}
-            disabled={!activeWeek.data}
-            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-[12px] font-semibold text-warning-foreground hover:bg-warning/25 disabled:opacity-50"
-          >
-            <Zap className="h-4 w-4" /> Cadastrar imediata
-          </button>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowImm(true)}
+              disabled={!activeWeek.data}
+              className="inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-[12px] font-semibold text-warning-foreground hover:bg-warning/25 disabled:opacity-50"
+            >
+              <Zap className="h-4 w-4" /> Cadastrar imediata
+            </button>
+            <button
+              onClick={() => setShowImmImport(true)}
+              disabled={!activeWeek.data}
+              className="btn-ghost py-2 text-[12px]"
+            >
+              <Upload className="h-4 w-4" /> Importar imediatas
+            </button>
+            <button onClick={downloadImmediateTemplate} className="btn-ghost py-2 text-[12px]">
+              <FileDown className="h-4 w-4" /> Baixar modelo
+            </button>
+          </div>
         </Panel>
+
       </div>
 
       <div className="mt-5">
@@ -268,9 +294,52 @@ function PlanejamentoPage() {
           }}
         />
       )}
+      {showImmImport && activeWeek.data && (
+
+        <ImmediateImportModal
+          weekId={activeWeek.data.id}
+          onClose={() => setShowImmImport(false)}
+          onDone={(n) => {
+            setShowImmImport(false);
+            qc.invalidateQueries({ queryKey: ["activities"] });
+            toast.success(`${n} imediatas cadastradas.`);
+          }}
+        />
+      )}
     </main>
   );
 }
+
+function downloadImmediateTemplate() {
+  const header = [...IMMEDIATE_COLUMNS];
+  const example: Record<string, any> = {
+    "Ordem": "2027999999",
+    "Nº": 1,
+    "Nota": "14999999",
+    "Op": 10,
+    "Subop": "",
+    "TxtDesc.Oper.": "Descrição da atividade imediata",
+    "Gerência": "Oficinas",
+    "Área op": "",
+    "Localização": "",
+    "Local": "ROTINA",
+    "CenTrab": "MECANICO",
+    "Gr pl": "COM",
+    "Trab": 4,
+    "Dur n": 4,
+    "Data início": new Date().toISOString().slice(0, 10),
+    "Hora início": "08:00",
+    "Data fim": new Date().toISOString().slice(0, 10),
+    "Hora fim": "12:00",
+    "Tipo de Nota": "ZF",
+    "Confirmação": "",
+  };
+  const ws = XLSX.utils.json_to_sheet([example], { header });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Imediatas");
+  XLSX.writeFile(wb, "modelo-atividades-imediatas.xlsx");
+}
+
 
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
@@ -398,24 +467,39 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 }
 
 function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose: () => void; onSaved: () => void }) {
-  const [order, setOrder] = useState("");
-  const [note, setNote] = useState("");
-  const [desc, setDesc] = useState("");
-  const [area, setArea] = useState("");
-  const [specialty, setSpecialty] = useState("");
-  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [values, setValues] = useState<Record<ImmCol, string>>(() => {
+    const obj = {} as Record<ImmCol, string>;
+    for (const c of IMMEDIATE_COLUMNS) obj[c] = "";
+    obj["Data início"] = new Date().toISOString().slice(0, 10);
+    obj["Data fim"] = new Date().toISOString().slice(0, 10);
+    return obj;
+  });
   const [saving, setSaving] = useState(false);
   const call = useServerFn(createImmediateActivity);
 
+  function set(col: ImmCol, v: string) { setValues((p) => ({ ...p, [col]: v })); }
+
   async function save() {
-    if (!order.trim() || !desc.trim()) return toast.error("Ordem e descrição são obrigatórios.");
+    const order = values["Ordem"].trim();
+    const desc = values["TxtDesc.Oper."].trim();
+    if (!order || !desc) return toast.error("Ordem e Descrição (TxtDesc.Oper.) são obrigatórios.");
     setSaving(true);
     try {
+      const planning: Record<string, any> = {};
+      for (const c of IMMEDIATE_COLUMNS) {
+        const v = values[c];
+        planning[c] = v === "" ? null : v;
+      }
       const res = await call({
         data: {
-          weekId, order_number: order.trim(), note_number: note.trim() || null,
-          description: desc.trim(), area: area.trim() || null,
-          specialty: specialty.trim() || null, scheduled_date: date || null,
+          weekId,
+          order_number: order,
+          note_number: values["Nota"].trim() || null,
+          description: desc,
+          area: values["Gerência"].trim() || null,
+          specialty: values["CenTrab"].trim() || null,
+          scheduled_date: values["Data início"] || null,
+          planning_data: planning,
         },
       });
       if (!res.ok) return toast.error(res.error);
@@ -423,11 +507,17 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
     } finally { setSaving(false); }
   }
 
+  const dateCols = new Set<ImmCol>(["Data início", "Data fim"]);
+  const timeCols = new Set<ImmCol>(["Hora início", "Hora fim"]);
+  const numCols = new Set<ImmCol>(["Nº", "Op", "Trab", "Dur n"]);
+  const wideCols = new Set<ImmCol>(["TxtDesc.Oper."]);
+
   return (
     <Modal
       title="Cadastrar atividade imediata"
-      description="Registro fora do ciclo semanal, sinalizado com destaque âmbar."
+      description="Preencha os mesmos campos da programação semanal. Destaque âmbar identifica a imediata."
       onClose={onClose}
+      size="lg"
       footer={
         <>
           <button onClick={onClose} className="btn-ghost">Cancelar</button>
@@ -437,18 +527,124 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
         </>
       }
     >
-      <div className="grid gap-3">
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Ordem" required><input value={order} onChange={(e) => setOrder(e.target.value)} className="input-base" /></Field>
-          <Field label="Nota"><input value={note} onChange={(e) => setNote(e.target.value)} className="input-base" /></Field>
-        </div>
-        <Field label="Descrição" required><input value={desc} onChange={(e) => setDesc(e.target.value)} className="input-base" /></Field>
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Área"><input value={area} onChange={(e) => setArea(e.target.value)} className="input-base" /></Field>
-          <Field label="Especialidade"><input value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="input-base" /></Field>
-        </div>
-        <Field label="Data"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-base" /></Field>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {IMMEDIATE_COLUMNS.map((c) => {
+          const required = c === "Ordem" || c === "TxtDesc.Oper.";
+          const type = dateCols.has(c) ? "date" : timeCols.has(c) ? "time" : numCols.has(c) ? "number" : "text";
+          const label = c + (c === "TxtDesc.Oper." ? " (Descrição)" : "");
+          return (
+            <div key={c} className={wideCols.has(c) ? "sm:col-span-2" : ""}>
+              <Field label={label} required={required}>
+                <input
+                  type={type}
+                  value={values[c]}
+                  onChange={(e) => set(c, e.target.value)}
+                  className="input-base"
+                />
+              </Field>
+            </div>
+          );
+        })}
       </div>
     </Modal>
   );
 }
+
+function ImmediateImportModal({
+  weekId, onClose, onDone,
+}: { weekId: string; onClose: () => void; onDone: (count: number) => void }) {
+  const [file, setFile] = useState<File | null>(null);
+  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const call = useServerFn(bulkCreateImmediateActivities);
+
+  async function handleFile(f: File) {
+    setFile(f); setError(null);
+    try {
+      const res = await parseWorkbook(f);
+      if (!res.rows.length) { setError("A planilha não contém linhas de dados."); setParsed(null); return; }
+      setParsed(res);
+    } catch (e: any) { setError(e?.message ?? "Falha ao ler a planilha."); setParsed(null); }
+  }
+
+  async function submit() {
+    if (!parsed) return;
+    setBusy(true); setError(null);
+    try {
+      const items = [];
+      for (const r of parsed.rows) {
+        const order = extractField(r, "Ordem", "Ordem de serviço", "OS");
+        const desc = extractField(r, "TxtDesc.Oper.", "Descrição", "Descricao") ?? "";
+        if (!order || !desc) continue;
+        const planning: Record<string, any> = {};
+        for (const c of IMMEDIATE_COLUMNS) {
+          const key = Object.keys(r).find((k) => normalize(k) === normalize(c));
+          planning[c] = key ? r[key] ?? null : null;
+        }
+        items.push({
+          order_number: String(order),
+          note_number: extractField(r, "Nota", "Nº nota"),
+          description: String(desc),
+          area: extractField(r, "Gerência", "Área", "Area"),
+          specialty: extractField(r, "CenTrab", "Especialidade"),
+          scheduled_date: toISODate(extractField(r, "Data início", "Data", "Data programada")),
+          planning_data: planning,
+        });
+      }
+      if (!items.length) { setError("Nenhuma linha válida (Ordem e Descrição são obrigatórios)."); setBusy(false); return; }
+      const res = await call({ data: { weekId, items } });
+      if (!res.ok) { setError(res.error); setBusy(false); return; }
+      onDone(res.count);
+    } catch (e: any) { setError(e?.message ?? "Erro ao importar."); }
+    finally { setBusy(false); }
+  }
+
+  return (
+    <Modal
+      title="Importar atividades imediatas"
+      description="Use o mesmo formato da programação semanal. Baixe o modelo se precisar."
+      onClose={onClose}
+      size="lg"
+      footer={
+        <>
+          <button onClick={downloadImmediateTemplate} className="btn-ghost">
+            <FileDown className="h-4 w-4" /> Baixar modelo
+          </button>
+          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={submit} disabled={busy || !parsed} className="btn-primary">
+            {busy ? "Importando…" : "Importar imediatas"}
+          </button>
+        </>
+      }
+    >
+      <div className="rounded-md border border-dashed border-border bg-muted/40 p-4">
+        <input
+          ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => inputRef.current?.click()} className="btn-ghost">
+            <Upload className="h-4 w-4" /> {file ? "Trocar arquivo" : "Selecionar arquivo"}
+          </button>
+          {file && (
+            <div className="text-[12px] text-muted-foreground">
+              <span className="font-medium text-foreground">{file.name}</span>
+              {parsed && <span> · {parsed.rows.length} linhas · aba “{parsed.sheetName}”</span>}
+            </div>
+          )}
+        </div>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Colunas esperadas: {IMMEDIATE_COLUMNS.join(", ")}.
+        </p>
+      </div>
+      {error && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+    </Modal>
+  );
+}
+

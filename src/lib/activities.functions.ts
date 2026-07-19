@@ -96,6 +96,7 @@ const immediateSchema = z.object({
   area: z.string().max(120).nullable(),
   specialty: z.string().max(120).nullable(),
   scheduled_date: z.string().nullable(),
+  planning_data: z.record(z.string(), z.any()).default({}),
 });
 
 export const createImmediateActivity = createServerFn({ method: "POST" })
@@ -103,11 +104,10 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => immediateSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    // authorization: planning or admin
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
     if (!canCreate) return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
-    const sourceKey = `IMD-${Date.now()}`;
+    const sourceKey = `IMD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const { data: created, error } = await supabase
       .from("activities")
       .insert({
@@ -119,6 +119,7 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
         area: data.area,
         specialty: data.specialty,
         scheduled_date: data.scheduled_date,
+        planning_data: data.planning_data,
         is_immediate: true,
         created_by: userId,
         status: "Sem apontamento",
@@ -128,6 +129,40 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, id: created.id };
   });
+
+const bulkImmediateSchema = z.object({
+  weekId: z.string().uuid(),
+  items: z.array(immediateSchema.omit({ weekId: true })).min(1).max(1000),
+});
+
+export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => bulkImmediateSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
+    if (!canCreate) return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
+    const now = Date.now();
+    const payload = data.items.map((it, idx) => ({
+      week_id: data.weekId,
+      source_key: `IMD-${now}-${idx}-${Math.floor(Math.random() * 10000)}`,
+      order_number: it.order_number,
+      note_number: it.note_number,
+      description: it.description,
+      area: it.area,
+      specialty: it.specialty,
+      scheduled_date: it.scheduled_date,
+      planning_data: it.planning_data,
+      is_immediate: true,
+      created_by: userId,
+      status: "Sem apontamento",
+    }));
+    const { data: created, error } = await supabase.from("activities").insert(payload).select("id");
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, count: created?.length ?? 0 };
+  });
+
 
 const roleSchema = z.enum(["admin", "planning", "leader", "viewer"]);
 const approveSchema = z.object({
