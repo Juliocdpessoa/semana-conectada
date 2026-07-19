@@ -4,8 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import logoTransparent from "@/assets/normatel-logo-light.png";
 import { ShieldCheck, ClipboardCheck, BarChart3 } from "lucide-react";
+
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
