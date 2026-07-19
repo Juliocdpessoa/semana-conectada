@@ -34,23 +34,42 @@ type ActivityRow = {
 
 const STATUSES = [
   "Sem apontamento",
-  "Em execução",
-  "Concluída",
-  "Não realizada",
-  "Impedida",
-  "Reprogramada",
-  "Cancelada",
+  "EXECUTADO",
+  "NÃO EXECUTADO",
 ];
 const JUSTIFICATIONS = [
-  "Falta de material",
-  "Falta de acesso/liberação",
-  "Equipamento indisponível",
-  "Condição climática",
-  "Prioridade alterada",
-  "Falta de efetivo",
-  "Outro impedimento",
+  "01 - ATRASO NA EXECUÇÃO",
+  "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
+  "03 - ATRASO NA LIBERAÇÃO DE SMS (RAS)",
+  "04 - NÃO LIBERADO PELA OPERAÇÃO",
+  "05 - NÃO LIBERADO PELO SMS",
+  "06 - FALHA NA DOCUMENTAÇÃO OPERACIONAL (ARO, ADTCP)",
+  "07 - FALHA DE LIBERAÇÃO OPERACIONAL (FALTOU APLICAR LIBRA)",
+  "08 - ATENDIMENTO DE ORDEM IMEDIATA",
+  "09 - QUANTIDADE DE EXECUTANTES PROGRAMADOS DIFERENTE DO DISPONÍVEL",
+  "10 - ATRASO NA ENTREGA DE MATERIAL",
+  "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
+  "12 - SERVIÇO CANCELADO",
+  "13 - CAUSAS EXTERNAS",
+  "14 - CONDIÇÕES CLIMÁTICAS",
+  "15 - PROGRAMAÇÃO INDEVIDA",
+  "16 - FALHA NO PLANEJAMENTO",
+  "17 - TAREFA ELIMINADA EQUIVOCADAMENTE DO SAP",
+  "18 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DO ED",
+  "19 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DO EE",
+  "20 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DA EI",
+  "21 - EVENTOS EXTRAORDINÁRIOS (ASSEMBLÉIAS, MOVIMENTAÇÃO SINDICAL, ETC)",
+  "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
+  "23 - PT EMITIDA COM DIVERGENCIA",
+  "24 - PT NÃO FOI EMITIDA E/OU NÃO ESTÁ NA CCL",
+  "25 - NÃO CONSTA NA PROGRAMAÇÃO DIÁRIA",
+  "26 - MÃO DE OBRA DESVIADA PARA SERVIÇOS EXTRA PROGRAMADOS",
+  "27 - HH PROGRAMADO SUPERIOR AO HH DISPONÍVEL",
+  "28 - PENDENCIA DE MATERIAL",
+  "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
-const REQUIRES_JUSTIFICATION = new Set(["Não realizada", "Impedida", "Reprogramada", "Cancelada"]);
+const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
+
 
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
