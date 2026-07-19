@@ -31,6 +31,7 @@ type ActivityRow = {
   is_immediate: boolean;
   sync_status: "synced" | "pending" | "error";
   week_id: string;
+  planning_data: Record<string, unknown> | null;
 };
 
 const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
@@ -420,6 +421,12 @@ function formatDateTime(d: string | null) {
   if (!d) return "";
   return new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null {
+  const v = pd?.[key];
+  if (v === null || v === undefined || v === "") return null;
+  return String(v);
+}
+
 
 function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; onClose: () => void; onSaved: () => void }) {
   const [status, setStatus] = useState(activity.status);
@@ -472,7 +479,8 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
       <div className="rounded-md border border-border bg-muted/50 p-3">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
           <MetaItem label="Ordem" value={activity.order_number} />
-          <MetaItem label="Nota" value={activity.note_number} />
+          <MetaItem label="Operação" value={fmtPlan(activity.planning_data, "Op")} />
+          <MetaItem label="Sub operação" value={fmtPlan(activity.planning_data, "Subop")} />
           <MetaItem label="Área" value={activity.area} />
           <MetaItem label="Data" value={formatDate(activity.scheduled_date)} />
         </div>
