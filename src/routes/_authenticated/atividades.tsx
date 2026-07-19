@@ -229,7 +229,15 @@ function AtividadesPage() {
           <option value="">Todas as áreas</option>
           {areas.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <input type="date" value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs" />
+        <label className="input-base flex w-auto min-w-[150px] items-center gap-2 py-2 text-xs">
+          <span className="whitespace-nowrap text-muted-foreground">Data:</span>
+          <input
+            type="date"
+            value={dateFilter}
+            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
+            className="flex-1 min-w-0 bg-transparent outline-none text-xs"
+          />
+        </label>
         {activeFilters > 0 && (
           <button onClick={clearFilters} className="btn-ghost py-1.5 text-xs">
             <X className="h-3 w-3" /> Limpar {activeFilters}
