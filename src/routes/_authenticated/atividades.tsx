@@ -5,8 +5,9 @@ import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { updateActivity, bulkUpdateActivities } from "@/lib/activities.functions";
 import { toast } from "sonner";
-import { Search, X, Filter, Zap, CheckCircle2, AlertTriangle, Clock, RefreshCw } from "lucide-react";
+import { Search, X, Zap, CheckCircle2, AlertTriangle, Clock, RefreshCw, ListChecks, Percent } from "lucide-react";
 import type { SessionInfo } from "./route";
+import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, SyncPill, Modal, Field } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -32,11 +33,7 @@ type ActivityRow = {
   week_id: string;
 };
 
-const STATUSES = [
-  "Sem apontamento",
-  "EXECUTADO",
-  "NÃO EXECUTADO",
-];
+const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
 const JUSTIFICATIONS = [
   "01 - ATRASO NA EXECUÇÃO",
   "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
@@ -70,9 +67,9 @@ const JUSTIFICATIONS = [
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 
-
 function AtividadesPage() {
-  const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const _ctx = Route.useRouteContext() as { session: SessionInfo };
+  void _ctx;
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -97,20 +94,20 @@ function AtividadesPage() {
     queryKey: ["activities", activeWeek.data?.id],
     enabled: !!activeWeek.data?.id,
     queryFn: async () => {
-      const pageSize = 1000;
+      const chunk = 1000;
       const all: any[] = [];
-      for (let from = 0; ; from += pageSize) {
+      for (let from = 0; ; from += chunk) {
         const { data, error } = await supabase
           .from("activities")
           .select("*")
           .eq("week_id", activeWeek.data!.id)
           .order("scheduled_date", { ascending: true })
           .order("order_number", { ascending: true })
-          .range(from, from + pageSize - 1);
+          .range(from, from + chunk - 1);
         if (error) throw error;
         if (!data || data.length === 0) break;
         all.push(...data);
-        if (data.length < pageSize) break;
+        if (data.length < chunk) break;
       }
       return all as ActivityRow[];
     },
@@ -144,31 +141,24 @@ function AtividadesPage() {
     const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
     const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
     const noReport = rows.filter((r) => r.status === "Sem apontamento").length;
-
     const immediates = rows.filter((r) => r.is_immediate).length;
     const percent = total ? Math.round((concluded / total) * 100) : 0;
     return { total, concluded, impeded, noReport, immediates, percent };
   }, [activities.data]);
 
-  const areas = useMemo(() => {
-    return Array.from(new Set((activities.data ?? []).map((r) => r.area).filter(Boolean))) as string[];
-  }, [activities.data]);
+  const areas = useMemo(
+    () => Array.from(new Set((activities.data ?? []).map((r) => r.area).filter(Boolean))) as string[],
+    [activities.data],
+  );
+
+  const activeFilters = [search, statusFilter, areaFilter, dateFilter].filter(Boolean).length;
 
   function clearFilters() {
-    setSearch("");
-    setStatusFilter("");
-    setAreaFilter("");
-    setDateFilter("");
-    setPage(0);
+    setSearch(""); setStatusFilter(""); setAreaFilter(""); setDateFilter(""); setPage(0);
   }
 
   function toggleSelect(id: string) {
-    setSelected((prev) => {
-      const n = new Set(prev);
-      if (n.has(id)) n.delete(id);
-      else n.add(id);
-      return n;
-    });
+    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }
 
   function toggleAll() {
@@ -178,196 +168,202 @@ function AtividadesPage() {
 
   return (
     <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
-      {/* Cabeçalho da semana */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <div className="text-xs text-muted-foreground">Semana ativa</div>
-          <h1 className="text-xl font-semibold text-foreground">
-            {activeWeek.data?.label ?? "—"}
-          </h1>
-        </div>
-        <div className="text-xs text-muted-foreground">
-          {kpis.concluded} de {kpis.total} concluídas ({kpis.percent}%)
-        </div>
-      </div>
-
-      {/* Indicadores */}
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Kpi label="Programadas" value={kpis.total} icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
-        <Kpi label="Executadas" value={kpis.concluded} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
-        <Kpi label="Não executadas" value={kpis.impeded} icon={<AlertTriangle className="h-4 w-4 text-destructive" />} />
-
-        <Kpi label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
-        <Kpi label="IMEDIATAS" value={kpis.immediates} icon={<Zap className="h-4 w-4 text-destructive" />} />
-        <Kpi label="Conclusão" value={`${kpis.percent}%`} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
-      </div>
+      <PageHeader
+        eyebrow="Semana ativa"
+        title={activeWeek.data?.label ?? "—"}
+        description={
+          activeWeek.data
+            ? `${activeWeek.data.start_date} a ${activeWeek.data.end_date} · ${kpis.total} atividades programadas`
+            : "Nenhuma semana ativa."
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <div className="hidden text-right sm:block">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
+              <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
+            </div>
+            <button onClick={() => activities.refetch()} className="btn-ghost" title="Recarregar">
+              <RefreshCw className="h-3.5 w-3.5" /> Atualizar
+            </button>
+          </div>
+        }
+      />
 
       {/* Barra de progresso semanal */}
-      <div className="mb-6 h-1.5 w-full overflow-hidden rounded-full bg-muted">
+      <div
+        className="mb-5 h-1 w-full overflow-hidden rounded-full bg-muted"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={kpis.percent}
+      >
         <div className="h-full bg-success transition-all" style={{ width: `${kpis.percent}%` }} />
       </div>
 
-      {/* Filtros */}
-      <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card p-3">
-        <div className="relative flex-1 min-w-[240px]">
-          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+      {/* KPIs */}
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+        <KpiCard label="Executadas" value={kpis.concluded} tone="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
+        <KpiCard label="Não executadas" value={kpis.impeded} tone="destructive" icon={<AlertTriangle className="h-3.5 w-3.5" />} />
+        <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
+        <KpiCard label="Imediatas" value={kpis.immediates} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
+        <KpiCard label="Conclusão" value={`${kpis.percent}%`} tone="primary" icon={<Percent className="h-3.5 w-3.5" />} />
+      </section>
+
+      {/* Toolbar */}
+      <Toolbar className="mb-3">
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(0); }}
-            placeholder="Buscar por ordem, nota, descrição, área ou responsável..."
-            className="w-full rounded-md border border-input bg-card py-2 pl-8 pr-3 text-sm outline-none focus:border-ring focus:ring-1 focus:ring-ring"
+            placeholder="Buscar por ordem, nota, descrição, área ou responsável…"
+            className="input-base pl-8"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }}
-          className="rounded-md border border-input bg-card px-2 py-2 text-xs"
-        >
+        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs">
           <option value="">Todos os status</option>
           {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
-        <select
-          value={areaFilter}
-          onChange={(e) => { setAreaFilter(e.target.value); setPage(0); }}
-          className="rounded-md border border-input bg-card px-2 py-2 text-xs"
-        >
+        <select value={areaFilter} onChange={(e) => { setAreaFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs">
           <option value="">Todas as áreas</option>
           {areas.map((a) => <option key={a} value={a}>{a}</option>)}
         </select>
-        <input
-          type="date"
-          value={dateFilter}
-          onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
-          className="rounded-md border border-input bg-card px-2 py-2 text-xs"
-        />
-        {(search || statusFilter || areaFilter || dateFilter) && (
-          <button onClick={clearFilters} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-accent">
-            <X className="h-3 w-3" /> Limpar
+        <input type="date" value={dateFilter} onChange={(e) => { setDateFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs" />
+        {activeFilters > 0 && (
+          <button onClick={clearFilters} className="btn-ghost py-1.5 text-xs">
+            <X className="h-3 w-3" /> Limpar {activeFilters}
           </button>
         )}
-        <button
-          onClick={() => activities.refetch()}
-          className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1.5 text-xs hover:bg-accent"
-          title="Atualizar"
-        >
-          <RefreshCw className="h-3 w-3" />
-          Atualizar
-        </button>
-        <div className="ml-auto text-xs text-muted-foreground">
-          {filtered.length} de {activities.data?.length ?? 0}
+        <div className="ml-auto text-[11px] font-medium text-muted-foreground tabular">
+          {filtered.length.toLocaleString("pt-BR")} <span className="opacity-60">de {(activities.data?.length ?? 0).toLocaleString("pt-BR")}</span>
         </div>
-      </div>
+      </Toolbar>
 
       {/* Ações de lote */}
       {selected.size > 0 && (
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 p-3">
-          <div className="text-sm">
-            <span className="font-semibold">{selected.size}</span> atividade(s) selecionada(s)
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/[0.06] px-3 py-2">
+          <div className="text-[13px]">
+            <span className="font-semibold tabular">{selected.size}</span> atividade(s) selecionada(s)
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setSelected(new Set())} className="rounded-md border border-border px-3 py-1.5 text-xs hover:bg-accent">
-              Cancelar
-            </button>
-            <button onClick={() => setBulkOpen(true)} className="rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-secondary">
-              Apontar em lote
-            </button>
+            <button onClick={() => setSelected(new Set())} className="btn-ghost py-1 text-xs">Cancelar</button>
+            <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">Apontar em lote</button>
           </div>
         </div>
       )}
 
-      {/* Tabela (desktop) / Cartões (mobile) */}
+      {/* Tabela / Cards */}
       {activities.isLoading ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          Carregando atividades...
+        <div className="space-y-2">
+          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
         </div>
       ) : filtered.length === 0 ? (
-        <div className="rounded-lg border border-border bg-card p-8 text-center text-sm text-muted-foreground">
-          Nenhuma atividade encontrada.
-        </div>
+        <EmptyState
+          icon={<Search className="h-4 w-4" />}
+          title="Nenhuma atividade encontrada"
+          description="Ajuste os filtros ou limpe a busca para ver todas as atividades da semana."
+          action={activeFilters > 0 && <button onClick={clearFilters} className="btn-ghost text-xs"><X className="h-3 w-3" /> Limpar filtros</button>}
+        />
       ) : (
         <>
           {/* Desktop */}
-          <div className="hidden overflow-hidden rounded-lg border border-border bg-card md:block">
-            <table className="w-full text-sm">
-              <thead className="border-b border-border bg-muted/60 text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="w-8 px-2 py-2">
-                    <input type="checkbox" checked={paged.length > 0 && selected.size === paged.length} onChange={toggleAll} />
-                  </th>
-                  <th className="px-2 py-2 text-left font-medium">Ordem / Nota</th>
-                  <th className="px-2 py-2 text-left font-medium">Atividade</th>
-                  <th className="px-2 py-2 text-left font-medium">Área / Especialidade</th>
-                  <th className="px-2 py-2 text-left font-medium">Data</th>
-                  <th className="px-2 py-2 text-left font-medium">Status</th>
-                  <th className="px-2 py-2 text-left font-medium">Responsável</th>
-                  <th className="px-2 py-2 text-left font-medium">Sinc.</th>
-                  <th className="px-2 py-2 text-right font-medium">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {paged.map((r) => (
-                  <tr key={r.id} className={`border-b border-border/60 hover:bg-accent/40 ${r.is_immediate ? "bg-destructive/5" : ""}`}>
-                    <td className="px-2 py-2">
-                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
-                    </td>
-                    <td className="px-2 py-2 font-mono text-xs">
-                      <div>{r.order_number}</div>
-                      <div className="text-muted-foreground">{r.note_number}</div>
-                    </td>
-                    <td className="px-2 py-2">
-                      <div className="flex items-start gap-2">
-                        {r.is_immediate && (
-                          <span className="mt-0.5 inline-flex items-center gap-1 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">
-                            <Zap className="h-2.5 w-2.5" /> Imediata
-                          </span>
-                        )}
-                        <div className="text-foreground">{r.description}</div>
-                      </div>
-                    </td>
-                    <td className="px-2 py-2 text-xs">
-                      <div>{r.area}</div>
-                      <div className="text-muted-foreground">{r.specialty}</div>
-                    </td>
-                    <td className="px-2 py-2 text-xs">{formatDate(r.scheduled_date)}</td>
-                    <td className="px-2 py-2"><StatusPill status={r.status} /></td>
-                    <td className="px-2 py-2 text-xs">
-                      {r.reported_by_name || <span className="text-muted-foreground">—</span>}
-                      {r.reported_at && <div className="text-[11px] text-muted-foreground">{formatDateTime(r.reported_at)}</div>}
-                    </td>
-                    <td className="px-2 py-2"><SyncPill status={r.sync_status} /></td>
-                    <td className="px-2 py-2 text-right">
-                      <button onClick={() => setEditing(r)} className="rounded-md bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground hover:bg-secondary">
-                        {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
-                      </button>
-                    </td>
+          <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
+            <div className="max-h-[calc(100vh-360px)] overflow-auto">
+              <table className="w-full text-[13px]">
+                <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="w-8 px-2 py-2">
+                      <input type="checkbox" checked={paged.length > 0 && selected.size === paged.length} onChange={toggleAll} />
+                    </th>
+                    <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
+                    <th className="px-2 py-2 text-left font-semibold">Atividade</th>
+                    <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
+                    <th className="px-2 py-2 text-left font-semibold">Data</th>
+                    <th className="px-2 py-2 text-left font-semibold">Status</th>
+                    <th className="px-2 py-2 text-left font-semibold">Responsável</th>
+                    <th className="px-2 py-2 text-left font-semibold">Sinc.</th>
+                    <th className="px-2 py-2 text-right font-semibold">Ação</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {paged.map((r) => (
+                    <tr key={r.id} className="row-zebra hover:bg-accent/60">
+                      <td className="px-2 py-2 align-top">
+                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
+                      </td>
+                      <td className="px-2 py-2 align-top font-mono text-[11px]">
+                        <div className="text-foreground">{r.order_number}</div>
+                        <div className="text-muted-foreground">{r.note_number}</div>
+                      </td>
+                      <td className="px-2 py-2 align-top">
+                        <div className="flex items-start gap-1.5">
+                          {r.is_immediate && (
+                            <span className="mt-0.5 inline-flex shrink-0 items-center gap-1 rounded-sm border border-warning/50 bg-warning/15 px-1 py-0.5 text-[9px] font-bold uppercase tracking-wider text-warning-foreground">
+                              <Zap className="h-2.5 w-2.5" /> Imediata
+                            </span>
+                          )}
+                          <div className="text-foreground">{r.description}</div>
+                        </div>
+                      </td>
+                      <td className="px-2 py-2 align-top text-[11px]">
+                        <div className="text-foreground">{r.area}</div>
+                        <div className="text-muted-foreground">{r.specialty}</div>
+                      </td>
+                      <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.scheduled_date)}</td>
+                      <td className="px-2 py-2 align-top"><StatusPill status={r.status} /></td>
+                      <td className="px-2 py-2 align-top text-[11px]">
+                        {r.reported_by_name || <span className="text-muted-foreground">—</span>}
+                        {r.reported_at && <div className="text-[10px] text-muted-foreground tabular">{formatDateTime(r.reported_at)}</div>}
+                      </td>
+                      <td className="px-2 py-2 align-top"><SyncPill status={r.sync_status} /></td>
+                      <td className="px-2 py-2 text-right align-top">
+                        <button onClick={() => setEditing(r)} className="btn-primary py-1 text-[11px]">
+                          {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
 
           {/* Mobile */}
           <div className="space-y-2 md:hidden">
             {paged.map((r) => (
-              <div key={r.id} className={`rounded-lg border border-border bg-card p-3 ${r.is_immediate ? "border-l-4 border-l-destructive" : ""}`}>
-                <div className="flex items-start justify-between gap-2">
+              <div key={r.id} className={`surface-card p-3 ${r.is_immediate ? "border-l-[3px] border-l-warning" : ""}`}>
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={selected.has(r.id)}
+                    onChange={() => toggleSelect(r.id)}
+                  />
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
-                      <div className="font-mono text-xs text-muted-foreground">{r.order_number} · {r.note_number}</div>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                      <span className="font-mono text-[11px] text-foreground">{r.order_number}</span>
+                      {r.note_number && <span className="font-mono text-[11px] text-muted-foreground">· {r.note_number}</span>}
+                      {r.is_immediate && (
+                        <span className="inline-flex items-center gap-1 rounded-sm border border-warning/50 bg-warning/15 px-1 py-0.5 text-[9px] font-bold uppercase text-warning-foreground">
+                          <Zap className="h-2.5 w-2.5" /> Imediata
+                        </span>
+                      )}
                     </div>
-                    <div className="mt-1 text-sm text-foreground">{r.description}</div>
-                    <div className="mt-1 text-xs text-muted-foreground">{r.area} · {r.specialty} · {formatDate(r.scheduled_date)}</div>
+                    <div className="mt-1 text-[13px] leading-snug text-foreground">{r.description}</div>
+                    <div className="mt-1 text-[11px] text-muted-foreground">
+                      {r.area}{r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
+                    </div>
                   </div>
                 </div>
-                <div className="mt-2 flex items-center justify-between gap-2">
+                <div className="mt-3 flex items-center justify-between gap-2">
                   <StatusPill status={r.status} />
-                  <button onClick={() => setEditing(r)} className="rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground">
+                  <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
                     {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
                   </button>
                 </div>
                 {r.reported_by_name && (
-                  <div className="mt-1 text-[11px] text-muted-foreground">
+                  <div className="mt-2 border-t border-border pt-1.5 text-[10px] text-muted-foreground">
                     Últ.: {r.reported_by_name} · {formatDateTime(r.reported_at)}
                   </div>
                 )}
@@ -376,21 +372,13 @@ function AtividadesPage() {
           </div>
 
           {/* Paginação */}
-          <div className="mt-3 flex items-center justify-between text-xs">
-            <div className="text-muted-foreground">
-              Página {page + 1} de {totalPages}
+          <div className="mt-4 flex items-center justify-between text-[11px]">
+            <div className="text-muted-foreground tabular">
+              Página <span className="font-semibold text-foreground">{page + 1}</span> de {totalPages}
             </div>
             <div className="flex gap-1">
-              <button
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-                disabled={page === 0}
-                className="rounded-md border border-border px-3 py-1 disabled:opacity-40 hover:bg-accent"
-              >Anterior</button>
-              <button
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
-                disabled={page >= totalPages - 1}
-                className="rounded-md border border-border px-3 py-1 disabled:opacity-40 hover:bg-accent"
-              >Próxima</button>
+              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="btn-ghost py-1 text-xs disabled:opacity-40">Anterior</button>
+              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-ghost py-1 text-xs disabled:opacity-40">Próxima</button>
             </div>
           </div>
         </>
@@ -400,10 +388,7 @@ function AtividadesPage() {
         <ApontarModal
           activity={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            qc.invalidateQueries({ queryKey: ["activities"] });
-          }}
+          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["activities"] }); }}
         />
       )}
       {bulkOpen && (
@@ -411,45 +396,11 @@ function AtividadesPage() {
           count={selected.size}
           ids={Array.from(selected)}
           onClose={() => setBulkOpen(false)}
-          onSaved={() => {
-            setBulkOpen(false);
-            setSelected(new Set());
-            qc.invalidateQueries({ queryKey: ["activities"] });
-          }}
+          onSaved={() => { setBulkOpen(false); setSelected(new Set()); qc.invalidateQueries({ queryKey: ["activities"] }); }}
         />
       )}
     </main>
   );
-}
-
-function Kpi({ label, value, icon }: { label: string; value: number | string; icon: React.ReactNode }) {
-  return (
-    <div className="rounded-lg border border-border bg-card p-3">
-      <div className="flex items-center justify-between text-xs text-muted-foreground">
-        <span>{label}</span>
-        {icon}
-      </div>
-      <div className="mt-1 text-xl font-semibold text-foreground">{value}</div>
-    </div>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    "EXECUTADO": "border-success/40 bg-success/10 text-success",
-    "Sem apontamento": "border-border bg-muted text-muted-foreground",
-    "NÃO EXECUTADO": "border-destructive/40 bg-destructive/10 text-destructive",
-  };
-
-  return <span className={`status-pill ${styles[status] ?? "border-border bg-muted text-muted-foreground"}`}>{status}</span>;
-}
-
-function SyncPill({ status }: { status: "synced" | "pending" | "error" }) {
-  const label = status === "synced" ? "OK" : status === "pending" ? "Pendente" : "Erro";
-  const style = status === "synced" ? "border-success/40 bg-success/10 text-success"
-    : status === "pending" ? "border-warning/40 bg-warning/10 text-warning-foreground"
-    : "border-destructive/40 bg-destructive/10 text-destructive";
-  return <span className={`status-pill ${style}`}>{label}</span>;
 }
 
 function formatDate(d: string | null) {
@@ -468,7 +419,6 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
   const [observation, setObservation] = useState(activity.observation ?? "");
   const [saving, setSaving] = useState(false);
   const call = useServerFn(updateActivity);
-
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
 
   async function save() {
@@ -488,65 +438,73 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
         },
       });
       if (!res.ok) {
-        if ((res as any).conflict) {
-          toast.error("Esta atividade foi alterada por outro usuário. Recarregue e revise.");
-        } else {
-          toast.error(res.error ?? "Erro ao salvar apontamento.");
-        }
+        if ((res as any).conflict) toast.error("Esta atividade foi alterada por outro usuário. Recarregue e revise.");
+        else toast.error(res.error ?? "Erro ao salvar apontamento.");
         return;
       }
       toast.success("Apontamento salvo.");
       onSaved();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
-    <Modal onClose={onClose} title="Apontar atividade">
-      <div className="rounded-md border border-border bg-muted/40 p-3 text-xs">
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <span><b>Ordem:</b> {activity.order_number}</span>
-          <span><b>Nota:</b> {activity.note_number}</span>
-          <span><b>Área:</b> {activity.area}</span>
-          <span><b>Data:</b> {formatDate(activity.scheduled_date)}</span>
+    <Modal
+      title="Apontar atividade"
+      description="Registre status, justificativa e observações."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={save} disabled={saving} className="btn-primary">
+            {saving ? "Salvando…" : "Salvar apontamento"}
+          </button>
+        </>
+      }
+    >
+      <div className="rounded-md border border-border bg-muted/50 p-3">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
+          <MetaItem label="Ordem" value={activity.order_number} />
+          <MetaItem label="Nota" value={activity.note_number} />
+          <MetaItem label="Área" value={activity.area} />
+          <MetaItem label="Data" value={formatDate(activity.scheduled_date)} />
         </div>
-        <div className="mt-1 text-sm text-foreground">{activity.description}</div>
+        <div className="mt-2 text-[13px] text-foreground">{activity.description}</div>
       </div>
 
-      <label className="mt-4 block text-xs font-medium">Status <span className="text-destructive">*</span></label>
-      <select value={status} onChange={(e) => setStatus(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm">
-        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
+      <div className="mt-4 space-y-3">
+        <Field label="Status" required>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
 
-      <label className="mt-4 block text-xs font-medium">
-        Justificativa {needsJust && <span className="text-destructive">*</span>}
-      </label>
-      <select value={justification} onChange={(e) => setJustification(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm">
-        <option value="">— Selecione —</option>
-        {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
-      </select>
+        <Field label="Justificativa" required={needsJust}>
+          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
+            <option value="">— Selecione —</option>
+            {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
+          </select>
+        </Field>
 
-      <label className="mt-4 block text-xs font-medium">Observações</label>
-      <textarea
-        value={observation}
-        onChange={(e) => setObservation(e.target.value)}
-        rows={3}
-        maxLength={2000}
-        className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm"
-      />
-
-      <p className="mt-3 text-[11px] text-muted-foreground">
-        Você será registrado automaticamente como responsável por esta informação.
-      </p>
-
-      <div className="mt-5 flex justify-end gap-2">
-        <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent">Cancelar</button>
-        <button onClick={save} disabled={saving} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-secondary disabled:opacity-60">
-          {saving ? "Salvando..." : "Salvar apontamento"}
-        </button>
+        <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
+          <textarea
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            className="input-base"
+          />
+        </Field>
       </div>
     </Modal>
+  );
+}
+
+function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="tabular text-foreground">{value ?? "—"}</div>
+    </div>
   );
 }
 
@@ -556,23 +514,14 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
   const [observation, setObservation] = useState("");
   const [saving, setSaving] = useState(false);
   const call = useServerFn(bulkUpdateActivities);
-
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
 
   async function save() {
-    if (needsJust && !justification.trim()) {
-      toast.error("Justificativa é obrigatória para este status.");
-      return;
-    }
+    if (needsJust && !justification.trim()) { toast.error("Justificativa é obrigatória para este status."); return; }
     setSaving(true);
     try {
       const res = await call({
-        data: {
-          ids,
-          status,
-          justification: justification.trim() || null,
-          observation: observation.trim() || null,
-        },
+        data: { ids, status, justification: justification.trim() || null, observation: observation.trim() || null },
       });
       if (!res.ok) return toast.error(res.error ?? "Erro ao salvar lote.");
       toast.success(`${res.count} atividade(s) atualizada(s).`);
@@ -581,41 +530,39 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
   }
 
   return (
-    <Modal onClose={onClose} title={`Apontar ${count} atividade(s) em lote`}>
-      <div className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
-        <b>{count}</b> atividade(s) receberão o mesmo status e justificativa. Você será registrado como responsável em todas.
+    <Modal
+      title={`Apontar ${count} atividade(s) em lote`}
+      description="O mesmo status e justificativa serão aplicados a todas."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={save} disabled={saving} className="btn-primary">
+            {saving ? "Salvando…" : `Aplicar a ${count}`}
+          </button>
+        </>
+      }
+    >
+      <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning-foreground">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div><b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como responsável em todas.</div>
       </div>
-      <label className="mt-4 block text-xs font-medium">Status</label>
-      <select value={status} onChange={(e) => setStatus(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm">
-        {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
-      </select>
-      <label className="mt-4 block text-xs font-medium">Justificativa {needsJust && <span className="text-destructive">*</span>}</label>
-      <select value={justification} onChange={(e) => setJustification(e.target.value)} className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm">
-        <option value="">— Selecione —</option>
-        {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
-      </select>
-      <label className="mt-4 block text-xs font-medium">Observação (opcional)</label>
-      <textarea value={observation} onChange={(e) => setObservation(e.target.value)} rows={2} maxLength={2000} className="mt-1 w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-      <div className="mt-5 flex justify-end gap-2">
-        <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent">Cancelar</button>
-        <button onClick={save} disabled={saving} className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60 hover:bg-secondary">
-          {saving ? "Salvando..." : `Aplicar a ${count} atividade(s)`}
-        </button>
+      <div className="mt-4 space-y-3">
+        <Field label="Status" required>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
+            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label="Justificativa" required={needsJust}>
+          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
+            <option value="">— Selecione —</option>
+            {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
+          </select>
+        </Field>
+        <Field label="Observação (opcional)">
+          <textarea value={observation} onChange={(e) => setObservation(e.target.value)} rows={2} maxLength={2000} className="input-base" />
+        </Field>
       </div>
     </Modal>
-  );
-}
-
-function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-0 sm:items-center sm:p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-t-xl bg-card p-5 shadow-lg sm:rounded-xl" onClick={(e) => e.stopPropagation()}>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-foreground">{title}</h2>
-          <button onClick={onClose} className="rounded p-1 hover:bg-accent"><X className="h-4 w-4" /></button>
-        </div>
-        {children}
-      </div>
-    </div>
   );
 }

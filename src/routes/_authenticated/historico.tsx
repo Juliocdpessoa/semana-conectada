@@ -2,6 +2,8 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { SessionInfo } from "./route";
+import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
+import { History } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/historico")({
   beforeLoad: ({ context }) => {
@@ -23,66 +25,80 @@ function HistoricoPage() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
-      <h1 className="text-xl font-semibold">Histórico e auditoria</h1>
+      <PageHeader eyebrow="Histórico" title="Semanas e auditoria" description="Registro de semanas importadas e últimas alterações de apontamento." />
 
-      <section className="mt-6 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold">Semanas</h2>
-        <div className="mt-2 overflow-hidden rounded-md border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/60 text-xs text-muted-foreground">
-              <tr><th className="px-2 py-2 text-left">Código</th><th className="px-2 py-2 text-left">Rótulo</th><th className="px-2 py-2 text-left">Início</th><th className="px-2 py-2 text-left">Fim</th><th className="px-2 py-2 text-left">Ativa</th></tr>
-            </thead>
-            <tbody>
-              {(weeks.data ?? []).map((w) => (
-                <tr key={w.id} className="border-t border-border/60">
-                  <td className="px-2 py-2 font-mono text-xs">{w.code}</td>
-                  <td className="px-2 py-2">{w.label}</td>
-                  <td className="px-2 py-2 text-xs">{w.start_date}</td>
-                  <td className="px-2 py-2 text-xs">{w.end_date}</td>
-                  <td className="px-2 py-2 text-xs">{w.is_active ? "Sim" : "Não"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="mt-6 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold">Últimas alterações (auditoria)</h2>
-        {history.data && history.data.length > 0 ? (
-          <div className="mt-2 overflow-auto rounded-md border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/60 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-2 text-left">Quando</th>
-                  <th className="px-2 py-2 text-left">Quem</th>
-                  <th className="px-2 py-2 text-left">Origem</th>
-                  <th className="px-2 py-2 text-left">Antes</th>
-                  <th className="px-2 py-2 text-left">Depois</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.data.map((h) => (
-                  <tr key={h.id} className="border-t border-border/60 align-top">
-                    <td className="px-2 py-2 text-xs">{new Date(h.changed_at).toLocaleString("pt-BR")}</td>
-                    <td className="px-2 py-2 text-xs">
-                      <div>{h.changed_by_name}</div>
-                      <div className="text-muted-foreground">{h.changed_by_email}</div>
-                    </td>
-                    <td className="px-2 py-2 text-xs">{h.change_source}</td>
-                    <td className="px-2 py-2 text-xs"><pre className="whitespace-pre-wrap break-all">{JSON.stringify(h.previous_values, null, 0)}</pre></td>
-                    <td className="px-2 py-2 text-xs"><pre className="whitespace-pre-wrap break-all">{JSON.stringify(h.new_values, null, 0)}</pre></td>
+      <div className="grid gap-4">
+        <Panel title="Semanas" description={`${weeks.data?.length ?? 0} registros`} padded={false}>
+          {weeks.data && weeks.data.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Código</th>
+                    <th className="px-3 py-2 text-left font-semibold">Rótulo</th>
+                    <th className="px-3 py-2 text-left font-semibold">Início</th>
+                    <th className="px-3 py-2 text-left font-semibold">Fim</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ativa</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="mt-2 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-            Nenhuma alteração registrada ainda.
-          </div>
-        )}
-      </section>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {weeks.data.map((w) => (
+                    <tr key={w.id} className="row-zebra">
+                      <td className="px-3 py-2 font-mono text-[11px]">{w.code}</td>
+                      <td className="px-3 py-2">{w.label}</td>
+                      <td className="px-3 py-2 text-[11px] tabular">{w.start_date}</td>
+                      <td className="px-3 py-2 text-[11px] tabular">{w.end_date}</td>
+                      <td className="px-3 py-2 text-[11px]">{w.is_active ? "Sim" : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-4"><EmptyState title="Nenhuma semana registrada" /></div>
+          )}
+        </Panel>
+
+        <Panel title="Últimas alterações" description="200 registros mais recentes" padded={false}>
+          {history.data && history.data.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[12px]">
+                <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Quando</th>
+                    <th className="px-3 py-2 text-left font-semibold">Quem</th>
+                    <th className="px-3 py-2 text-left font-semibold">Origem</th>
+                    <th className="px-3 py-2 text-left font-semibold">Antes</th>
+                    <th className="px-3 py-2 text-left font-semibold">Depois</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {history.data.map((h) => (
+                    <tr key={h.id} className="row-zebra align-top">
+                      <td className="px-3 py-2 tabular text-[11px]">{new Date(h.changed_at).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 text-[11px]">
+                        <div className="font-medium text-foreground">{h.changed_by_name}</div>
+                        <div className="text-muted-foreground">{h.changed_by_email}</div>
+                      </td>
+                      <td className="px-3 py-2 text-[11px]">
+                        <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
+                      </td>
+                      <td className="px-3 py-2 text-[11px]">
+                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
+                      </td>
+                      <td className="px-3 py-2 text-[11px]">
+                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-4"><EmptyState icon={<History className="h-4 w-4" />} title="Nenhuma alteração registrada" description="Assim que apontamentos forem feitos, o histórico aparecerá aqui." /></div>
+          )}
+        </Panel>
+      </div>
     </main>
   );
 }
