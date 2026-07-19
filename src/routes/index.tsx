@@ -22,8 +22,8 @@ function LandingPage() {
               <BrandLogo className="h-6 w-auto" />
             </div>
             <div className="hidden sm:block leading-tight">
-              <div className="text-[13px] font-semibold text-foreground">Controle Semanal</div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Normatel · Manutenção</div>
+              <div className="text-[13px] font-semibold text-foreground">NEXO</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Gestão integrada da manutenção</div>
             </div>
           </div>
           <Link to="/auth" className="btn-primary">
