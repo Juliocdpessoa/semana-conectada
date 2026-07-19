@@ -78,14 +78,22 @@ function AtividadesPage() {
     queryKey: ["activities", activeWeek.data?.id],
     enabled: !!activeWeek.data?.id,
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("week_id", activeWeek.data!.id)
-        .order("scheduled_date", { ascending: true })
-        .order("order_number", { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as ActivityRow[];
+      const pageSize = 1000;
+      const all: any[] = [];
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("week_id", activeWeek.data!.id)
+          .order("scheduled_date", { ascending: true })
+          .order("order_number", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+      }
+      return all as ActivityRow[];
     },
   });
 
