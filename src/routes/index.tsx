@@ -1,6 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { ClipboardList, ShieldCheck, RefreshCw } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/")({
   beforeLoad: async () => {
@@ -17,12 +18,10 @@ function LandingPage() {
       <header className="border-b border-border bg-card">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">
-            <div className="grid h-9 w-9 place-items-center rounded-md bg-primary text-primary-foreground font-bold text-sm">
-              CS
-            </div>
-            <div>
+            <BrandLogo className="h-9 w-auto" />
+            <div className="hidden sm:block">
               <div className="font-semibold text-foreground leading-tight">Controle Semanal</div>
-              <div className="text-xs text-muted-foreground">Acompanhamento de manutenção</div>
+              <div className="text-xs text-muted-foreground">Normatel Engenharia · Manutenção</div>
             </div>
           </div>
           <Link

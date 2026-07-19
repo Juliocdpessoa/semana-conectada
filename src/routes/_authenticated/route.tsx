@@ -66,13 +66,13 @@ function AuthedLayout() {
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-3 sm:px-6">
-          <Link to="/atividades" className="flex items-center gap-2">
-            <div className="grid h-8 w-8 place-items-center rounded-md bg-sidebar-primary text-sidebar-primary-foreground text-xs font-bold">
-              CS
+          <Link to="/atividades" className="flex items-center gap-3">
+            <div className="grid h-9 shrink-0 place-items-center rounded-md bg-white px-2 py-1">
+              <BrandLogo className="h-6 w-auto" />
             </div>
             <div className="hidden sm:block">
               <div className="text-sm font-semibold leading-tight">Controle Semanal</div>
-              <div className="text-[11px] leading-tight opacity-70">Manutenção</div>
+              <div className="text-[11px] leading-tight opacity-70">Normatel Engenharia · Manutenção</div>
             </div>
           </Link>
 

@@ -1,6 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { Clock } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/aguardando-aprovacao")({
   component: PendingPage,
@@ -11,6 +12,7 @@ function PendingPage() {
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
         <div className="rounded-lg border border-border bg-card p-8 text-center shadow-sm">
+          <BrandLogo className="mx-auto mb-4 h-10 w-auto" />
           <div className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-warning/15 text-warning-foreground">
             <Clock className="h-6 w-6" />
           </div>
