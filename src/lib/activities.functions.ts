@@ -10,7 +10,7 @@ const updateSchema = z.object({
   observation: z.string().max(2000).nullable(),
 });
 
-const REQUIRES_JUSTIFICATION = new Set(["Não realizada", "Impedida", "Reprogramada", "Cancelada"]);
+const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 
 export const updateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
