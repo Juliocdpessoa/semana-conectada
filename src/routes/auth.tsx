@@ -78,10 +78,10 @@ function AuthPage() {
           </div>
           <div className="mt-10 max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-primary">
-              Controle Semanal
+              NEXO
             </div>
             <h1 className="mt-2 text-2xl font-semibold leading-tight text-sidebar-foreground">
-              Central operacional de acompanhamento diário
+              Gestão integrada da manutenção
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/75">
               Plataforma corporativa para líderes e planejamento acompanharem
@@ -119,8 +119,8 @@ function AuthPage() {
               <BrandLogo className="h-8 w-auto" />
             </div>
             <div>
-              <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
-              <div className="text-[11px] text-muted-foreground">Normatel · Manutenção</div>
+              <div className="text-sm font-semibold text-foreground">NEXO</div>
+              <div className="text-[11px] text-muted-foreground">Gestão integrada da manutenção</div>
             </div>
           </div>
 

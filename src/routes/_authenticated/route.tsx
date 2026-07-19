@@ -85,9 +85,9 @@ function AuthedLayout() {
               <BrandLogo className="h-6 w-auto" />
             </div>
             <div className="hidden leading-tight sm:block">
-              <div className="text-[13px] font-semibold">Controle Semanal</div>
+              <div className="text-[13px] font-semibold">NEXO</div>
               <div className="text-[10px] uppercase tracking-[0.09em] text-sidebar-foreground/60">
-                Normatel · Manutenção
+                Gestão integrada da manutenção
               </div>
             </div>
           </Link>
