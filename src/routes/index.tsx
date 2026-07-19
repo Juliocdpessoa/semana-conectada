@@ -41,9 +41,9 @@ function LandingPage() {
             Acompanhamento diário de atividades semanais de manutenção
           </h1>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-            Líderes aprovados visualizam a programação da semana e apontam status,
-            justificativa e observações. Cada alteração é registrada
-            automaticamente com autor, data e versão.
+            Cada colaborador é responsável por informar semanalmente o andamento
+            das suas atividades — atualizando status, justificativa e observações.
+            Toda alteração é registrada automaticamente com autor, data e versão.
           </p>
           <div className="mt-5">
             <Link to="/auth" className="btn-primary">
