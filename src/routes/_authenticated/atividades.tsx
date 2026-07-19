@@ -551,7 +551,7 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
 }
 
 function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: string[]; onClose: () => void; onSaved: () => void }) {
-  const [status, setStatus] = useState("Concluída");
+  const [status, setStatus] = useState("EXECUTADO");
   const [justification, setJustification] = useState("");
   const [observation, setObservation] = useState("");
   const [saving, setSaving] = useState(false);
