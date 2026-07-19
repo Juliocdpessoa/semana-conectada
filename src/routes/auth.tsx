@@ -116,7 +116,7 @@ function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
             <div className="inline-flex items-center rounded-md border border-border/70 bg-white px-3 py-1.5 shadow-sm">
-              <img src={logoTransparent} alt="Normatel Engenharia" className="h-8 w-auto" />
+              <BrandLogo className="h-8 w-auto" />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
