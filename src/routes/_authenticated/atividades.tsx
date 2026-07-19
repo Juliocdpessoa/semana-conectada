@@ -194,8 +194,9 @@ function AtividadesPage() {
       {/* Indicadores */}
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <Kpi label="Programadas" value={kpis.total} icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
-        <Kpi label="Concluídas" value={kpis.concluded} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
-        <Kpi label="Impedidas/N/R" value={kpis.impeded} icon={<AlertTriangle className="h-4 w-4 text-warning" />} />
+        <Kpi label="Executadas" value={kpis.concluded} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
+        <Kpi label="Não executadas" value={kpis.impeded} icon={<AlertTriangle className="h-4 w-4 text-destructive" />} />
+
         <Kpi label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-4 w-4 text-muted-foreground" />} />
         <Kpi label="IMEDIATAS" value={kpis.immediates} icon={<Zap className="h-4 w-4 text-destructive" />} />
         <Kpi label="Conclusão" value={`${kpis.percent}%`} icon={<CheckCircle2 className="h-4 w-4 text-success" />} />
