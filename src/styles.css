@@ -73,20 +73,20 @@
   --popover: oklch(1 0 0);
   --popover-foreground: oklch(0.22 0.02 240);
 
-  /* Primary: azul-petróleo profundo (ação, foco corporativo) */
-  --primary: oklch(0.32 0.055 220);
+  /* Primary: Verde Normatel (ação, foco corporativo) */
+  --primary: oklch(0.62 0.18 142);
   --primary-foreground: oklch(0.99 0.002 240);
-  --secondary: oklch(0.4 0.05 220);
+  --secondary: oklch(0.52 0.16 142);
   --secondary-foreground: oklch(0.99 0.002 240);
 
   /* Tons neutros / cinzas frios */
-  --muted: oklch(0.955 0.006 235);
-  --muted-foreground: oklch(0.5 0.02 235);
-  --accent: oklch(0.94 0.015 220);
-  --accent-foreground: oklch(0.28 0.05 220);
+  --muted: oklch(0.955 0.008 150);
+  --muted-foreground: oklch(0.5 0.02 150);
+  --accent: oklch(0.93 0.04 142);
+  --accent-foreground: oklch(0.3 0.12 142);
 
   /* Semântica — usar com parcimônia */
-  --success: oklch(0.6 0.14 148);            /* verde Normatel dessaturado */
+  --success: oklch(0.62 0.18 142);           /* verde Normatel */
   --success-foreground: oklch(0.99 0.002 240);
   --warning: oklch(0.76 0.14 78);            /* âmbar atenção */
   --warning-foreground: oklch(0.28 0.06 60);
@@ -94,20 +94,21 @@
   --destructive-foreground: oklch(0.99 0.002 240);
 
   /* Bordas / inputs */
-  --border: oklch(0.9 0.008 235);
-  --border-strong: oklch(0.82 0.012 235);
-  --input: oklch(0.92 0.008 235);
-  --ring: oklch(0.55 0.09 220);
+  --border: oklch(0.9 0.01 150);
+  --border-strong: oklch(0.82 0.015 150);
+  --input: oklch(0.92 0.01 150);
+  --ring: oklch(0.62 0.18 142);
 
-  /* Header (chrome escuro tipo central de controle) */
-  --sidebar: oklch(0.24 0.035 222);
-  --sidebar-foreground: oklch(0.95 0.008 235);
-  --sidebar-primary: oklch(0.66 0.16 148);   /* verde Normatel — indicador ativo */
-  --sidebar-primary-foreground: oklch(0.15 0.02 240);
-  --sidebar-accent: oklch(0.3 0.04 222);
-  --sidebar-accent-foreground: oklch(0.98 0.005 235);
-  --sidebar-border: oklch(0.32 0.03 222);
-  --sidebar-ring: oklch(0.66 0.16 148);
+  /* Header (chrome escuro com fundo esverdeado profundo) */
+  --sidebar: oklch(0.22 0.04 150);
+  --sidebar-foreground: oklch(0.96 0.01 150);
+  --sidebar-primary: oklch(0.72 0.2 142);    /* verde Normatel vibrante — indicador ativo */
+  --sidebar-primary-foreground: oklch(0.15 0.02 150);
+  --sidebar-accent: oklch(0.28 0.045 150);
+  --sidebar-accent-foreground: oklch(0.98 0.005 150);
+  --sidebar-border: oklch(0.3 0.04 150);
+  --sidebar-ring: oklch(0.72 0.2 142);
+
 }
 
 @layer base {
