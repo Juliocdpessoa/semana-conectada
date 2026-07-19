@@ -175,10 +175,10 @@ function BarList({ items, color = "primary" }: { items: [string, number][]; colo
   return (
     <div className="space-y-2">
       {items.map(([k, n]) => (
-        <div key={k} className="text-[12px]">
-          <div className="flex justify-between gap-2">
-            <span className="truncate text-foreground" title={k}>{k}</span>
-            <span className="tabular text-muted-foreground">{n.toLocaleString("pt-BR")}</span>
+        <div key={k} className="min-w-0 text-[12px]">
+          <div className="flex min-w-0 justify-between gap-2">
+            <span className="min-w-0 flex-1 truncate text-foreground" title={k}>{k}</span>
+            <span className="shrink-0 tabular text-muted-foreground">{n.toLocaleString("pt-BR")}</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
             <div className={cn("h-full rounded-full", bg)} style={{ width: `${(n / max) * 100}%` }} />
