@@ -352,7 +352,12 @@ function AtividadesPage() {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="font-mono text-[11px] text-foreground">{r.order_number}</span>
-                      {r.note_number && <span className="font-mono text-[11px] text-muted-foreground">· {r.note_number}</span>}
+                      {fmtPlan(r.planning_data, "Op") && (
+                        <span className="font-mono text-[11px] text-muted-foreground">· Op {fmtPlan(r.planning_data, "Op")}</span>
+                      )}
+                      {fmtPlan(r.planning_data, "Subop") && (
+                        <span className="font-mono text-[11px] text-muted-foreground">· Sub {fmtPlan(r.planning_data, "Subop")}</span>
+                      )}
                       {r.is_immediate && (
                         <span className="inline-flex items-center gap-1 rounded-sm border border-warning/50 bg-warning/15 px-1 py-0.5 text-[9px] font-bold uppercase text-warning-foreground">
                           <Zap className="h-2.5 w-2.5" /> Imediata
