@@ -293,10 +293,51 @@ function PlanejamentoPage() {
             toast.success("Imediata cadastrada.");
           }}
         />
+      {showImmImport && activeWeek.data && (
+        <ImmediateImportModal
+          weekId={activeWeek.data.id}
+          onClose={() => setShowImmImport(false)}
+          onDone={(n) => {
+            setShowImmImport(false);
+            qc.invalidateQueries({ queryKey: ["activities"] });
+            toast.success(`${n} imediatas cadastradas.`);
+          }}
+        />
       )}
     </main>
   );
 }
+
+function downloadImmediateTemplate() {
+  const header = [...IMMEDIATE_COLUMNS];
+  const example: Record<string, any> = {
+    "Ordem": "2027999999",
+    "Nº": 1,
+    "Nota": "14999999",
+    "Op": 10,
+    "Subop": "",
+    "TxtDesc.Oper.": "Descrição da atividade imediata",
+    "Gerência": "Oficinas",
+    "Área op": "",
+    "Localização": "",
+    "Local": "ROTINA",
+    "CenTrab": "MECANICO",
+    "Gr pl": "COM",
+    "Trab": 4,
+    "Dur n": 4,
+    "Data início": new Date().toISOString().slice(0, 10),
+    "Hora início": "08:00",
+    "Data fim": new Date().toISOString().slice(0, 10),
+    "Hora fim": "12:00",
+    "Tipo de Nota": "ZF",
+    "Confirmação": "",
+  };
+  const ws = XLSX.utils.json_to_sheet([example], { header });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Imediatas");
+  XLSX.writeFile(wb, "modelo-atividades-imediatas.xlsx");
+}
+
 
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
