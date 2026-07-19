@@ -115,7 +115,7 @@ function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
             <div className="inline-flex items-center rounded-md border border-border bg-white px-2.5 py-2 shadow-sm">
-              <BrandLogo className="h-6 w-auto" />
+              <BrandLogo className="h-6 w-auto mix-blend-lighten" />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
