@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useRouter } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
-import { LogOut, ClipboardList, History, Settings, Zap } from "lucide-react";
+import { LogOut, ClipboardList, History, Settings, Zap, BarChart3 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
 export type SessionInfo = {
@@ -79,6 +79,7 @@ function AuthedLayout() {
 
           <nav className="ml-4 hidden items-center gap-1 sm:flex">
             <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" />
+            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" />
             {isPlanning && (
               <>
                 <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" />
@@ -115,6 +116,7 @@ function AuthedLayout() {
         {menuOpen && (
           <nav className="border-t border-sidebar-border/40 bg-sidebar px-4 py-2 sm:hidden">
             <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" block />
+            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" block />
             {isPlanning && (
               <>
                 <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" block />
