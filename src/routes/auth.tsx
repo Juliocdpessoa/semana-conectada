@@ -72,7 +72,7 @@ function AuthPage() {
           }}
         />
         <div className="relative">
-          <div className="inline-flex items-center gap-2.5 rounded-md bg-white px-3 py-2">
+          <div className="inline-flex items-center gap-2.5 rounded-md border border-white/10 bg-white px-3 py-2 shadow-sm">
             <BrandLogo className="h-6 w-auto" />
           </div>
           <div className="mt-10 max-w-md">
@@ -114,8 +114,8 @@ function AuthPage() {
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="inline-flex items-center rounded-md bg-sidebar px-2.5 py-2">
-              <BrandLogo className="h-5 w-auto" />
+            <div className="inline-flex items-center rounded-md border border-border bg-white px-2.5 py-2 shadow-sm">
+              <BrandLogo className="h-6 w-auto" />
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
