@@ -31,6 +31,7 @@ type ActivityRow = {
   is_immediate: boolean;
   sync_status: "synced" | "pending" | "error";
   week_id: string;
+  planning_data: Record<string, unknown> | null;
 };
 
 const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
