@@ -74,7 +74,7 @@ function AuthPage() {
         />
         <div className="relative">
           <div className="inline-flex items-center gap-2.5 rounded-md border border-border/40 bg-white px-3.5 py-2 shadow-sm">
-            <img src={logoTransparent} alt="Normatel Engenharia" className="h-9 w-auto" />
+            <BrandLogo className="h-9 w-auto" />
           </div>
           <div className="mt-10 max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-primary">
