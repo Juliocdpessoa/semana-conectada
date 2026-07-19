@@ -108,13 +108,13 @@ function PainelPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
       <PageHeader
         eyebrow="Painel gerencial"
         title={activeWeek.data.label}
         description={`${activeWeek.data.start_date} a ${activeWeek.data.end_date} · ${kpis.total} atividades`}
         actions={
-          <div className="flex items-center gap-4">
+          <div className="hidden items-center gap-4 sm:flex">
             <MiniStat label="Aderência" value={`${kpis.aderencia}%`} tone="success" />
             <MiniStat label="Progresso" value={`${kpis.progresso}%`} />
           </div>
@@ -130,11 +130,11 @@ function PainelPage() {
         <KpiCard label="Aderência" value={`${kpis.aderencia}%`} tone="primary" icon={<Percent className="h-3.5 w-3.5" />} />
       </section>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel title="Execução por dia" description="Barras empilhadas executado/não executado">
           <div className="space-y-3">
             {byDay.length === 0 ? <Empty /> : byDay.map(([day, g]) => (
-              <div key={day}>
+              <div key={day} className="min-w-0">
                 <div className="mb-1 flex justify-between text-[11px]">
                   <span className="font-medium text-foreground">{formatDate(day)}</span>
                   <span className="text-muted-foreground tabular">{g.exec}/{g.total}</span>
