@@ -73,7 +73,7 @@ function AuthPage() {
         />
         <div className="relative">
           <div className="inline-flex items-center gap-2.5 rounded-md border border-white/10 bg-white px-3 py-2 shadow-sm">
-            <BrandLogo className="h-6 w-auto mix-blend-multiply" />
+            <BrandLogo className="h-6 w-auto mix-blend-lighten" />
           </div>
           <div className="mt-10 max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-primary">
