@@ -92,16 +92,16 @@ function PainelPage() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold">Painel gerencial</h1>
-          <p className="text-xs text-muted-foreground">
+      <header className="grid grid-cols-[minmax(0,1fr)_auto] items-end gap-4">
+        <div className="min-w-0">
+          <h1 className="truncate text-xl font-semibold">Painel gerencial</h1>
+          <p className="truncate text-xs text-muted-foreground">
             {activeWeek.data.label} · {activeWeek.data.start_date} a {activeWeek.data.end_date}
           </p>
         </div>
-        <div className="text-right">
-          <div className="text-2xl font-bold text-success">{kpis.aderencia}%</div>
-          <div className="text-[11px] text-muted-foreground">Aderência (Executado / Total)</div>
+        <div className="shrink-0 text-right">
+          <div className="text-2xl font-bold text-success leading-none">{kpis.aderencia}%</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">Aderência</div>
         </div>
       </header>
 
