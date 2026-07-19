@@ -4,10 +4,10 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
-import { createImmediateActivity } from "@/lib/activities.functions";
+import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
 import { importWeek, activateWeek } from "@/lib/week-import.functions";
 import { toast } from "sonner";
-import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet } from "lucide-react";
+import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown } from "lucide-react";
 import type { SessionInfo } from "./route";
 import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
 
@@ -18,6 +18,17 @@ export const Route = createFileRoute("/_authenticated/planejamento")({
   },
   component: PlanejamentoPage,
 });
+
+// Colunas do modelo de programação semanal (mesma estrutura da planilha importada)
+const IMMEDIATE_COLUMNS = [
+  "Ordem", "Nº", "Nota", "Op", "Subop", "TxtDesc.Oper.",
+  "Gerência", "Área op", "Localização", "Local",
+  "CenTrab", "Gr pl", "Trab", "Dur n",
+  "Data início", "Hora início", "Data fim", "Hora fim",
+  "Tipo de Nota", "Confirmação",
+] as const;
+type ImmCol = (typeof IMMEDIATE_COLUMNS)[number];
+
 
 const COLUMN_HEADERS = [
   "Ordem", "Nota", "Descrição", "Área", "Especialidade", "Data", "Turno", "Equipe",
