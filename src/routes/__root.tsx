@@ -74,18 +74,18 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Controle Semanal — Acompanhamento diário de manutenção" },
+      { title: "NEXO — Gestão integrada da manutenção" },
       {
         name: "description",
         content:
-          "Plataforma corporativa para acompanhamento diário de atividades semanais de manutenção: apontamento, histórico e sincronização.",
+          "NEXO — Gestão integrada da manutenção. Plataforma corporativa para acompanhamento diário de atividades semanais: apontamento, histórico e indicadores.",
       },
-      { property: "og:title", content: "Controle Semanal — Acompanhamento diário de manutenção" },
-      { property: "og:description", content: "Plataforma corporativa para acompanhamento diário de atividades semanais de manutenção: apontamento, histórico e sincronização." },
+      { property: "og:title", content: "NEXO — Gestão integrada da manutenção" },
+      { property: "og:description", content: "NEXO — Gestão integrada da manutenção. Plataforma corporativa para acompanhamento diário de atividades semanais: apontamento, histórico e indicadores." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "theme-color", content: "#1E3A2B" },
-      { name: "twitter:title", content: "Controle Semanal — Acompanhamento diário de manutenção" },
+      { name: "twitter:title", content: "NEXO — Gestão integrada da manutenção" },
       { name: "twitter:description", content: "Plataforma corporativa para acompanhamento diário de atividades semanais de manutenção: apontamento, histórico e sincronização." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/795d3c1d-f0b5-4514-bce1-513e36eeb4a5/id-preview-206a26bc--2d7fe323-9bef-4a5e-965c-e5eada694ae5.lovable.app-1784417883296.png" },
       { name: "twitter:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/795d3c1d-f0b5-4514-bce1-513e36eeb4a5/id-preview-206a26bc--2d7fe323-9bef-4a5e-965c-e5eada694ae5.lovable.app-1784417883296.png" },
