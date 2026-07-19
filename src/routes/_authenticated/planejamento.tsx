@@ -7,8 +7,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity } from "@/lib/activities.functions";
 import { importWeek, activateWeek } from "@/lib/week-import.functions";
 import { toast } from "sonner";
-import { Zap, Upload, Download, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet } from "lucide-react";
 import type { SessionInfo } from "./route";
+import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
   beforeLoad: ({ context }) => {
@@ -18,7 +19,6 @@ export const Route = createFileRoute("/_authenticated/planejamento")({
   component: PlanejamentoPage,
 });
 
-// Column headers (index 0..23 == A..X)
 const COLUMN_HEADERS = [
   "Ordem", "Nota", "Descrição", "Área", "Especialidade", "Data", "Turno", "Equipe",
   "Prioridade", "Duração (h)", "Local", "Equipamento", "TAG", "Serviço", "Origem",
@@ -55,9 +55,7 @@ function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<st
           rows.push(obj);
         }
         resolve({ sheetName, rows, headerRow });
-      } catch (e) {
-        reject(e);
-      }
+      } catch (e) { reject(e); }
     };
     reader.readAsArrayBuffer(file);
   });
@@ -116,18 +114,15 @@ function PlanejamentoPage() {
       const pd = (a.planning_data ?? {}) as Record<string, any>;
       const line: Record<string, any> = {};
       for (const h of COLUMN_HEADERS.slice(0, 20)) {
-        // pick from planning_data by header name (case-insensitive)
         const key = Object.keys(pd).find((k) => normalize(k) === normalize(h));
         line[h] = key ? pd[key] : null;
       }
-      // Fallbacks for structured fields
       if (!line["Ordem"]) line["Ordem"] = a.order_number;
       if (!line["Nota"]) line["Nota"] = a.note_number;
       if (!line["Descrição"]) line["Descrição"] = a.description;
       if (!line["Área"]) line["Área"] = a.area;
       if (!line["Especialidade"]) line["Especialidade"] = a.specialty;
       if (!line["Data"]) line["Data"] = a.scheduled_date;
-      // Reporting columns U-X
       line["Status"] = a.status;
       line["Justificativa"] = a.justification;
       line["Observações"] = a.observation;
@@ -145,104 +140,110 @@ function PlanejamentoPage() {
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
-      <h1 className="text-xl font-semibold text-foreground">Painel do Planejamento</h1>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Importe manualmente a planilha da semana e exporte quando quiser levar os apontamentos de volta ao Excel.
-      </p>
+      <PageHeader
+        eyebrow="Planejamento"
+        title="Ciclo semanal"
+        description="Importe a planilha da semana e exporte os apontamentos consolidados quando desejar."
+      />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="rounded-lg border border-border bg-card p-5 lg:col-span-2">
-          <h2 className="text-sm font-semibold text-foreground">Semana ativa</h2>
-          <div className="mt-2 text-lg font-semibold">{activeWeek.data?.label ?? "—"}</div>
-          <div className="text-xs text-muted-foreground">
-            {activeWeek.data ? `${activeWeek.data.start_date} a ${activeWeek.data.end_date}` : "Nenhuma semana ativa."}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Panel
+          title="Semana ativa"
+          description={activeWeek.data ? `${activeWeek.data.start_date} → ${activeWeek.data.end_date}` : "Nenhuma semana ativa."}
+          className="lg:col-span-2"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Código</div>
+              <div className="mt-1 font-mono text-sm text-foreground">{activeWeek.data?.code ?? "—"}</div>
+              <div className="mt-3 text-lg font-semibold text-foreground">{activeWeek.data?.label ?? "—"}</div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => setShowImport(true)} className="btn-primary">
+                <Upload className="h-4 w-4" /> Importar planilha
+              </button>
+              <button onClick={exportWeek} disabled={!activeWeek.data} className="btn-ghost">
+                <Download className="h-4 w-4" /> Exportar apontamentos
+              </button>
+            </div>
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <button
-              onClick={() => setShowImport(true)}
-              className="inline-flex items-center gap-2 rounded-md bg-primary px-3 py-2 text-xs font-medium text-primary-foreground hover:opacity-90"
-            >
-              <Upload className="h-4 w-4" /> Importar planilha (.xlsx)
-            </button>
-            <button
-              onClick={exportWeek}
-              disabled={!activeWeek.data}
-              className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-xs font-medium hover:bg-accent disabled:opacity-50"
-            >
-              <Download className="h-4 w-4" /> Exportar apontamentos
-            </button>
-          </div>
-        </div>
+        </Panel>
 
-        <div className="rounded-lg border border-border bg-card p-5">
-          <h2 className="text-sm font-semibold text-foreground">Atividades IMEDIATAS</h2>
-          <p className="mt-1 text-xs text-muted-foreground">Somente planejamento/administrador.</p>
+        <Panel title="Atividades imediatas" description="Somente planejamento/administrador.">
+          <p className="text-[12px] text-muted-foreground">
+            Registre ordens surgidas fora do ciclo. Ficam destacadas com o indicador âmbar.
+          </p>
           <button
             onClick={() => setShowImm(true)}
             disabled={!activeWeek.data}
-            className="mt-3 inline-flex items-center gap-2 rounded-md bg-destructive px-3 py-2 text-xs font-medium text-destructive-foreground hover:opacity-90 disabled:opacity-50"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-md border border-warning/50 bg-warning/15 px-3 py-2 text-[12px] font-semibold text-warning-foreground hover:bg-warning/25 disabled:opacity-50"
           >
-            <Zap className="h-4 w-4" /> Cadastrar IMEDIATA
+            <Zap className="h-4 w-4" /> Cadastrar imediata
           </button>
-        </div>
+        </Panel>
       </div>
 
-      <div className="mt-6 rounded-lg border border-border bg-card p-5">
-        <h2 className="text-sm font-semibold text-foreground">Semanas importadas</h2>
-        {weeksList.data && weeksList.data.length > 0 ? (
-          <div className="mt-3 overflow-hidden rounded-md border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/60 text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 text-left">Código</th>
-                  <th className="px-3 py-2 text-left">Rótulo</th>
-                  <th className="px-3 py-2 text-left">Período</th>
-                  <th className="px-3 py-2 text-left">Ativa</th>
-                  <th className="px-3 py-2 text-right">Ação</th>
-                </tr>
-              </thead>
-              <tbody>
-                {weeksList.data.map((w: any) => (
-                  <tr key={w.id} className="border-t border-border/60">
-                    <td className="px-3 py-2 font-mono text-xs">{w.code}</td>
-                    <td className="px-3 py-2">{w.label}</td>
-                    <td className="px-3 py-2 text-xs">{w.start_date} → {w.end_date}</td>
-                    <td className="px-3 py-2">
-                      {w.is_active ? (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-xs font-medium text-success">
-                          <CheckCircle2 className="h-3 w-3" /> Ativa
-                        </span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-right">
-                      {!w.is_active && (
-                        <button
-                          onClick={async () => {
-                            const res = await activateFn({ data: { weekId: w.id } });
-                            if (!res.ok) return toast.error(res.error);
-                            toast.success("Semana ativada.");
-                            qc.invalidateQueries({ queryKey: ["active-week"] });
-                            qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                            qc.invalidateQueries({ queryKey: ["activities"] });
-                          }}
-                          className="rounded-md border border-border px-2 py-1 text-xs hover:bg-accent"
-                        >
-                          Ativar
-                        </button>
-                      )}
-                    </td>
+      <div className="mt-5">
+        <Panel title="Semanas importadas" description={`${weeksList.data?.length ?? 0} registros`} padded={false}>
+          {weeksList.data && weeksList.data.length > 0 ? (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Código</th>
+                    <th className="px-3 py-2 text-left font-semibold">Rótulo</th>
+                    <th className="px-3 py-2 text-left font-semibold">Período</th>
+                    <th className="px-3 py-2 text-left font-semibold">Status</th>
+                    <th className="px-3 py-2 text-right font-semibold">Ação</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="mt-3 rounded-md border border-border bg-muted/40 p-4 text-sm text-muted-foreground">
-            Nenhuma semana importada ainda.
-          </div>
-        )}
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {weeksList.data.map((w: any) => (
+                    <tr key={w.id} className="row-zebra hover:bg-accent/60">
+                      <td className="px-3 py-2 font-mono text-[11px]">{w.code}</td>
+                      <td className="px-3 py-2">{w.label}</td>
+                      <td className="px-3 py-2 text-[11px] tabular text-muted-foreground">{w.start_date} → {w.end_date}</td>
+                      <td className="px-3 py-2">
+                        {w.is_active ? (
+                          <span className="status-pill border-success/40 bg-success/10 text-success">
+                            <CheckCircle2 className="h-3 w-3" /> Ativa
+                          </span>
+                        ) : (
+                          <span className="text-[11px] text-muted-foreground">—</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {!w.is_active && (
+                          <button
+                            onClick={async () => {
+                              const res = await activateFn({ data: { weekId: w.id } });
+                              if (!res.ok) return toast.error(res.error);
+                              toast.success("Semana ativada.");
+                              qc.invalidateQueries({ queryKey: ["active-week"] });
+                              qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                              qc.invalidateQueries({ queryKey: ["activities"] });
+                            }}
+                            className="btn-ghost py-1 text-[11px]"
+                          >
+                            Ativar
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="p-4">
+              <EmptyState
+                icon={<FileSpreadsheet className="h-4 w-4" />}
+                title="Nenhuma semana importada"
+                description="Importe uma planilha .xlsx para iniciar o ciclo."
+              />
+            </div>
+          )}
+        </Panel>
       </div>
 
       {showImport && (
@@ -256,7 +257,6 @@ function PlanejamentoPage() {
           }}
         />
       )}
-
       {showImm && activeWeek.data && (
         <ImmediateModal
           weekId={activeWeek.data.id}
@@ -264,7 +264,7 @@ function PlanejamentoPage() {
           onSaved={() => {
             setShowImm(false);
             qc.invalidateQueries({ queryKey: ["activities"] });
-            toast.success("IMEDIATA cadastrada.");
+            toast.success("Imediata cadastrada.");
           }}
         />
       )}
@@ -286,33 +286,21 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const call = useServerFn(importWeek);
 
   async function handleFile(f: File) {
-    setFile(f);
-    setError(null);
+    setFile(f); setError(null);
     try {
       const res = await parseWorkbook(f);
-      if (!res.rows.length) {
-        setError("A planilha não contém linhas de dados.");
-        setParsed(null);
-        return;
-      }
+      if (!res.rows.length) { setError("A planilha não contém linhas de dados."); setParsed(null); return; }
       setParsed(res);
-      // Auto-suggest week code from filename
       const base = f.name.replace(/\.[^.]+$/, "");
       if (!code) setCode(base.slice(0, 32));
       if (!label) setLabel(base);
-    } catch (e: any) {
-      setError(e?.message ?? "Falha ao ler a planilha.");
-      setParsed(null);
-    }
+    } catch (e: any) { setError(e?.message ?? "Falha ao ler a planilha."); setParsed(null); }
   }
 
   async function submit() {
     if (!parsed) return;
-    if (!code.trim() || !label.trim() || !startDate || !endDate) {
-      return setError("Preencha código, rótulo e datas.");
-    }
-    setBusy(true);
-    setError(null);
+    if (!code.trim() || !label.trim() || !startDate || !endDate) return setError("Preencha código, rótulo e datas.");
+    setBusy(true); setError(null);
     try {
       const payload = parsed.rows.map((r, idx) => {
         const order = extractField(r, "Ordem", "Ordem de serviço", "OS", "Nº ordem", "Numero da ordem");
@@ -326,8 +314,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           order_number: order,
           note_number: note,
           description: desc,
-          area,
-          specialty: spec,
+          area, specialty: spec,
           scheduled_date: toISODate(dateRaw),
           planning_data: r,
           source_row_number: r.__row ?? null,
@@ -335,104 +322,78 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       });
       const res = await call({
         data: {
-          code: code.trim(),
-          label: label.trim(),
-          start_date: startDate,
-          end_date: endDate,
-          activate,
-          source_file_name: file?.name ?? null,
-          sheet_name: parsed.sheetName,
+          code: code.trim(), label: label.trim(),
+          start_date: startDate, end_date: endDate,
+          activate, source_file_name: file?.name ?? null, sheet_name: parsed.sheetName,
           rows: payload,
         },
       });
-      if (!res.ok) {
-        setError(res.error);
-        setBusy(false);
-        return;
-      }
+      if (!res.ok) { setError(res.error); setBusy(false); return; }
       toast.success(`Semana importada — ${res.count} atividades.`);
       onDone();
-    } catch (e: any) {
-      setError(e?.message ?? "Erro ao importar.");
-    } finally {
-      setBusy(false);
-    }
+    } catch (e: any) { setError(e?.message ?? "Erro ao importar."); }
+    finally { setBusy(false); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-2xl rounded-xl bg-card p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-base font-semibold">Importar planilha semanal</h2>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Selecione o arquivo Excel (.xlsx) da semana. As colunas A–T serão preservadas como dados de planejamento e as colunas U–X serão preenchidas pelos apontamentos.
-        </p>
-
-        <div className="mt-4 rounded-md border border-dashed border-border p-4">
-          <input
-            ref={inputRef}
-            type="file"
-            accept=".xlsx,.xls"
-            className="hidden"
-            onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
-          />
-          <button
-            type="button"
-            onClick={() => inputRef.current?.click()}
-            className="inline-flex items-center gap-2 rounded-md border border-border bg-card px-3 py-2 text-sm hover:bg-accent"
-          >
+    <Modal
+      title="Importar planilha semanal"
+      description="Colunas A–T viram planejamento (leitura); U–X são preenchidas pelos apontamentos."
+      onClose={onClose}
+      size="lg"
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={submit} disabled={busy || !parsed} className="btn-primary">
+            {busy ? "Importando…" : "Importar semana"}
+          </button>
+        </>
+      }
+    >
+      <div className="rounded-md border border-dashed border-border bg-muted/40 p-4">
+        <input
+          ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <button type="button" onClick={() => inputRef.current?.click()} className="btn-ghost">
             <Upload className="h-4 w-4" /> {file ? "Trocar arquivo" : "Selecionar arquivo"}
           </button>
           {file && (
-            <div className="mt-2 text-xs text-muted-foreground">
-              {file.name} · {parsed ? `${parsed.rows.length} linhas · aba "${parsed.sheetName}"` : "lendo..."}
+            <div className="text-[12px] text-muted-foreground">
+              <span className="font-medium text-foreground">{file.name}</span>
+              {parsed && <span> · {parsed.rows.length} linhas · aba “{parsed.sheetName}”</span>}
             </div>
           )}
         </div>
-
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <Field label="Código da semana *">
-            <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ex: 030/2026"
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-          <Field label="Rótulo *">
-            <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Semana 030/2026"
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-          <Field label="Início *">
-            <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-          <Field label="Fim *">
-            <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-        </div>
-
-        <label className="mt-3 flex items-center gap-2 text-xs">
-          <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
-          Ativar esta semana imediatamente (desativa a atual)
-        </label>
-
-        {error && (
-          <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive">
-            <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
-          </div>
-        )}
-
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent">
-            Cancelar
-          </button>
-          <button
-            onClick={submit}
-            disabled={busy || !parsed}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-          >
-            {busy ? "Importando..." : "Importar semana"}
-          </button>
-        </div>
       </div>
-    </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <Field label="Código da semana" required>
+          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ex: 030/2026" className="input-base" />
+        </Field>
+        <Field label="Rótulo" required>
+          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Semana 030/2026" className="input-base" />
+        </Field>
+        <Field label="Início" required>
+          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-base" />
+        </Field>
+        <Field label="Fim" required>
+          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input-base" />
+        </Field>
+      </div>
+
+      <label className="mt-3 flex items-center gap-2 text-[12px]">
+        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
+        Ativar esta semana imediatamente (desativa a atual)
+      </label>
+
+      {error && (
+        <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] text-destructive">
+          <AlertTriangle className="h-4 w-4 shrink-0" /> {error}
+        </div>
+      )}
+    </Modal>
   );
 }
 
@@ -452,75 +413,42 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
     try {
       const res = await call({
         data: {
-          weekId,
-          order_number: order.trim(),
-          note_number: note.trim() || null,
-          description: desc.trim(),
-          area: area.trim() || null,
-          specialty: specialty.trim() || null,
-          scheduled_date: date || null,
+          weekId, order_number: order.trim(), note_number: note.trim() || null,
+          description: desc.trim(), area: area.trim() || null,
+          specialty: specialty.trim() || null, scheduled_date: date || null,
         },
       });
       if (!res.ok) return toast.error(res.error);
       onSaved();
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-lg rounded-xl bg-card p-5 shadow-lg" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-base font-semibold">Cadastrar atividade IMEDIATA</h2>
-        <div className="mt-4 grid gap-3">
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Ordem *">
-              <input value={order} onChange={(e) => setOrder(e.target.value)}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-            </Field>
-            <Field label="Nota">
-              <input value={note} onChange={(e) => setNote(e.target.value)}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-            </Field>
-          </div>
-          <Field label="Descrição *">
-            <input value={desc} onChange={(e) => setDesc(e.target.value)}
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Área">
-              <input value={area} onChange={(e) => setArea(e.target.value)}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-            </Field>
-            <Field label="Especialidade">
-              <input value={specialty} onChange={(e) => setSpecialty(e.target.value)}
-                className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-            </Field>
-          </div>
-          <Field label="Data">
-            <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
-              className="w-full rounded-md border border-input bg-card px-3 py-2 text-sm" />
-          </Field>
-        </div>
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm hover:bg-accent">
-            Cancelar
+    <Modal
+      title="Cadastrar atividade imediata"
+      description="Registro fora do ciclo semanal, sinalizado com destaque âmbar."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={save} disabled={saving} className="btn-primary">
+            {saving ? "Salvando…" : "Cadastrar"}
           </button>
-          <button onClick={save} disabled={saving}
-            className="rounded-md bg-destructive px-4 py-2 text-sm font-medium text-destructive-foreground disabled:opacity-60">
-            {saving ? "Salvando..." : "Cadastrar IMEDIATA"}
-          </button>
+        </>
+      }
+    >
+      <div className="grid gap-3">
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Ordem" required><input value={order} onChange={(e) => setOrder(e.target.value)} className="input-base" /></Field>
+          <Field label="Nota"><input value={note} onChange={(e) => setNote(e.target.value)} className="input-base" /></Field>
         </div>
+        <Field label="Descrição" required><input value={desc} onChange={(e) => setDesc(e.target.value)} className="input-base" /></Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Área"><input value={area} onChange={(e) => setArea(e.target.value)} className="input-base" /></Field>
+          <Field label="Especialidade"><input value={specialty} onChange={(e) => setSpecialty(e.target.value)} className="input-base" /></Field>
+        </div>
+        <Field label="Data"><input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="input-base" /></Field>
       </div>
-    </div>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-xs font-medium">{label}</span>
-      {children}
-    </label>
+    </Modal>
   );
 }

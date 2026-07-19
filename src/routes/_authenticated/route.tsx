@@ -1,8 +1,9 @@
-import { createFileRoute, Outlet, Link, redirect, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
-import { LogOut, ClipboardList, History, Settings, Zap, BarChart3 } from "lucide-react";
+import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { cn } from "@/lib/utils";
 
 export type SessionInfo = {
   userId: string;
@@ -46,6 +47,7 @@ function AuthedLayout() {
   const { session } = Route.useRouteContext();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -54,9 +56,19 @@ function AuthedLayout() {
     return () => sub.subscription.unsubscribe();
   }, [router]);
 
+  useEffect(() => { setMenuOpen(false); }, [pathname]);
+
   const s = session as SessionInfo;
   const isPlanning = s.role === "planning" || s.role === "admin";
   const isAdmin = s.role === "admin";
+
+  const nav = [
+    { to: "/atividades", label: "Atividades", icon: ClipboardList, show: true },
+    { to: "/painel", label: "Painel", icon: BarChart3, show: true },
+    { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
+    { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
+    { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
+  ].filter((n) => n.show);
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -65,40 +77,38 @@ function AuthedLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-sidebar-border bg-sidebar text-sidebar-foreground">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-3 sm:px-6">
-          <Link to="/atividades" className="flex items-center gap-3">
-            <div className="grid h-9 shrink-0 place-items-center rounded-md bg-white px-2 py-1">
-              <BrandLogo className="h-6 w-auto" />
+      <header className="sticky top-0 z-40 border-b border-sidebar-border/70 bg-sidebar text-sidebar-foreground">
+        <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-2.5 sm:px-6">
+          {/* Marca */}
+          <Link to="/atividades" className="flex items-center gap-2.5">
+            <div className="grid h-8 shrink-0 place-items-center rounded-md bg-white px-1.5">
+              <BrandLogo className="h-5 w-auto" />
             </div>
-            <div className="hidden sm:block">
-              <div className="text-sm font-semibold leading-tight">Controle Semanal</div>
-              <div className="text-[11px] leading-tight opacity-70">Normatel Engenharia · Manutenção</div>
+            <div className="hidden leading-tight sm:block">
+              <div className="text-[13px] font-semibold">Controle Semanal</div>
+              <div className="text-[10px] uppercase tracking-[0.09em] text-sidebar-foreground/60">
+                Normatel · Manutenção
+              </div>
             </div>
           </Link>
 
-          <nav className="ml-4 hidden items-center gap-1 sm:flex">
-            <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" />
-            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" />
-            {isPlanning && (
-              <>
-                <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" />
-                <NavItem to="/historico" icon={<History className="h-4 w-4" />} label="Histórico" />
-              </>
-            )}
-            {isAdmin && <NavItem to="/admin/usuarios" icon={<Settings className="h-4 w-4" />} label="Administração" />}
+          <div className="mx-4 hidden h-6 w-px bg-sidebar-border sm:block" />
+
+          {/* Navegação desktop */}
+          <nav className="hidden items-center gap-0.5 sm:flex">
+            {nav.map((n) => <DesktopNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-3.5 w-3.5" />} />)}
           </nav>
 
-          <div className="ml-auto flex items-center gap-3">
+          {/* Ações à direita */}
+          <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right md:block">
-              <div className="text-xs font-medium">{s.fullName || s.email}</div>
-              <div className="text-[11px] opacity-70">
-                {s.email} · {roleLabel(s.role)}
-              </div>
+              <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
+              <div className="text-[10px] leading-tight text-sidebar-foreground/60">{roleLabel(s.role)}</div>
             </div>
             <button
               onClick={signOut}
-              className="inline-flex items-center gap-1.5 rounded-md border border-sidebar-border/60 bg-sidebar-accent px-3 py-1.5 text-xs font-medium hover:bg-secondary"
+              className="hidden items-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] font-medium hover:bg-sidebar-accent md:inline-flex"
+              title="Sair"
             >
               <LogOut className="h-3.5 w-3.5" />
               Sair
@@ -106,24 +116,33 @@ function AuthedLayout() {
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="sm:hidden rounded-md border border-sidebar-border/60 px-2 py-1.5 text-xs"
-              aria-label="Menu"
+              className="grid h-8 w-8 place-items-center rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent sm:hidden"
+              aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={menuOpen}
             >
-              Menu
+              {menuOpen ? <X className="h-4 w-4" /> : <Menu className="h-4 w-4" />}
             </button>
           </div>
         </div>
+
+        {/* Navegação mobile */}
         {menuOpen && (
-          <nav className="flex flex-col gap-1 border-t border-sidebar-border/40 bg-sidebar px-4 py-2 sm:hidden">
-            <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" block onNavigate={() => setMenuOpen(false)} />
-            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" block onNavigate={() => setMenuOpen(false)} />
-            {isPlanning && (
-              <>
-                <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" block onNavigate={() => setMenuOpen(false)} />
-                <NavItem to="/historico" icon={<History className="h-4 w-4" />} label="Histórico" block onNavigate={() => setMenuOpen(false)} />
-              </>
-            )}
-            {isAdmin && <NavItem to="/admin/usuarios" icon={<Settings className="h-4 w-4" />} label="Administração" block onNavigate={() => setMenuOpen(false)} />}
+          <nav className="border-t border-sidebar-border/60 bg-sidebar px-3 py-2 sm:hidden">
+            <div className="mb-2 rounded-md bg-sidebar-accent/40 px-3 py-2 text-[11px]">
+              <div className="font-medium">{s.fullName || s.email}</div>
+              <div className="text-sidebar-foreground/60">{s.email} · {roleLabel(s.role)}</div>
+            </div>
+            <div className="flex flex-col gap-0.5">
+              {nav.map((n) => (
+                <MobileNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-4 w-4" />} />
+              ))}
+              <button
+                onClick={signOut}
+                className="mt-2 inline-flex items-center gap-2 rounded-md border border-sidebar-border/60 px-3 py-2.5 text-[13px] hover:bg-sidebar-accent"
+              >
+                <LogOut className="h-4 w-4" /> Sair
+              </button>
+            </div>
           </nav>
         )}
       </header>
@@ -132,13 +151,30 @@ function AuthedLayout() {
   );
 }
 
-function NavItem({ to, icon, label, block, onNavigate }: { to: string; icon: React.ReactNode; label: string; block?: boolean; onNavigate?: () => void }) {
+function DesktopNavItem({ to, label, icon }: { to: string; label: string; icon: React.ReactNode }) {
   return (
     <Link
       to={to}
-      onClick={onNavigate}
-      className={`items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition hover:bg-sidebar-accent ${block ? "flex w-full" : "inline-flex"}`}
-      activeProps={{ className: "bg-sidebar-accent" }}
+      className={cn(
+        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+      )}
+      activeProps={{
+        className:
+          "bg-sidebar-accent text-sidebar-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-sidebar-primary",
+      }}
+    >
+      {icon}
+      {label}
+    </Link>
+  );
+}
+
+function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: React.ReactNode }) {
+  return (
+    <Link
+      to={to}
+      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground/85 hover:bg-sidebar-accent"
+      activeProps={{ className: "bg-sidebar-accent text-sidebar-foreground border-l-2 border-sidebar-primary" }}
     >
       {icon}
       {label}
