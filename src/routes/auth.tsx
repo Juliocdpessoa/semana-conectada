@@ -72,7 +72,7 @@ function AuthPage() {
           }}
         />
         <div className="relative">
-          <div className="inline-flex items-center gap-2.5 rounded-md border border-white/10 bg-white px-3 py-2 shadow-sm">
+          <div className="inline-flex items-center gap-2.5 rounded-md bg-black px-3 py-2 shadow-sm ring-1 ring-white/10">
             <BrandLogo className="h-6 w-auto" />
           </div>
           <div className="mt-10 max-w-md">
