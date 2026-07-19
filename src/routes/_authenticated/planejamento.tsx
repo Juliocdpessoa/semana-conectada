@@ -293,7 +293,9 @@ function PlanejamentoPage() {
             toast.success("Imediata cadastrada.");
           }}
         />
+      )}
       {showImmImport && activeWeek.data && (
+
         <ImmediateImportModal
           weekId={activeWeek.data.id}
           onClose={() => setShowImmImport(false)}
