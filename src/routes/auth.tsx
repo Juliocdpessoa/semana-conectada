@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
+import logoTransparent from "@/assets/normatel-logo-light.png";
 import { ShieldCheck, ClipboardCheck, BarChart3 } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
@@ -72,8 +73,8 @@ function AuthPage() {
           }}
         />
         <div className="relative">
-          <div className="inline-flex items-center gap-2.5 rounded-md border border-white/10 bg-white px-3 py-2 shadow-sm">
-            <BrandLogo className="h-6 w-auto" />
+          <div className="inline-flex items-center gap-2.5">
+            <img src={logoTransparent} alt="Normatel Engenharia" className="h-8 w-auto" />
           </div>
           <div className="mt-10 max-w-md">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-primary">
@@ -114,9 +115,8 @@ function AuthPage() {
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
         <div className="w-full max-w-sm">
           <div className="mb-6 flex items-center gap-3 lg:hidden">
-            <div className="inline-flex items-center rounded-md border border-border bg-white px-2.5 py-2 shadow-sm">
-              <BrandLogo className="h-6 w-auto" />
-            </div>
+            <img src={logoTransparent} alt="Normatel Engenharia" className="h-8 w-auto" />
+            
             <div>
               <div className="text-sm font-semibold text-foreground">Controle Semanal</div>
               <div className="text-[11px] text-muted-foreground">Normatel · Manutenção</div>
