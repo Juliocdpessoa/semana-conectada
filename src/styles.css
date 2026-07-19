@@ -5,18 +5,18 @@
 @custom-variant dark (&:is(.dark *));
 
 /*
- * Controle Semanal — design system
- * Interface corporativa híbrida, densa e sóbria.
- * Azul-marinho #102B46, azul secundário #173D60, verde #168866,
- * fundo #F4F7F9, cartão branco. Âmbar somente impedimentos,
- * vermelho somente pendências críticas.
+ * Controle Semanal — Normatel Engenharia
+ * Sistema visual corporativo B2B: central de controle sóbria, densa e precisa.
+ * Base petróleo-grafite / branco-gelo. Verde Normatel apenas para marca,
+ * ação primária e sucesso. Âmbar = atenção. Vermelho = falha/crítico.
  */
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -38,8 +38,11 @@
   --color-warning: var(--warning);
   --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -48,46 +51,63 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --shadow-xs: 0 1px 0 0 rgb(15 30 45 / 0.04);
+  --shadow-sm: 0 1px 2px 0 rgb(15 30 45 / 0.05), 0 1px 1px 0 rgb(15 30 45 / 0.03);
+  --shadow-md: 0 4px 12px -4px rgb(15 30 45 / 0.08), 0 2px 4px -2px rgb(15 30 45 / 0.04);
+  --shadow-lg: 0 12px 32px -8px rgb(15 30 45 / 0.14);
 }
 
 :root {
-  --radius: 0.5rem;
-  --background: oklch(0.975 0.003 240);
-  --foreground: oklch(0.18 0.005 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.18 0.005 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.18 0.005 240);
-  /* Primary: Verde Normatel (mais vibrante, igual ao logo) */
-  --primary: oklch(0.7 0.22 142);
-  --primary-foreground: oklch(0.99 0.005 240);
-  --secondary: oklch(0.6 0.2 142);
-  --secondary-foreground: oklch(0.99 0.005 240);
-  --muted: oklch(0.95 0.02 142);
-  --muted-foreground: oklch(0.42 0.02 142);
-  --accent: oklch(0.93 0.08 142);
-  --accent-foreground: oklch(0.25 0.08 142);
-  /* Verde Normatel operacional */
-  --success: oklch(0.7 0.22 142);
-  --success-foreground: oklch(0.99 0.005 240);
-  --warning: oklch(0.78 0.152 75);
-  --warning-foreground: oklch(0.24 0.05 60);
-  --destructive: oklch(0.582 0.212 27);
-  --destructive-foreground: oklch(0.985 0.005 240);
-  --border: oklch(0.88 0.03 142);
-  --input: oklch(0.9 0.02 142);
-  --ring: oklch(0.7 0.22 142);
-  /* Sidebar: preto Normatel com destaque verde vibrante */
-  --sidebar: oklch(0.2 0.03 142);
-  --sidebar-foreground: oklch(0.985 0.003 240);
-  --sidebar-primary: oklch(0.7 0.22 142);
-  --sidebar-primary-foreground: oklch(0.15 0.005 240);
-  --sidebar-accent: oklch(0.32 0.1 142);
-  --sidebar-accent-foreground: oklch(0.985 0.003 240);
-  --sidebar-border: oklch(0.35 0.08 142);
-  --sidebar-ring: oklch(0.7 0.22 142);
+  --radius: 5px;
 
+  /* Superfícies frias */
+  --background: oklch(0.98 0.004 235);       /* branco-gelo */
+  --surface: oklch(1 0 0);                   /* branco puro */
+  --surface-muted: oklch(0.965 0.006 235);   /* linhas zebra */
+  --foreground: oklch(0.22 0.02 240);        /* grafite */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.22 0.02 240);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.22 0.02 240);
+
+  /* Primary: azul-petróleo profundo (ação, foco corporativo) */
+  --primary: oklch(0.32 0.055 220);
+  --primary-foreground: oklch(0.99 0.002 240);
+  --secondary: oklch(0.4 0.05 220);
+  --secondary-foreground: oklch(0.99 0.002 240);
+
+  /* Tons neutros / cinzas frios */
+  --muted: oklch(0.955 0.006 235);
+  --muted-foreground: oklch(0.5 0.02 235);
+  --accent: oklch(0.94 0.015 220);
+  --accent-foreground: oklch(0.28 0.05 220);
+
+  /* Semântica — usar com parcimônia */
+  --success: oklch(0.6 0.14 148);            /* verde Normatel dessaturado */
+  --success-foreground: oklch(0.99 0.002 240);
+  --warning: oklch(0.76 0.14 78);            /* âmbar atenção */
+  --warning-foreground: oklch(0.28 0.06 60);
+  --destructive: oklch(0.55 0.2 25);         /* vermelho crítico */
+  --destructive-foreground: oklch(0.99 0.002 240);
+
+  /* Bordas / inputs */
+  --border: oklch(0.9 0.008 235);
+  --border-strong: oklch(0.82 0.012 235);
+  --input: oklch(0.92 0.008 235);
+  --ring: oklch(0.55 0.09 220);
+
+  /* Header (chrome escuro tipo central de controle) */
+  --sidebar: oklch(0.24 0.035 222);
+  --sidebar-foreground: oklch(0.95 0.008 235);
+  --sidebar-primary: oklch(0.66 0.16 148);   /* verde Normatel — indicador ativo */
+  --sidebar-primary-foreground: oklch(0.15 0.02 240);
+  --sidebar-accent: oklch(0.3 0.04 222);
+  --sidebar-accent-foreground: oklch(0.98 0.005 235);
+  --sidebar-border: oklch(0.32 0.03 222);
+  --sidebar-ring: oklch(0.66 0.16 148);
 }
 
 @layer base {
@@ -96,28 +116,156 @@
   }
   html {
     font-family: var(--font-sans);
+    font-feature-settings: "cv11", "ss01";
     -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
   }
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-size: 14px;
+    line-height: 1.45;
     overflow-x: hidden;
   }
   h1, h2, h3, h4 {
-    letter-spacing: -0.01em;
+    letter-spacing: -0.011em;
+    color: var(--color-foreground);
+  }
+
+  /* Números tabulares padrão em contextos técnicos */
+  .tabular, td, th, .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Foco acessível uniforme */
+  :where(button, a, input, select, textarea, [role="button"]):focus-visible {
+    outline: 2px solid var(--color-ring);
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
+
+  /* Seleção de texto */
+  ::selection {
+    background: color-mix(in oklab, var(--color-primary) 24%, transparent);
+    color: var(--color-foreground);
+  }
+
+  /* Scrollbar refinada */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: color-mix(in oklab, var(--color-foreground) 20%, transparent) transparent;
+  }
+  *::-webkit-scrollbar { width: 10px; height: 10px; }
+  *::-webkit-scrollbar-thumb {
+    background: color-mix(in oklab, var(--color-foreground) 18%, transparent);
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background: color-mix(in oklab, var(--color-foreground) 30%, transparent);
+    background-clip: padding-box;
+    border: 2px solid transparent;
+  }
+
+  /* Auto-fill sem amarelo */
+  input:-webkit-autofill {
+    -webkit-text-fill-color: var(--color-foreground);
+    box-shadow: 0 0 0 1000px var(--color-card) inset;
   }
 }
 
 @utility status-pill {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
+  gap: 0.325rem;
   padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   border-width: 1px;
   border-style: solid;
   white-space: nowrap;
+  line-height: 1.4;
 }
+
+@utility surface-card {
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-xs);
+}
+
+@utility input-base {
+  width: 100%;
+  background: var(--color-card);
+  border: 1px solid var(--color-input);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--color-foreground);
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+.input-base:hover { border-color: var(--color-border-strong); }
+.input-base:focus {
+  outline: none;
+  border-color: var(--color-ring);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--color-ring) 22%, transparent);
+}
+
+@utility btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: var(--color-primary);
+  color: var(--color-primary-foreground);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background 120ms ease, transform 80ms ease;
+}
+.btn-primary:hover { background: color-mix(in oklab, var(--color-primary) 88%, black); }
+.btn-primary:active { transform: translateY(0.5px); }
+.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+@utility btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: var(--color-card);
+  color: var(--color-foreground);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: 1px solid var(--color-border);
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.btn-ghost:hover { background: var(--color-muted); border-color: var(--color-border-strong); }
+.btn-ghost:disabled { opacity: 0.5; cursor: not-allowed; }
+
+@utility btn-success {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  background: var(--color-success);
+  color: var(--color-success-foreground);
+  border-radius: var(--radius-md);
+  padding: 0.5rem 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  border: 1px solid transparent;
+  transition: background 120ms ease;
+}
+.btn-success:hover { background: color-mix(in oklab, var(--color-success) 88%, black); }
+
+@utility row-zebra {
+  background: var(--color-surface);
+}
+.row-zebra:nth-child(even) { background: var(--color-surface-muted); }
