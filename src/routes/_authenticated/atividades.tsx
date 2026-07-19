@@ -421,6 +421,12 @@ function formatDateTime(d: string | null) {
   if (!d) return "";
   return new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
 }
+function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null {
+  const v = pd?.[key];
+  if (v === null || v === undefined || v === "") return null;
+  return String(v);
+}
+
 
 function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; onClose: () => void; onSaved: () => void }) {
   const [status, setStatus] = useState(activity.status);
