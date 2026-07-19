@@ -84,7 +84,7 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
       { property: "og:description", content: "Plataforma corporativa para acompanhamento diário de atividades semanais de manutenção: apontamento, histórico e sincronização." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "theme-color", content: "#1B2E3D" },
+      { name: "theme-color", content: "#1E3A2B" },
       { name: "twitter:title", content: "Controle Semanal — Acompanhamento diário de manutenção" },
       { name: "twitter:description", content: "Plataforma corporativa para acompanhamento diário de atividades semanais de manutenção: apontamento, histórico e sincronização." },
       { property: "og:image", content: "https://pub-bb2e103a32db4e198524a2e9ed8f35b4.r2.dev/795d3c1d-f0b5-4514-bce1-513e36eeb4a5/id-preview-206a26bc--2d7fe323-9bef-4a5e-965c-e5eada694ae5.lovable.app-1784417883296.png" },
