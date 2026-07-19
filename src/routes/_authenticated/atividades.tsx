@@ -473,7 +473,8 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
       <div className="rounded-md border border-border bg-muted/50 p-3">
         <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px] sm:grid-cols-4">
           <MetaItem label="Ordem" value={activity.order_number} />
-          <MetaItem label="Nota" value={activity.note_number} />
+          <MetaItem label="Operação" value={fmtPlan(activity.planning_data, "Op")} />
+          <MetaItem label="Sub operação" value={fmtPlan(activity.planning_data, "Subop")} />
           <MetaItem label="Área" value={activity.area} />
           <MetaItem label="Data" value={formatDate(activity.scheduled_date)} />
         </div>
