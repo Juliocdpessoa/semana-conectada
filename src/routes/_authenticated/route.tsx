@@ -2,6 +2,7 @@ import { createFileRoute, Outlet, Link, redirect, useRouter } from "@tanstack/re
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { LogOut, ClipboardList, History, Settings, Zap } from "lucide-react";
+import { BrandLogo } from "@/components/brand-logo";
 
 export type SessionInfo = {
   userId: string;
