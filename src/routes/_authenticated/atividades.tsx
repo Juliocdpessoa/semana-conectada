@@ -141,9 +141,10 @@ function AtividadesPage() {
   const kpis = useMemo(() => {
     const rows = activities.data ?? [];
     const total = rows.length;
-    const concluded = rows.filter((r) => r.status === "Concluída").length;
-    const impeded = rows.filter((r) => r.status === "Impedida" || r.status === "Não realizada").length;
+    const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
+    const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
     const noReport = rows.filter((r) => r.status === "Sem apontamento").length;
+
     const immediates = rows.filter((r) => r.is_immediate).length;
     const percent = total ? Math.round((concluded / total) * 100) : 0;
     return { total, concluded, impeded, noReport, immediates, percent };
