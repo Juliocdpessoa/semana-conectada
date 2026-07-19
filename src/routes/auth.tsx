@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
+import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -59,13 +60,11 @@ function AuthPage() {
   return (
     <div className="min-h-screen bg-background">
       <div className="mx-auto flex min-h-screen max-w-md flex-col justify-center px-6 py-12">
-        <div className="mb-8 flex items-center gap-3">
-          <div className="grid h-10 w-10 place-items-center rounded-md bg-primary text-primary-foreground font-bold">
-            CS
-          </div>
+        <div className="mb-8 flex flex-col items-center gap-3 text-center">
+          <BrandLogo className="h-14 w-auto" />
           <div>
             <div className="font-semibold text-foreground">Controle Semanal</div>
-            <div className="text-xs text-muted-foreground">Acompanhamento de manutenção</div>
+            <div className="text-xs text-muted-foreground">Normatel Engenharia · Manutenção</div>
           </div>
         </div>
 
