@@ -114,16 +114,16 @@ function AuthedLayout() {
           </div>
         </div>
         {menuOpen && (
-          <nav className="border-t border-sidebar-border/40 bg-sidebar px-4 py-2 sm:hidden">
-            <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" block />
-            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" block />
+          <nav className="flex flex-col gap-1 border-t border-sidebar-border/40 bg-sidebar px-4 py-2 sm:hidden">
+            <NavItem to="/atividades" icon={<ClipboardList className="h-4 w-4" />} label="Atividades" block onNavigate={() => setMenuOpen(false)} />
+            <NavItem to="/painel" icon={<BarChart3 className="h-4 w-4" />} label="Painel" block onNavigate={() => setMenuOpen(false)} />
             {isPlanning && (
               <>
-                <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" block />
-                <NavItem to="/historico" icon={<History className="h-4 w-4" />} label="Histórico" block />
+                <NavItem to="/planejamento" icon={<Zap className="h-4 w-4" />} label="Planejamento" block onNavigate={() => setMenuOpen(false)} />
+                <NavItem to="/historico" icon={<History className="h-4 w-4" />} label="Histórico" block onNavigate={() => setMenuOpen(false)} />
               </>
             )}
-            {isAdmin && <NavItem to="/admin/usuarios" icon={<Settings className="h-4 w-4" />} label="Administração" block />}
+            {isAdmin && <NavItem to="/admin/usuarios" icon={<Settings className="h-4 w-4" />} label="Administração" block onNavigate={() => setMenuOpen(false)} />}
           </nav>
         )}
       </header>
@@ -132,11 +132,12 @@ function AuthedLayout() {
   );
 }
 
-function NavItem({ to, icon, label, block }: { to: string; icon: React.ReactNode; label: string; block?: boolean }) {
+function NavItem({ to, icon, label, block, onNavigate }: { to: string; icon: React.ReactNode; label: string; block?: boolean; onNavigate?: () => void }) {
   return (
     <Link
       to={to}
-      className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium transition hover:bg-sidebar-accent ${block ? "w-full" : ""}`}
+      onClick={onNavigate}
+      className={`items-center gap-2 rounded-md px-3 py-2 text-xs font-medium transition hover:bg-sidebar-accent ${block ? "flex w-full" : "inline-flex"}`}
       activeProps={{ className: "bg-sidebar-accent" }}
     >
       {icon}
