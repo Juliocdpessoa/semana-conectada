@@ -154,11 +154,11 @@ function DesktopNavItem({ to, label, icon }: { to: string; label: string; icon: 
     <Link
       to={to}
       className={cn(
-        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-primary-foreground/85 transition-colors hover:bg-white/10 hover:text-primary-foreground",
       )}
       activeProps={{
         className:
-          "bg-sidebar-accent text-sidebar-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-sidebar-primary",
+          "bg-white/15 text-primary-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-primary-foreground",
       }}
     >
       {icon}
@@ -171,8 +171,8 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
   return (
     <Link
       to={to}
-      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground/85 hover:bg-sidebar-accent"
-      activeProps={{ className: "bg-sidebar-accent text-sidebar-foreground border-l-2 border-sidebar-primary" }}
+      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-primary-foreground/85 hover:bg-white/10"
+      activeProps={{ className: "bg-white/15 text-primary-foreground border-l-2 border-primary-foreground" }}
     >
       {icon}
       {label}
