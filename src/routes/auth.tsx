@@ -139,28 +139,34 @@ function AuthPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
-                  {mode === "login" ? "Acessar plataforma" : "Solicitar acesso"}
+                  {mode === "login" ? "Acessar plataforma" : mode === "signup" ? "Solicitar acesso" : "Recuperar senha"}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
-                  {mode === "login" ? "Use seu e-mail corporativo." : "Novo cadastro requer aprovação."}
+                  {mode === "login"
+                    ? "Informe seu e-mail e senha."
+                    : mode === "signup"
+                    ? "Novo cadastro requer aprovação."
+                    : "Informe seu e-mail para receber as instruções."}
                 </p>
               </div>
             </div>
 
-            <div className="mt-5 inline-flex rounded-md border border-border p-0.5">
-              {(["login", "signup"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setMode(m)}
-                  className={`rounded-[3px] px-3 py-1 text-[12px] font-medium transition ${
-                    mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {m === "login" ? "Entrar" : "Cadastrar"}
-                </button>
-              ))}
-            </div>
+            {mode !== "forgot" && (
+              <div className="mt-5 inline-flex rounded-md border border-border p-0.5">
+                {(["login", "signup"] as const).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={`rounded-[3px] px-3 py-1 text-[12px] font-medium transition ${
+                      mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {m === "login" ? "Entrar" : "Cadastrar"}
+                  </button>
+                ))}
+              </div>
+            )}
 
             <form onSubmit={submit} className="mt-5 space-y-4">
               {mode === "signup" && (
@@ -181,28 +187,50 @@ function AuthPage() {
                   className="input-base"
                 />
               </div>
-              <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Senha</label>
-                <input
-                  type="password" required
-                  autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                  value={password} onChange={(e) => setPassword(e.target.value)}
-                  className="input-base"
-                />
-              </div>
+              {mode !== "forgot" && (
+                <div>
+                  <div className="mb-1 flex items-center justify-between">
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Senha</label>
+                    {mode === "login" && (
+                      <button
+                        type="button"
+                        onClick={() => setMode("forgot")}
+                        className="text-[11px] font-medium text-primary hover:underline"
+                      >
+                        Esqueci minha senha
+                      </button>
+                    )}
+                  </div>
+                  <input
+                    type="password" required
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    className="input-base"
+                  />
+                </div>
+              )}
 
               <button
                 type="submit"
                 disabled={loading}
                 className="btn-primary w-full py-2.5"
               >
-                {loading ? "Aguarde..." : mode === "login" ? "Entrar" : "Solicitar acesso"}
+                {loading ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Solicitar acesso" : "Enviar instruções"}
               </button>
 
               {mode === "signup" && (
                 <p className="text-[11px] text-muted-foreground">
                   Após o cadastro seu acesso fica pendente até aprovação de um administrador.
                 </p>
+              )}
+              {mode === "forgot" && (
+                <button
+                  type="button"
+                  onClick={() => setMode("login")}
+                  className="w-full text-center text-[11px] text-muted-foreground hover:text-foreground"
+                >
+                  Voltar para login
+                </button>
               )}
             </form>
           </div>
