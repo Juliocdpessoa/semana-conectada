@@ -1,0 +1,15 @@
+{
+  "name": "NEXO — Gestão integrada da manutenção",
+  "short_name": "NEXO",
+  "description": "Plataforma corporativa para acompanhamento diário de atividades semanais.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F7F9",
+  "theme_color": "#1E3A2B",
+  "lang": "pt-BR",
+  "icons": [
+    { "src": "/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/app-icon.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
