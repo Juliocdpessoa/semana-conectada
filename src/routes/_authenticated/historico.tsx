@@ -20,7 +20,33 @@ function HistoricoPage() {
   });
   const history = useQuery({
     queryKey: ["history"],
-    queryFn: async () => (await supabase.from("activity_history").select("*").order("changed_at", { ascending: false }).limit(200)).data ?? [],
+    queryFn: async () => {
+      const { data: rows } = await supabase
+        .from("activity_history")
+        .select("*")
+        .order("changed_at", { ascending: false })
+        .limit(200);
+      const list = rows ?? [];
+      const ids = Array.from(new Set(list.map((r: any) => r.activity_id).filter(Boolean)));
+      let map: Record<string, any> = {};
+      if (ids.length > 0) {
+        const { data: acts } = await supabase
+          .from("activities")
+          .select("id, order_number, planning_data")
+          .in("id", ids);
+        map = Object.fromEntries((acts ?? []).map((a: any) => [a.id, a]));
+      }
+      return list.map((h: any) => {
+        const a = map[h.activity_id] ?? {};
+        const pd = (a.planning_data ?? {}) as Record<string, any>;
+        return {
+          ...h,
+          order_number: a.order_number ?? null,
+          operacao: pd["Operação"] ?? pd["Operacao"] ?? pd["OPERAÇÃO"] ?? null,
+          sub_operacao: pd["Sub operação"] ?? pd["Sub Operação"] ?? pd["Subop"] ?? pd["SUB OPERAÇÃO"] ?? pd["Sub operacao"] ?? null,
+        };
+      });
+    },
   });
 
   return (
@@ -66,6 +92,9 @@ function HistoricoPage() {
                 <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-semibold">Quando</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ordem</th>
+                    <th className="px-3 py-2 text-left font-semibold">Op</th>
+                    <th className="px-3 py-2 text-left font-semibold">Subop</th>
                     <th className="px-3 py-2 text-left font-semibold">Quem</th>
                     <th className="px-3 py-2 text-left font-semibold">Origem</th>
                     <th className="px-3 py-2 text-left font-semibold">Antes</th>
@@ -73,9 +102,12 @@ function HistoricoPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {history.data.map((h) => (
+                  {history.data.map((h: any) => (
                     <tr key={h.id} className="row-zebra align-top">
                       <td className="px-3 py-2 tabular text-[11px]">{new Date(h.changed_at).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 font-mono text-[11px]">{h.order_number ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]">{h.operacao ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]">{h.sub_operacao ?? "—"}</td>
                       <td className="px-3 py-2 text-[11px]">
                         <div className="font-medium text-foreground">{h.changed_by_name}</div>
                         <div className="text-muted-foreground">{h.changed_by_email}</div>
