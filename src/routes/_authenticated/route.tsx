@@ -77,20 +77,20 @@ function AuthedLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-sidebar-border/70 bg-sidebar text-sidebar-foreground">
+      <header className="sticky top-0 z-40 border-b border-white/15 bg-primary text-primary-foreground">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-1.5 sm:px-6">
           {/* Marca */}
           <Link to="/atividades" className="flex items-center gap-2.5">
-            <BrandLogo className="h-7 w-auto" />
+            <BrandLogo className="h-7 w-auto brightness-0 invert" />
             <div className="hidden leading-tight sm:block">
               <div className="text-[13px] font-semibold">NEXO</div>
-              <div className="text-[10px] uppercase tracking-[0.09em] text-sidebar-foreground/60">
+              <div className="text-[10px] uppercase tracking-[0.09em] text-primary-foreground/70">
                 Gestão integrada da manutenção
               </div>
             </div>
           </Link>
 
-          <div className="mx-4 hidden h-6 w-px bg-sidebar-border sm:block" />
+          <div className="mx-4 hidden h-6 w-px bg-white/20 sm:block" />
 
           {/* Navegação desktop */}
           <nav className="hidden items-center gap-0.5 sm:flex">
@@ -101,11 +101,11 @@ function AuthedLayout() {
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right md:block">
               <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
-              <div className="text-[10px] leading-tight text-sidebar-foreground/60">{roleLabel(s.role)}</div>
+              <div className="text-[10px] leading-tight text-primary-foreground/70">{roleLabel(s.role)}</div>
             </div>
             <button
               onClick={signOut}
-              className="hidden items-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] font-medium hover:bg-sidebar-accent md:inline-flex"
+              className="hidden items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-medium hover:bg-white/20 md:inline-flex"
               title="Sair"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -114,7 +114,7 @@ function AuthedLayout() {
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="grid h-8 w-8 place-items-center rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent sm:hidden"
+              className="grid h-8 w-8 place-items-center rounded-md border border-white/20 hover:bg-white/10 sm:hidden"
               aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
               aria-expanded={menuOpen}
             >
@@ -125,10 +125,10 @@ function AuthedLayout() {
 
         {/* Navegação mobile */}
         {menuOpen && (
-          <nav className="border-t border-sidebar-border/60 bg-sidebar px-3 py-2 sm:hidden">
-            <div className="mb-2 rounded-md bg-sidebar-accent/40 px-3 py-2 text-[11px]">
+          <nav className="border-t border-white/15 bg-primary px-3 py-2 sm:hidden">
+            <div className="mb-2 rounded-md bg-white/10 px-3 py-2 text-[11px]">
               <div className="font-medium">{s.fullName || s.email}</div>
-              <div className="text-sidebar-foreground/60">{s.email} · {roleLabel(s.role)}</div>
+              <div className="text-primary-foreground/70">{s.email} · {roleLabel(s.role)}</div>
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
@@ -136,7 +136,7 @@ function AuthedLayout() {
               ))}
               <button
                 onClick={signOut}
-                className="mt-2 inline-flex items-center gap-2 rounded-md border border-sidebar-border/60 px-3 py-2.5 text-[13px] hover:bg-sidebar-accent"
+                className="mt-2 inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2.5 text-[13px] hover:bg-white/10"
               >
                 <LogOut className="h-4 w-4" /> Sair
               </button>
@@ -154,11 +154,11 @@ function DesktopNavItem({ to, label, icon }: { to: string; label: string; icon: 
     <Link
       to={to}
       className={cn(
-        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-sidebar-foreground/85 transition-colors hover:bg-sidebar-accent hover:text-sidebar-foreground",
+        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-primary-foreground/85 transition-colors hover:bg-white/10 hover:text-primary-foreground",
       )}
       activeProps={{
         className:
-          "bg-sidebar-accent text-sidebar-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-sidebar-primary",
+          "bg-white/15 text-primary-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-primary-foreground",
       }}
     >
       {icon}
@@ -171,8 +171,8 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
   return (
     <Link
       to={to}
-      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-sidebar-foreground/85 hover:bg-sidebar-accent"
-      activeProps={{ className: "bg-sidebar-accent text-sidebar-foreground border-l-2 border-sidebar-primary" }}
+      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-primary-foreground/85 hover:bg-white/10"
+      activeProps={{ className: "bg-white/15 text-primary-foreground border-l-2 border-primary-foreground" }}
     >
       {icon}
       {label}
