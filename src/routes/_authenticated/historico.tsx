@@ -92,6 +92,9 @@ function HistoricoPage() {
                 <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2 text-left font-semibold">Quando</th>
+                    <th className="px-3 py-2 text-left font-semibold">Ordem</th>
+                    <th className="px-3 py-2 text-left font-semibold">Op</th>
+                    <th className="px-3 py-2 text-left font-semibold">Subop</th>
                     <th className="px-3 py-2 text-left font-semibold">Quem</th>
                     <th className="px-3 py-2 text-left font-semibold">Origem</th>
                     <th className="px-3 py-2 text-left font-semibold">Antes</th>
@@ -99,9 +102,12 @@ function HistoricoPage() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
-                  {history.data.map((h) => (
+                  {history.data.map((h: any) => (
                     <tr key={h.id} className="row-zebra align-top">
                       <td className="px-3 py-2 tabular text-[11px]">{new Date(h.changed_at).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 font-mono text-[11px]">{h.order_number ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]">{h.operacao ?? "—"}</td>
+                      <td className="px-3 py-2 text-[11px]">{h.sub_operacao ?? "—"}</td>
                       <td className="px-3 py-2 text-[11px]">
                         <div className="font-medium text-foreground">{h.changed_by_name}</div>
                         <div className="text-muted-foreground">{h.changed_by_email}</div>
