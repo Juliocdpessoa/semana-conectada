@@ -99,7 +99,7 @@ export function Panel({
   padded?: boolean;
 }) {
   return (
-    <section className={cn("surface-card", className)}>
+    <section className={cn("surface-card min-w-0 overflow-hidden", className)}>
       {(title || actions) && (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">

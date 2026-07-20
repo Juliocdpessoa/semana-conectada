@@ -24,10 +24,10 @@ function HistoricoPage() {
   });
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6">
       <PageHeader eyebrow="Histórico" title="Semanas e auditoria" description="Registro de semanas importadas e últimas alterações de apontamento." />
 
-      <div className="grid gap-4">
+      <div className="grid min-w-0 gap-4">
         <Panel title="Semanas" description={`${weeks.data?.length ?? 0} registros`} padded={false}>
           {weeks.data && weeks.data.length > 0 ? (
             <div className="overflow-x-auto">
@@ -84,10 +84,10 @@ function HistoricoPage() {
                         <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
                       </td>
                     </tr>
                   ))}
