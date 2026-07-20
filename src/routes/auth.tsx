@@ -17,7 +17,7 @@ const nameSchema = z.string().trim().min(2, { message: "Informe seu nome" }).max
 
 function AuthPage() {
   const navigate = useNavigate();
-  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -28,8 +28,19 @@ function AuthPage() {
     setLoading(true);
     try {
       const parsedEmail = emailSchema.safeParse(email);
-      const parsedPw = passwordSchema.safeParse(password);
       if (!parsedEmail.success) return toast.error(parsedEmail.error.issues[0].message);
+
+      if (mode === "forgot") {
+        const { error } = await supabase.auth.resetPasswordForEmail(parsedEmail.data, {
+          redirectTo: `${window.location.origin}/redefinir-senha`,
+        });
+        if (error) return toast.error(error.message);
+        toast.success("Se o e-mail estiver cadastrado, enviaremos as instruções de recuperação.");
+        setMode("login");
+        return;
+      }
+
+      const parsedPw = passwordSchema.safeParse(password);
       if (!parsedPw.success) return toast.error(parsedPw.error.issues[0].message);
 
       if (mode === "signup") {
