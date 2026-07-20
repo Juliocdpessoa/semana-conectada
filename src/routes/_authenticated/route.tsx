@@ -125,7 +125,7 @@ function AuthedLayout() {
 
         {/* Navegação mobile */}
         {menuOpen && (
-          <nav className="border-t border-white/15 bg-primary px-3 py-2 sm:hidden">
+          <nav className="border-t border-white/10 bg-[oklch(0.42_0.13_142)] px-3 py-2 sm:hidden">
             <div className="mb-2 rounded-md bg-white/10 px-3 py-2 text-[11px]">
               <div className="font-medium">{s.fullName || s.email}</div>
               <div className="text-primary-foreground/70">{s.email} · {roleLabel(s.role)}</div>
