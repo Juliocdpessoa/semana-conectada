@@ -84,10 +84,10 @@ function HistoricoPage() {
                         <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
                       </td>
                     </tr>
                   ))}
