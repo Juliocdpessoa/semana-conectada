@@ -24,10 +24,10 @@ function HistoricoPage() {
   });
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6">
       <PageHeader eyebrow="Histórico" title="Semanas e auditoria" description="Registro de semanas importadas e últimas alterações de apontamento." />
 
-      <div className="grid gap-4">
+      <div className="grid min-w-0 gap-4">
         <Panel title="Semanas" description={`${weeks.data?.length ?? 0} registros`} padded={false}>
           {weeks.data && weeks.data.length > 0 ? (
             <div className="overflow-x-auto">
