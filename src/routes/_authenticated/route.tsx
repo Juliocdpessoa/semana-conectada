@@ -90,7 +90,7 @@ function AuthedLayout() {
             </div>
           </Link>
 
-          <div className="mx-4 hidden h-6 w-px bg-sidebar-border sm:block" />
+          <div className="mx-4 hidden h-6 w-px bg-white/20 sm:block" />
 
           {/* Navegação desktop */}
           <nav className="hidden items-center gap-0.5 sm:flex">
@@ -101,11 +101,11 @@ function AuthedLayout() {
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right md:block">
               <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
-              <div className="text-[10px] leading-tight text-sidebar-foreground/60">{roleLabel(s.role)}</div>
+              <div className="text-[10px] leading-tight text-primary-foreground/70">{roleLabel(s.role)}</div>
             </div>
             <button
               onClick={signOut}
-              className="hidden items-center gap-1.5 rounded-md border border-sidebar-border bg-sidebar-accent/40 px-2.5 py-1.5 text-[11px] font-medium hover:bg-sidebar-accent md:inline-flex"
+              className="hidden items-center gap-1.5 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px] font-medium hover:bg-white/20 md:inline-flex"
               title="Sair"
             >
               <LogOut className="h-3.5 w-3.5" />
@@ -114,7 +114,7 @@ function AuthedLayout() {
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="grid h-8 w-8 place-items-center rounded-md border border-sidebar-border/60 hover:bg-sidebar-accent sm:hidden"
+              className="grid h-8 w-8 place-items-center rounded-md border border-white/20 hover:bg-white/10 sm:hidden"
               aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
               aria-expanded={menuOpen}
             >
@@ -125,10 +125,10 @@ function AuthedLayout() {
 
         {/* Navegação mobile */}
         {menuOpen && (
-          <nav className="border-t border-sidebar-border/60 bg-sidebar px-3 py-2 sm:hidden">
-            <div className="mb-2 rounded-md bg-sidebar-accent/40 px-3 py-2 text-[11px]">
+          <nav className="border-t border-white/15 bg-primary px-3 py-2 sm:hidden">
+            <div className="mb-2 rounded-md bg-white/10 px-3 py-2 text-[11px]">
               <div className="font-medium">{s.fullName || s.email}</div>
-              <div className="text-sidebar-foreground/60">{s.email} · {roleLabel(s.role)}</div>
+              <div className="text-primary-foreground/70">{s.email} · {roleLabel(s.role)}</div>
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
@@ -136,7 +136,7 @@ function AuthedLayout() {
               ))}
               <button
                 onClick={signOut}
-                className="mt-2 inline-flex items-center gap-2 rounded-md border border-sidebar-border/60 px-3 py-2.5 text-[13px] hover:bg-sidebar-accent"
+                className="mt-2 inline-flex items-center gap-2 rounded-md border border-white/20 px-3 py-2.5 text-[13px] hover:bg-white/10"
               >
                 <LogOut className="h-4 w-4" /> Sair
               </button>
