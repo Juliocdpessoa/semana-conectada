@@ -174,7 +174,7 @@ function AtividadesPage() {
         title={activeWeek.data?.label ?? "—"}
         description={
           activeWeek.data
-            ? `${activeWeek.data.start_date} a ${activeWeek.data.end_date} · ${kpis.total} atividades programadas`
+            ? `${formatDate(activeWeek.data.start_date)} a ${formatDate(activeWeek.data.end_date)} · ${kpis.total} atividades programadas`
             : "Nenhuma semana ativa."
         }
         actions={
