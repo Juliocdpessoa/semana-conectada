@@ -46,7 +46,9 @@ function AuthPage() {
       if (mode === "signup") {
         const parsedName = nameSchema.safeParse(fullName);
         if (!parsedName.success) return toast.error(parsedName.error.issues[0].message);
-        const { error } = await supabase.auth.signUp({
+        // Garante que ninguém está logado antes de criar novo cadastro
+        await supabase.auth.signOut().catch(() => {});
+        const { data: signUpData, error } = await supabase.auth.signUp({
           email: parsedEmail.data,
           password: parsedPw.data,
           options: {
@@ -54,7 +56,21 @@ function AuthPage() {
             data: { full_name: parsedName.data },
           },
         });
-        if (error) return toast.error(error.message);
+        if (error) {
+          const msg = error.message?.toLowerCase() ?? "";
+          if (msg.includes("already") || msg.includes("registered") || msg.includes("exists")) {
+            toast.error("Este e-mail já possui cadastro. Use 'Entrar' ou 'Esqueci minha senha'.");
+            setMode("login");
+            return;
+          }
+          if (msg.includes("rate") || msg.includes("limit")) {
+            toast.error("Muitas tentativas. Aguarde alguns minutos e tente novamente.");
+            return;
+          }
+          return toast.error(error.message);
+        }
+        // Se a sessão veio junto (auto-confirm), desloga para não travar em /atividades
+        if (signUpData.session) await supabase.auth.signOut().catch(() => {});
         toast.success("Cadastro enviado. Aguarde a aprovação de um administrador.");
         navigate({ to: "/aguardando-aprovacao" });
       } else {
