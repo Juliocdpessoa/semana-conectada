@@ -77,14 +77,14 @@ function AuthedLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-sidebar-border/70 bg-sidebar text-sidebar-foreground">
+      <header className="sticky top-0 z-40 border-b border-white/15 bg-primary text-primary-foreground">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-1.5 sm:px-6">
           {/* Marca */}
           <Link to="/atividades" className="flex items-center gap-2.5">
-            <BrandLogo className="h-7 w-auto" />
+            <BrandLogo className="h-7 w-auto brightness-0 invert" />
             <div className="hidden leading-tight sm:block">
               <div className="text-[13px] font-semibold">NEXO</div>
-              <div className="text-[10px] uppercase tracking-[0.09em] text-sidebar-foreground/60">
+              <div className="text-[10px] uppercase tracking-[0.09em] text-primary-foreground/70">
                 Gestão integrada da manutenção
               </div>
             </div>
