@@ -20,7 +20,33 @@ function HistoricoPage() {
   });
   const history = useQuery({
     queryKey: ["history"],
-    queryFn: async () => (await supabase.from("activity_history").select("*").order("changed_at", { ascending: false }).limit(200)).data ?? [],
+    queryFn: async () => {
+      const { data: rows } = await supabase
+        .from("activity_history")
+        .select("*")
+        .order("changed_at", { ascending: false })
+        .limit(200);
+      const list = rows ?? [];
+      const ids = Array.from(new Set(list.map((r: any) => r.activity_id).filter(Boolean)));
+      let map: Record<string, any> = {};
+      if (ids.length > 0) {
+        const { data: acts } = await supabase
+          .from("activities")
+          .select("id, order_number, planning_data")
+          .in("id", ids);
+        map = Object.fromEntries((acts ?? []).map((a: any) => [a.id, a]));
+      }
+      return list.map((h: any) => {
+        const a = map[h.activity_id] ?? {};
+        const pd = (a.planning_data ?? {}) as Record<string, any>;
+        return {
+          ...h,
+          order_number: a.order_number ?? null,
+          operacao: pd["Operação"] ?? pd["Operacao"] ?? pd["OPERAÇÃO"] ?? null,
+          sub_operacao: pd["Sub operação"] ?? pd["Sub Operação"] ?? pd["Subop"] ?? pd["SUB OPERAÇÃO"] ?? pd["Sub operacao"] ?? null,
+        };
+      });
+    },
   });
 
   return (
