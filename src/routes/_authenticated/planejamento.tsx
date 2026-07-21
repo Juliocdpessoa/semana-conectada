@@ -5,9 +5,9 @@ import { useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
-import { importWeek, activateWeek } from "@/lib/week-import.functions";
+import { importWeek, activateWeek, deleteWeek } from "@/lib/week-import.functions";
 import { toast } from "sonner";
-import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown } from "lucide-react";
+import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown, Trash2 } from "lucide-react";
 import type { SessionInfo } from "./route";
 import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
 
@@ -134,6 +134,7 @@ function PlanejamentoPage() {
   });
 
   const activateFn = useServerFn(activateWeek);
+  const deleteFn = useServerFn(deleteWeek);
 
   async function exportWeek() {
     if (!activeWeek.data) return;
@@ -269,19 +270,39 @@ function PlanejamentoPage() {
                       </td>
                       <td className="px-3 py-2 text-right">
                         {!w.is_active && (
-                          <button
-                            onClick={async () => {
-                              const res = await activateFn({ data: { weekId: w.id } });
-                              if (!res.ok) return toast.error(res.error);
-                              toast.success("Semana ativada.");
-                              qc.invalidateQueries({ queryKey: ["active-week"] });
-                              qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                              qc.invalidateQueries({ queryKey: ["activities"] });
-                            }}
-                            className="btn-ghost py-1 text-[11px]"
-                          >
-                            Ativar
-                          </button>
+                          <div className="flex justify-end gap-1">
+                            <button
+                              onClick={async () => {
+                                const res = await activateFn({ data: { weekId: w.id } });
+                                if (!res.ok) return toast.error(res.error);
+                                toast.success("Semana ativada.");
+                                qc.invalidateQueries({ queryKey: ["active-week"] });
+                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                                qc.invalidateQueries({ queryKey: ["activities"] });
+                              }}
+                              className="btn-ghost py-1 text-[11px]"
+                            >
+                              Ativar
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (
+                                  !window.confirm(
+                                    `Excluir definitivamente ${w.code}? Exporte o backup antes de continuar.`,
+                                  )
+                                )
+                                  return;
+                                const res = await deleteFn({ data: { weekId: w.id } });
+                                if (!res.ok) return toast.error(res.error);
+                                toast.success("Semana excluída.");
+                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                              }}
+                              className="btn-ghost py-1 text-[11px] text-destructive"
+                              title="Excluir semana inativa"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         )}
                       </td>
                     </tr>
