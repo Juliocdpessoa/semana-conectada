@@ -38,7 +38,7 @@ function PainelPage() {
       for (let from = 0; ; from += chunk) {
         const { data, error } = await supabase
           .from("activities")
-          .select("id,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name")
+          .select("id,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data")
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
         if (error) throw error;
