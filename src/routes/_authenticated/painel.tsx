@@ -50,7 +50,9 @@ function PainelPage() {
       for (let from = 0; ; from += chunk) {
         const { data, error } = await supabase
           .from("activities")
-          .select("id,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data")
+          .select(
+            "id,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
+          )
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
         if (error) throw error;
@@ -102,12 +104,19 @@ function PainelPage() {
   if (activeWeek.isLoading || activities.isLoading) {
     return (
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
-        <div className="mb-5 space-y-2"><Skeleton className="h-6 w-64" /><Skeleton className="h-4 w-96" /></div>
+        <div className="mb-5 space-y-2">
+          <Skeleton className="h-6 w-64" />
+          <Skeleton className="h-4 w-96" />
+        </div>
         <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-20" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-20" />
+          ))}
         </div>
         <div className="grid gap-4 lg:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-64" />)}
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-64" />
+          ))}
         </div>
       </main>
     );
@@ -137,11 +146,26 @@ function PainelPage() {
 
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-        <KpiCard label="Executadas" value={kpis.executado} tone="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
-        <KpiCard label="Não executadas" value={kpis.naoExec} tone="destructive" icon={<XCircle className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Executadas"
+          value={kpis.executado}
+          tone="success"
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+        />
+        <KpiCard
+          label="Não executadas"
+          value={kpis.naoExec}
+          tone="destructive"
+          icon={<XCircle className="h-3.5 w-3.5" />}
+        />
         <KpiCard label="Sem apontamento" value={kpis.semApont} icon={<Clock className="h-3.5 w-3.5" />} />
         <KpiCard label="Imediatas" value={kpis.imediatas} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
-        <KpiCard label="Aderência" value={`${kpis.aderencia}%`} tone="primary" icon={<Percent className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Aderência"
+          value={`${kpis.aderencia}%`}
+          tone="primary"
+          icon={<Percent className="h-3.5 w-3.5" />}
+        />
       </section>
 
       <section className="mb-4">
@@ -150,23 +174,34 @@ function PainelPage() {
 
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel title="Execução por dia" description="Barras empilhadas executado/não executado">
-
           <div className="space-y-3">
-            {byDay.length === 0 ? <Empty /> : byDay.map(([day, g]) => (
-              <div key={day} className="min-w-0">
-                <div className="mb-1 flex justify-between text-[11px]">
-                  <span className="font-medium text-foreground">{formatDate(day)}</span>
-                  <span className="text-muted-foreground tabular">{g.exec}/{g.total}</span>
+            {byDay.length === 0 ? (
+              <Empty />
+            ) : (
+              byDay.map(([day, g]) => (
+                <div key={day} className="min-w-0">
+                  <div className="mb-1 flex justify-between text-[11px]">
+                    <span className="font-medium text-foreground">{formatDate(day)}</span>
+                    <span className="text-muted-foreground tabular">
+                      {g.exec}/{g.total}
+                    </span>
+                  </div>
+                  <StackedBar total={g.total} exec={g.exec} nao={g.nao} />
                 </div>
-                <StackedBar total={g.total} exec={g.exec} nao={g.nao} />
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </Panel>
 
-        <Panel title="Por área (Gerência)"><BarList items={byArea} /></Panel>
-        <Panel title="Por especialidade"><BarList items={bySpecialty} /></Panel>
-        <Panel title="Top 10 justificativas" description="Motivos de NÃO EXECUTADO"><BarList items={byJust} color="destructive" /></Panel>
+        <Panel title="Por área (Gerência)">
+          <BarList items={byArea} />
+        </Panel>
+        <Panel title="Por especialidade">
+          <BarList items={bySpecialty} />
+        </Panel>
+        <Panel title="Top 10 justificativas" description="Motivos de NÃO EXECUTADO">
+          <BarList items={byJust} color="destructive" />
+        </Panel>
 
         <Panel className="lg:col-span-2" title="Top 10 responsáveis por apontamento">
           <BarList items={byResp} color="success" />
@@ -180,14 +215,25 @@ function MiniStat({ label, value, tone = "default" }: { label: string; value: st
   return (
     <div className="text-right">
       <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("text-xl font-semibold leading-none tabular", tone === "success" ? "text-success" : "text-foreground")}>
+      <div
+        className={cn(
+          "text-xl font-semibold leading-none tabular",
+          tone === "success" ? "text-success" : "text-foreground",
+        )}
+      >
         {value}
       </div>
     </div>
   );
 }
 
-function BarList({ items, color = "primary" }: { items: [string, number][]; color?: "primary" | "success" | "destructive" }) {
+function BarList({
+  items,
+  color = "primary",
+}: {
+  items: [string, number][];
+  color?: "primary" | "success" | "destructive";
+}) {
   const max = Math.max(1, ...items.map(([, n]) => n));
   const bg = color === "success" ? "bg-success" : color === "destructive" ? "bg-destructive" : "bg-primary";
   if (items.length === 0) return <Empty />;
@@ -196,7 +242,9 @@ function BarList({ items, color = "primary" }: { items: [string, number][]; colo
       {items.map(([k, n]) => (
         <div key={k} className="min-w-0 text-[12px]">
           <div className="flex min-w-0 justify-between gap-2">
-            <span className="min-w-0 flex-1 truncate text-foreground" title={k}>{k}</span>
+            <span className="min-w-0 flex-1 truncate text-foreground" title={k}>
+              {k}
+            </span>
             <span className="shrink-0 tabular text-muted-foreground">{n.toLocaleString("pt-BR")}</span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
@@ -282,7 +330,15 @@ function reportedIsoDay(reportedAt: string | null): string | null {
 function hoursOf(pd: Record<string, unknown> | null): number {
   if (!pd) return 0;
   const raw = (pd as Record<string, unknown>)["Dur n"] ?? (pd as Record<string, unknown>)["Trab"];
-  const n = typeof raw === "number" ? raw : typeof raw === "string" ? Number(raw) : NaN;
+  const normalized =
+    typeof raw === "string"
+      ? raw
+          .trim()
+          .replace(/\s*h(?:oras?)?$/i, "")
+          .replace(/\./g, "")
+          .replace(",", ".")
+      : raw;
+  const n = typeof normalized === "number" ? normalized : typeof normalized === "string" ? Number(normalized) : NaN;
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
@@ -295,8 +351,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
   const hoursDisabled = totalHours <= 0;
   const effectiveMetric = hoursDisabled && metric === "hours" ? "count" : metric;
 
-  const unitOf = (r: CurveRow) =>
-    effectiveMetric === "hours" ? hoursOf(r.planning_data) : 1;
+  const unitOf = (r: CurveRow) => (effectiveMetric === "hours" ? hoursOf(r.planning_data) : 1);
 
   const { data, totalPlanned, cutoffIso, indicators } = useMemo(() => {
     const dPlanned = new Map<string, number>();
@@ -419,7 +474,9 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
             onClick={() => setMetric("count")}
             className={cn(
               "rounded px-2 py-1 font-medium transition",
-              effectiveMetric === "count" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground"
+              effectiveMetric === "count"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
             )}
           >
             Atividades
@@ -431,8 +488,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
             title={hoursDisabled ? "Sem horas planejadas suficientes nos dados desta semana" : undefined}
             className={cn(
               "rounded px-2 py-1 font-medium transition",
-              effectiveMetric === "hours" ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground",
-              hoursDisabled && "cursor-not-allowed opacity-50"
+              effectiveMetric === "hours"
+                ? "bg-card text-foreground shadow-sm"
+                : "text-muted-foreground hover:text-foreground",
+              hoursDisabled && "cursor-not-allowed opacity-50",
             )}
           >
             Horas planejadas
@@ -454,7 +513,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
               value={`${indicators.deviation >= 0 ? "+" : ""}${indicators.deviation.toFixed(1)} pp`}
               tone={indicators.deviation >= 0 ? "success" : "destructive"}
             />
-            <CurveStat label="Restante" value={`${indicators.remaining.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`} />
+            <CurveStat
+              label="Restante"
+              value={`${indicators.remaining.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`}
+            />
           </div>
 
           {hoursDisabled && metric === "hours" && (

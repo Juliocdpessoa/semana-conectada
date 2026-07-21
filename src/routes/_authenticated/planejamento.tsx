@@ -21,24 +21,38 @@ export const Route = createFileRoute("/_authenticated/planejamento")({
 
 // Colunas do modelo de programação semanal (mesma estrutura da planilha importada)
 const IMMEDIATE_COLUMNS = [
-  "Ordem", "Nº", "Nota", "Op", "Subop", "TxtDesc.Oper.",
-  "Gerência", "Área op", "Localização", "Local",
-  "CenTrab", "Gr pl", "Trab", "Dur n",
-  "Data início", "Hora início", "Data fim", "Hora fim",
-  "Tipo de Nota", "Confirmação",
+  "Ordem",
+  "Nº",
+  "Nota",
+  "Op",
+  "Subop",
+  "TxtDesc.Oper.",
+  "Gerência",
+  "Área op",
+  "Localização",
+  "Local",
+  "CenTrab",
+  "Gr pl",
+  "Trab",
+  "Dur n",
+  "Data início",
+  "Hora início",
+  "Data fim",
+  "Hora fim",
+  "Tipo de Nota",
+  "Confirmação",
 ] as const;
 type ImmCol = (typeof IMMEDIATE_COLUMNS)[number];
 
-
-const COLUMN_HEADERS = [
-  "Ordem", "Nota", "Descrição", "Área", "Especialidade", "Data", "Turno", "Equipe",
-  "Prioridade", "Duração (h)", "Local", "Equipamento", "TAG", "Serviço", "Origem",
-  "Contrato", "PEP", "Centro de custo", "Observação planejamento", "Responsável planejamento",
-  "Status", "Justificativa", "Observações", "Responsável pela informação",
-];
+const REPORT_HEADERS = ["Status", "Justificativa", "Observações", "Responsável pela informação"];
 
 function normalize(s: string) {
-  return s.toString().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+  return s
+    .toString()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim();
 }
 
 function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<string, any>[]; headerRow: string[] }> {
@@ -66,7 +80,9 @@ function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<st
           rows.push(obj);
         }
         resolve({ sheetName, rows, headerRow });
-      } catch (e) { reject(e); }
+      } catch (e) {
+        reject(e);
+      }
     };
     reader.readAsArrayBuffer(file);
   });
@@ -101,7 +117,6 @@ function PlanejamentoPage() {
   const [showImmImport, setShowImmImport] = useState(false);
   const [showImport, setShowImport] = useState(false);
 
-
   const activeWeek = useQuery({
     queryKey: ["active-week"],
     queryFn: async () => (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
@@ -110,32 +125,43 @@ function PlanejamentoPage() {
   const weeksList = useQuery({
     queryKey: ["weeks-list"],
     queryFn: async () =>
-      (await supabase.from("weeks").select("id, code, label, start_date, end_date, is_active").order("start_date", { ascending: false })).data ?? [],
+      (
+        await supabase
+          .from("weeks")
+          .select("id, code, label, start_date, end_date, is_active")
+          .order("start_date", { ascending: false })
+      ).data ?? [],
   });
 
   const activateFn = useServerFn(activateWeek);
 
   async function exportWeek() {
     if (!activeWeek.data) return;
-    const { data: acts, error } = await supabase
-      .from("activities")
-      .select("*")
-      .eq("week_id", activeWeek.data.id)
-      .order("source_row_number", { ascending: true });
-    if (error) return toast.error(error.message);
-    const rows = (acts ?? []).map((a: any) => {
+    const acts: any[] = [];
+    const chunk = 1000;
+    for (let from = 0; ; from += chunk) {
+      const { data, error } = await supabase
+        .from("activities")
+        .select("*")
+        .eq("week_id", activeWeek.data.id)
+        .order("source_row_number", { ascending: true })
+        .range(from, from + chunk - 1);
+      if (error) return toast.error(error.message);
+      if (!data?.length) break;
+      acts.push(...data);
+      if (data.length < chunk) break;
+    }
+    const planningHeaders = Array.from(
+      new Set(
+        acts
+          .flatMap((a: any) => Object.keys((a.planning_data ?? {}) as Record<string, unknown>))
+          .filter((key) => key !== "__row"),
+      ),
+    );
+    const headers = [...planningHeaders, ...REPORT_HEADERS];
+    const rows = acts.map((a: any) => {
       const pd = (a.planning_data ?? {}) as Record<string, any>;
-      const line: Record<string, any> = {};
-      for (const h of COLUMN_HEADERS.slice(0, 20)) {
-        const key = Object.keys(pd).find((k) => normalize(k) === normalize(h));
-        line[h] = key ? pd[key] : null;
-      }
-      if (!line["Ordem"]) line["Ordem"] = a.order_number;
-      if (!line["Nota"]) line["Nota"] = a.note_number;
-      if (!line["Descrição"]) line["Descrição"] = a.description;
-      if (!line["Área"]) line["Área"] = a.area;
-      if (!line["Especialidade"]) line["Especialidade"] = a.specialty;
-      if (!line["Data"]) line["Data"] = a.scheduled_date;
+      const line: Record<string, any> = Object.fromEntries(planningHeaders.map((h) => [h, pd[h] ?? null]));
       line["Status"] = a.status;
       line["Justificativa"] = a.justification;
       line["Observações"] = a.observation;
@@ -144,7 +170,7 @@ function PlanejamentoPage() {
         : "";
       return line;
     });
-    const ws = XLSX.utils.json_to_sheet(rows, { header: COLUMN_HEADERS });
+    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Programação");
     XLSX.writeFile(wb, `${activeWeek.data.code.replace(/\//g, "-")}-apontamentos.xlsx`);
@@ -162,7 +188,9 @@ function PlanejamentoPage() {
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
           title="Semana ativa"
-          description={activeWeek.data ? `${activeWeek.data.start_date} → ${activeWeek.data.end_date}` : "Nenhuma semana ativa."}
+          description={
+            activeWeek.data ? `${activeWeek.data.start_date} → ${activeWeek.data.end_date}` : "Nenhuma semana ativa."
+          }
           className="lg:col-span-2"
         >
           <div className="flex flex-wrap items-end justify-between gap-4">
@@ -206,7 +234,6 @@ function PlanejamentoPage() {
             </button>
           </div>
         </Panel>
-
       </div>
 
       <div className="mt-5">
@@ -228,7 +255,9 @@ function PlanejamentoPage() {
                     <tr key={w.id} className="row-zebra hover:bg-accent/60">
                       <td className="px-3 py-2 font-mono text-[11px]">{w.code}</td>
                       <td className="px-3 py-2">{w.label}</td>
-                      <td className="px-3 py-2 text-[11px] tabular text-muted-foreground">{w.start_date} → {w.end_date}</td>
+                      <td className="px-3 py-2 text-[11px] tabular text-muted-foreground">
+                        {w.start_date} → {w.end_date}
+                      </td>
                       <td className="px-3 py-2">
                         {w.is_active ? (
                           <span className="status-pill border-success/40 bg-success/10 text-success">
@@ -295,7 +324,6 @@ function PlanejamentoPage() {
         />
       )}
       {showImmImport && activeWeek.data && (
-
         <ImmediateImportModal
           weekId={activeWeek.data.id}
           onClose={() => setShowImmImport(false)}
@@ -313,26 +341,26 @@ function PlanejamentoPage() {
 function downloadImmediateTemplate() {
   const header = [...IMMEDIATE_COLUMNS];
   const example: Record<string, any> = {
-    "Ordem": "2027999999",
-    "Nº": 1,
-    "Nota": "14999999",
-    "Op": 10,
-    "Subop": "",
+    Ordem: "2027999999",
+    Nº: 1,
+    Nota: "14999999",
+    Op: 10,
+    Subop: "",
     "TxtDesc.Oper.": "Descrição da atividade imediata",
-    "Gerência": "Oficinas",
+    Gerência: "Oficinas",
     "Área op": "",
-    "Localização": "",
-    "Local": "ROTINA",
-    "CenTrab": "MECANICO",
+    Localização: "",
+    Local: "ROTINA",
+    CenTrab: "MECANICO",
     "Gr pl": "COM",
-    "Trab": 4,
+    Trab: 4,
     "Dur n": 4,
     "Data início": new Date().toISOString().slice(0, 10),
     "Hora início": "08:00",
     "Data fim": new Date().toISOString().slice(0, 10),
     "Hora fim": "12:00",
     "Tipo de Nota": "ZF",
-    "Confirmação": "",
+    Confirmação: "",
   };
   const ws = XLSX.utils.json_to_sheet([example], { header });
   const wb = XLSX.utils.book_new();
@@ -340,10 +368,11 @@ function downloadImmediateTemplate() {
   XLSX.writeFile(wb, "modelo-atividades-imediatas.xlsx");
 }
 
-
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string; headerRow: string[] } | null>(null);
+  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string; headerRow: string[] } | null>(
+    null,
+  );
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -355,35 +384,56 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const call = useServerFn(importWeek);
 
   async function handleFile(f: File) {
-    setFile(f); setError(null);
+    setFile(f);
+    setError(null);
     try {
       const res = await parseWorkbook(f);
-      if (!res.rows.length) { setError("A planilha não contém linhas de dados."); setParsed(null); return; }
+      if (!res.rows.length) {
+        setError("A planilha não contém linhas de dados.");
+        setParsed(null);
+        return;
+      }
       setParsed(res);
       const base = f.name.replace(/\.[^.]+$/, "");
       if (!code) setCode(base.slice(0, 32));
       if (!label) setLabel(base);
-    } catch (e: any) { setError(e?.message ?? "Falha ao ler a planilha."); setParsed(null); }
+    } catch (e: any) {
+      setError(e?.message ?? "Falha ao ler a planilha.");
+      setParsed(null);
+    }
   }
 
   async function submit() {
     if (!parsed) return;
     if (!code.trim() || !label.trim() || !startDate || !endDate) return setError("Preencha código, rótulo e datas.");
-    setBusy(true); setError(null);
+    setBusy(true);
+    setError(null);
     try {
       const payload = parsed.rows.map((r, idx) => {
         const order = extractField(r, "Ordem", "Ordem de serviço", "OS", "Nº ordem", "Numero da ordem");
         const note = extractField(r, "Nota", "Nº nota", "Numero da nota");
-        const desc = extractField(r, "Descrição", "Descricao", "Serviço", "Servico") ?? "";
-        const area = extractField(r, "Área", "Area");
-        const spec = extractField(r, "Especialidade", "Disciplina");
-        const dateRaw = extractField(r, "Data", "Data programada", "Data prevista", "Data planejada");
+        const operation = extractField(r, "Op", "Operação", "Operacao");
+        const suboperation = extractField(r, "Subop", "Sub operação", "Sub operacao");
+        const desc = extractField(r, "TxtDesc.Oper.", "Descrição", "Descricao", "Serviço", "Servico") ?? "";
+        const area = extractField(r, "Área op", "Área", "Area");
+        const spec = extractField(r, "CenTrab", "Centro de trabalho", "Especialidade", "Disciplina");
+        const dateRaw = extractField(
+          r,
+          "Data início",
+          "Data inicio",
+          "Data",
+          "Data programada",
+          "Data prevista",
+          "Data planejada",
+        );
+        const sourceParts = [order, operation, suboperation, note].map((value) => value?.trim()).filter(Boolean);
         return {
-          source_key: order?.trim() || `ROW-${r.__row ?? idx + 2}`,
+          source_key: sourceParts.length ? sourceParts.join("|") : `ROW-${r.__row ?? idx + 2}`,
           order_number: order,
           note_number: note,
           description: desc,
-          area, specialty: spec,
+          area,
+          specialty: spec,
           scheduled_date: toISODate(dateRaw),
           planning_data: r,
           source_row_number: r.__row ?? null,
@@ -391,17 +441,28 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       });
       const res = await call({
         data: {
-          code: code.trim(), label: label.trim(),
-          start_date: startDate, end_date: endDate,
-          activate, source_file_name: file?.name ?? null, sheet_name: parsed.sheetName,
+          code: code.trim(),
+          label: label.trim(),
+          start_date: startDate,
+          end_date: endDate,
+          activate,
+          source_file_name: file?.name ?? null,
+          sheet_name: parsed.sheetName,
           rows: payload,
         },
       });
-      if (!res.ok) { setError(res.error); setBusy(false); return; }
+      if (!res.ok) {
+        setError(res.error);
+        setBusy(false);
+        return;
+      }
       toast.success(`Semana importada — ${res.count} atividades.`);
       onDone();
-    } catch (e: any) { setError(e?.message ?? "Erro ao importar."); }
-    finally { setBusy(false); }
+    } catch (e: any) {
+      setError(e?.message ?? "Erro ao importar.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -412,7 +473,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       size="lg"
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button onClick={submit} disabled={busy || !parsed} className="btn-primary">
             {busy ? "Importando…" : "Importar semana"}
           </button>
@@ -421,7 +484,10 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     >
       <div className="rounded-md border border-dashed border-border bg-muted/40 p-4">
         <input
-          ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
         <div className="flex flex-wrap items-center gap-3">
@@ -431,7 +497,12 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           {file && (
             <div className="text-[12px] text-muted-foreground">
               <span className="font-medium text-foreground">{file.name}</span>
-              {parsed && <span> · {parsed.rows.length} linhas · aba “{parsed.sheetName}”</span>}
+              {parsed && (
+                <span>
+                  {" "}
+                  · {parsed.rows.length} linhas · aba “{parsed.sheetName}”
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -439,10 +510,20 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field label="Código da semana" required>
-          <input value={code} onChange={(e) => setCode(e.target.value)} placeholder="Ex: 030/2026" className="input-base" />
+          <input
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="Ex: 030/2026"
+            className="input-base"
+          />
         </Field>
         <Field label="Rótulo" required>
-          <input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Ex: Semana 030/2026" className="input-base" />
+          <input
+            value={label}
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder="Ex: Semana 030/2026"
+            className="input-base"
+          />
         </Field>
         <Field label="Início" required>
           <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-base" />
@@ -477,7 +558,9 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
   const [saving, setSaving] = useState(false);
   const call = useServerFn(createImmediateActivity);
 
-  function set(col: ImmCol, v: string) { setValues((p) => ({ ...p, [col]: v })); }
+  function set(col: ImmCol, v: string) {
+    setValues((p) => ({ ...p, [col]: v }));
+  }
 
   async function save() {
     const order = values["Ordem"].trim();
@@ -504,7 +587,9 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
       });
       if (!res.ok) return toast.error(res.error);
       onSaved();
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   const dateCols = new Set<ImmCol>(["Data início", "Data fim"]);
@@ -520,7 +605,9 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
       size="lg"
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button onClick={save} disabled={saving} className="btn-primary">
             {saving ? "Salvando…" : "Cadastrar"}
           </button>
@@ -535,12 +622,7 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
           return (
             <div key={c} className={wideCols.has(c) ? "sm:col-span-2" : ""}>
               <Field label={label} required={required}>
-                <input
-                  type={type}
-                  value={values[c]}
-                  onChange={(e) => set(c, e.target.value)}
-                  className="input-base"
-                />
+                <input type={type} value={values[c]} onChange={(e) => set(c, e.target.value)} className="input-base" />
               </Field>
             </div>
           );
@@ -551,8 +633,14 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
 }
 
 function ImmediateImportModal({
-  weekId, onClose, onDone,
-}: { weekId: string; onClose: () => void; onDone: (count: number) => void }) {
+  weekId,
+  onClose,
+  onDone,
+}: {
+  weekId: string;
+  onClose: () => void;
+  onDone: (count: number) => void;
+}) {
   const [file, setFile] = useState<File | null>(null);
   const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string } | null>(null);
   const [busy, setBusy] = useState(false);
@@ -561,17 +649,26 @@ function ImmediateImportModal({
   const call = useServerFn(bulkCreateImmediateActivities);
 
   async function handleFile(f: File) {
-    setFile(f); setError(null);
+    setFile(f);
+    setError(null);
     try {
       const res = await parseWorkbook(f);
-      if (!res.rows.length) { setError("A planilha não contém linhas de dados."); setParsed(null); return; }
+      if (!res.rows.length) {
+        setError("A planilha não contém linhas de dados.");
+        setParsed(null);
+        return;
+      }
       setParsed(res);
-    } catch (e: any) { setError(e?.message ?? "Falha ao ler a planilha."); setParsed(null); }
+    } catch (e: any) {
+      setError(e?.message ?? "Falha ao ler a planilha.");
+      setParsed(null);
+    }
   }
 
   async function submit() {
     if (!parsed) return;
-    setBusy(true); setError(null);
+    setBusy(true);
+    setError(null);
     try {
       const items = [];
       for (const r of parsed.rows) {
@@ -581,7 +678,7 @@ function ImmediateImportModal({
         const planning: Record<string, any> = {};
         for (const c of IMMEDIATE_COLUMNS) {
           const key = Object.keys(r).find((k) => normalize(k) === normalize(c));
-          planning[c] = key ? r[key] ?? null : null;
+          planning[c] = key ? (r[key] ?? null) : null;
         }
         items.push({
           order_number: String(order),
@@ -593,12 +690,23 @@ function ImmediateImportModal({
           planning_data: planning,
         });
       }
-      if (!items.length) { setError("Nenhuma linha válida (Ordem e Descrição são obrigatórios)."); setBusy(false); return; }
+      if (!items.length) {
+        setError("Nenhuma linha válida (Ordem e Descrição são obrigatórios).");
+        setBusy(false);
+        return;
+      }
       const res = await call({ data: { weekId, items } });
-      if (!res.ok) { setError(res.error); setBusy(false); return; }
+      if (!res.ok) {
+        setError(res.error);
+        setBusy(false);
+        return;
+      }
       onDone(res.count);
-    } catch (e: any) { setError(e?.message ?? "Erro ao importar."); }
-    finally { setBusy(false); }
+    } catch (e: any) {
+      setError(e?.message ?? "Erro ao importar.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -612,7 +720,9 @@ function ImmediateImportModal({
           <button onClick={downloadImmediateTemplate} className="btn-ghost">
             <FileDown className="h-4 w-4" /> Baixar modelo
           </button>
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button onClick={submit} disabled={busy || !parsed} className="btn-primary">
             {busy ? "Importando…" : "Importar imediatas"}
           </button>
@@ -621,7 +731,10 @@ function ImmediateImportModal({
     >
       <div className="rounded-md border border-dashed border-border bg-muted/40 p-4">
         <input
-          ref={inputRef} type="file" accept=".xlsx,.xls" className="hidden"
+          ref={inputRef}
+          type="file"
+          accept=".xlsx,.xls"
+          className="hidden"
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
         <div className="flex flex-wrap items-center gap-3">
@@ -631,13 +744,16 @@ function ImmediateImportModal({
           {file && (
             <div className="text-[12px] text-muted-foreground">
               <span className="font-medium text-foreground">{file.name}</span>
-              {parsed && <span> · {parsed.rows.length} linhas · aba “{parsed.sheetName}”</span>}
+              {parsed && (
+                <span>
+                  {" "}
+                  · {parsed.rows.length} linhas · aba “{parsed.sheetName}”
+                </span>
+              )}
             </div>
           )}
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          Colunas esperadas: {IMMEDIATE_COLUMNS.join(", ")}.
-        </p>
+        <p className="mt-3 text-[11px] text-muted-foreground">Colunas esperadas: {IMMEDIATE_COLUMNS.join(", ")}.</p>
       </div>
       {error && (
         <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] text-destructive">
@@ -647,4 +763,3 @@ function ImmediateImportModal({
     </Modal>
   );
 }
-
