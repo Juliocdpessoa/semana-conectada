@@ -5,7 +5,7 @@ import { z } from "zod";
 const updateSchema = z.object({
   activityId: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
-  status: z.string().min(1).max(64),
+  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
 });
@@ -21,11 +21,7 @@ export const updateActivity = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
     // Fetch profile for stamping name/email server-side
-    const { data: prof } = await supabase
-      .from("profiles")
-      .select("full_name, email")
-      .eq("id", userId)
-      .maybeSingle();
+    const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
     // Optimistic concurrency: only update if version matches
     const { data: updated, error } = await supabase
       .from("activities")
@@ -57,7 +53,7 @@ export const updateActivity = createServerFn({ method: "POST" })
 
 const bulkSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
-  status: z.string().min(1).max(64),
+  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
 });
@@ -106,7 +102,8 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
-    if (!canCreate) return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
+    if (!canCreate)
+      return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
     const sourceKey = `IMD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const { data: created, error } = await supabase
       .from("activities")
@@ -132,7 +129,10 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
 
 const bulkImmediateSchema = z.object({
   weekId: z.string().uuid(),
-  items: z.array(immediateSchema.omit({ weekId: true })).min(1).max(1000),
+  items: z
+    .array(immediateSchema.omit({ weekId: true }))
+    .min(1)
+    .max(1000),
 });
 
 export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
@@ -142,7 +142,8 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
-    if (!canCreate) return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
+    if (!canCreate)
+      return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
     const now = Date.now();
     const payload = data.items.map((it, idx) => ({
       week_id: data.weekId,
@@ -162,7 +163,6 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, count: created?.length ?? 0 };
   });
-
 
 const roleSchema = z.enum(["admin", "planning", "leader", "viewer"]);
 const approveSchema = z.object({
