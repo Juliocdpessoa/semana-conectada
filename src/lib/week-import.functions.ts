@@ -46,6 +46,18 @@ export const importWeek = createServerFn({ method: "POST" })
       return { ok: false as const, error: `Já existe uma semana com o código ${data.code}.` };
     }
 
+    const { count: weeksCount, error: countError } = await supabaseAdmin
+      .from("weeks")
+      .select("id", { count: "exact", head: true });
+    if (countError) return { ok: false as const, error: countError.message };
+    if ((weeksCount ?? 0) >= 4) {
+      return {
+        ok: false as const,
+        error:
+          "O limite de 4 semanas foi atingido. Exporte o backup e exclua uma semana inativa antes de importar outra.",
+      };
+    }
+
     const { data: week, error: wErr } = await supabaseAdmin
       .from("weeks")
       .insert({
@@ -118,6 +130,29 @@ export const activateWeek = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     await supabaseAdmin.from("weeks").update({ is_active: false }).eq("is_active", true);
     const { error } = await supabaseAdmin.from("weeks").update({ is_active: true }).eq("id", data.weekId);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const };
+  });
+
+export const deleteWeek = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    if (!(await requirePlanning(supabase, userId))) {
+      return { ok: false as const, error: "Sem permissão." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: week, error: weekError } = await supabaseAdmin
+      .from("weeks")
+      .select("id, is_active")
+      .eq("id", data.weekId)
+      .maybeSingle();
+    if (weekError) return { ok: false as const, error: weekError.message };
+    if (!week) return { ok: false as const, error: "Semana não encontrada." };
+    if (week.is_active) return { ok: false as const, error: "A semana ativa não pode ser excluída." };
+
+    const { error } = await supabaseAdmin.from("weeks").delete().eq("id", data.weekId);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
   });
