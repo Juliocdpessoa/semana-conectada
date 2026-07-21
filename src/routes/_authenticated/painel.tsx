@@ -144,8 +144,13 @@ function PainelPage() {
         <KpiCard label="Aderência" value={`${kpis.aderencia}%`} tone="primary" icon={<Percent className="h-3.5 w-3.5" />} />
       </section>
 
+      <section className="mb-4">
+        <ProgressCurve rows={rows} startDate={activeWeek.data.start_date} endDate={activeWeek.data.end_date} />
+      </section>
+
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel title="Execução por dia" description="Barras empilhadas executado/não executado">
+
           <div className="space-y-3">
             {byDay.length === 0 ? <Empty /> : byDay.map(([day, g]) => (
               <div key={day} className="min-w-0">
