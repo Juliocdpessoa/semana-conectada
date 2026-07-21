@@ -41,17 +41,9 @@ export const importWeek = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     // Duplicate check
-    const { data: existing } = await supabaseAdmin
-      .from("weeks")
-      .select("id, code")
-      .eq("code", data.code)
-      .maybeSingle();
+    const { data: existing } = await supabaseAdmin.from("weeks").select("id, code").eq("code", data.code).maybeSingle();
     if (existing) {
       return { ok: false as const, error: `Já existe uma semana com o código ${data.code}.` };
-    }
-
-    if (data.activate) {
-      await supabaseAdmin.from("weeks").update({ is_active: false }).eq("is_active", true);
     }
 
     const { data: week, error: wErr } = await supabaseAdmin
@@ -61,7 +53,7 @@ export const importWeek = createServerFn({ method: "POST" })
         label: data.label,
         start_date: data.start_date,
         end_date: data.end_date,
-        is_active: data.activate,
+        is_active: false,
         source_file_name: data.source_file_name ?? null,
         sheet_name: data.sheet_name ?? null,
         imported_at: new Date().toISOString(),
@@ -91,7 +83,25 @@ export const importWeek = createServerFn({ method: "POST" })
     for (let i = 0; i < payload.length; i += 500) {
       const chunk = payload.slice(i, i + 500);
       const { error } = await supabaseAdmin.from("activities").insert(chunk);
-      if (error) return { ok: false as const, error: `Erro ao inserir linha ${i}: ${error.message}` };
+      if (error) {
+        await supabaseAdmin.from("weeks").delete().eq("id", week.id);
+        return { ok: false as const, error: `Erro ao inserir linha ${i}: ${error.message}` };
+      }
+    }
+
+    if (data.activate) {
+      const { error: deactivateError } = await supabaseAdmin
+        .from("weeks")
+        .update({ is_active: false })
+        .eq("is_active", true);
+      if (deactivateError) {
+        await supabaseAdmin.from("weeks").delete().eq("id", week.id);
+        return { ok: false as const, error: deactivateError.message };
+      }
+      const { error: activateError } = await supabaseAdmin.from("weeks").update({ is_active: true }).eq("id", week.id);
+      if (activateError) {
+        return { ok: false as const, error: activateError.message };
+      }
     }
 
     return { ok: true as const, weekId: week.id, count: payload.length };
