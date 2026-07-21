@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Clock, Zap, ListChecks, Percent } from "lucide-react";
-import { PageHeader, KpiCard, Panel, EmptyState, Skeleton } from "@/components/ui-kit";
+import { PageHeader, KpiCard, Panel, EmptyState, Skeleton, Modal } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import {
   Bar,
@@ -24,6 +24,8 @@ export const Route = createFileRoute("/_authenticated/painel")({
 
 type Row = {
   id: string;
+  order_number: string | null;
+  description: string;
   status: string;
   justification: string | null;
   area: string | null;
@@ -36,6 +38,7 @@ type Row = {
 };
 
 function PainelPage() {
+  const [selectedJustification, setSelectedJustification] = useState<string | null>(null);
   const activeWeek = useQuery({
     queryKey: ["active-week"],
     queryFn: async () => (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
@@ -51,7 +54,7 @@ function PainelPage() {
         const { data, error } = await supabase
           .from("activities")
           .select(
-            "id,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
+            "id,order_number,description,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
           )
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
@@ -100,6 +103,10 @@ function PainelPage() {
     const only = rows.filter((r) => r.reported_by_name);
     return groupCounts(only, (r) => r.reported_by_name!).slice(0, 10);
   }, [rows]);
+  const selectedPendingTasks = useMemo(
+    () => rows.filter((r) => r.status === "NÃO EXECUTADO" && r.justification === selectedJustification),
+    [rows, selectedJustification],
+  );
 
   if (activeWeek.isLoading || activities.isLoading) {
     return (
@@ -199,14 +206,21 @@ function PainelPage() {
         <Panel title="Por especialidade">
           <BarList items={bySpecialty} />
         </Panel>
-        <Panel title="Top 10 justificativas" description="Motivos de NÃO EXECUTADO">
-          <BarList items={byJust} color="destructive" />
+        <Panel title="Top 10 justificativas" description="Clique no motivo para visualizar as tarefas pendentes">
+          <BarList items={byJust} color="destructive" onSelect={setSelectedJustification} />
         </Panel>
 
         <Panel className="lg:col-span-2" title="Top 10 responsáveis por apontamento">
           <BarList items={byResp} color="success" />
         </Panel>
       </div>
+      {selectedJustification && (
+        <PendingTasksModal
+          justification={selectedJustification}
+          rows={selectedPendingTasks}
+          onClose={() => setSelectedJustification(null)}
+        />
+      )}
     </main>
   );
 }
@@ -230,9 +244,11 @@ function MiniStat({ label, value, tone = "default" }: { label: string; value: st
 function BarList({
   items,
   color = "primary",
+  onSelect,
 }: {
   items: [string, number][];
   color?: "primary" | "success" | "destructive";
+  onSelect?: (key: string) => void;
 }) {
   const max = Math.max(1, ...items.map(([, n]) => n));
   const bg = color === "success" ? "bg-success" : color === "destructive" ? "bg-destructive" : "bg-primary";
@@ -240,7 +256,16 @@ function BarList({
   return (
     <div className="space-y-2">
       {items.map(([k, n]) => (
-        <div key={k} className="min-w-0 text-[12px]">
+        <button
+          key={k}
+          type="button"
+          onClick={() => onSelect?.(k)}
+          disabled={!onSelect}
+          className={cn(
+            "block w-full min-w-0 text-left text-[12px]",
+            onSelect && "rounded-md p-1.5 transition-colors hover:bg-muted",
+          )}
+        >
           <div className="flex min-w-0 justify-between gap-2">
             <span className="min-w-0 flex-1 truncate text-foreground" title={k}>
               {k}
@@ -250,10 +275,65 @@ function BarList({
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
             <div className={cn("h-full rounded-full", bg)} style={{ width: `${(n / max) * 100}%` }} />
           </div>
-        </div>
+        </button>
       ))}
     </div>
   );
+}
+
+function PendingTasksModal({
+  justification,
+  rows,
+  onClose,
+}: {
+  justification: string;
+  rows: Row[];
+  onClose: () => void;
+}) {
+  return (
+    <Modal
+      title={`${rows.length.toLocaleString("pt-BR")} tarefa(s) pendente(s)`}
+      description={justification}
+      onClose={onClose}
+      footer={
+        <button onClick={onClose} className="btn-primary">
+          Fechar
+        </button>
+      }
+    >
+      <div className="max-h-[60vh] overflow-auto rounded-md border border-border">
+        <table className="w-full min-w-[760px] text-[12px]">
+          <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 text-left">Ordem</th>
+              <th className="px-3 py-2 text-left">Op</th>
+              <th className="px-3 py-2 text-left">Subop</th>
+              <th className="px-3 py-2 text-left">Descrição da tarefa</th>
+              <th className="px-3 py-2 text-left">Data</th>
+              <th className="px-3 py-2 text-left">Responsável</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {rows.map((r) => (
+              <tr key={r.id} className="row-zebra align-top">
+                <td className="px-3 py-2 font-mono">{r.order_number || "—"}</td>
+                <td className="px-3 py-2 font-mono">{planValue(r.planning_data, "Op")}</td>
+                <td className="px-3 py-2 font-mono">{planValue(r.planning_data, "Subop")}</td>
+                <td className="max-w-[420px] px-3 py-2">{r.description}</td>
+                <td className="px-3 py-2 whitespace-nowrap">{formatDate(r.scheduled_date || "—")}</td>
+                <td className="px-3 py-2">{r.reported_by_name || "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Modal>
+  );
+}
+
+function planValue(data: Record<string, unknown> | null, key: string) {
+  const value = data?.[key];
+  return value === null || value === undefined || value === "" ? "—" : String(value);
 }
 
 function StackedBar({ total, exec, nao }: { total: number; exec: number; nao: number }) {
