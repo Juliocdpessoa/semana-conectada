@@ -46,6 +46,89 @@ type ImmCol = (typeof IMMEDIATE_COLUMNS)[number];
 
 const REPORT_HEADERS = ["Status", "Justificativa", "Observações", "Responsável pela informação"];
 
+const WEEKLY_TEMPLATE_COLUMNS = [
+  "Tipo de Nota",
+  "Nota",
+  "Confirmação",
+  "Ordem",
+  "Op",
+  "Subop",
+  "Data início",
+  "Hora início",
+  "Data fim",
+  "Hora fim",
+  "Gr pl",
+  "Área op",
+  "CenTrab",
+  "TxtDesc.Oper.",
+  "Localização",
+  "Nº",
+  "Dur n",
+  "Trab",
+  "Gerência",
+  "Local",
+  "Status",
+  "Justificativa",
+  "Observações",
+] as const;
+
+const TEMPLATE_STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
+const TEMPLATE_JUSTIFICATIONS = [
+  "01 - ATRASO NA EXECUÇÃO",
+  "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
+  "03 - ATRASO NA LIBERAÇÃO DE SMS (RAS)",
+  "04 - NÃO LIBERADO PELA OPERAÇÃO",
+  "05 - NÃO LIBERADO PELO SMS",
+  "06 - FALHA NA DOCUMENTAÇÃO OPERACIONAL (ARO, ADTCP)",
+  "07 - FALHA DE LIBERAÇÃO OPERACIONAL (FALTOU APLICAR LIBRA)",
+  "08 - ATENDIMENTO DE ORDEM IMEDIATA",
+  "09 - QUANTIDADE DE EXECUTANTES PROGRAMADOS DIFERENTE DO DISPONÍVEL",
+  "10 - ATRASO NA ENTREGA DE MATERIAL",
+  "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
+  "12 - SERVIÇO CANCELADO",
+  "13 - CAUSAS EXTERNAS",
+  "14 - CONDIÇÕES CLIMÁTICAS",
+  "15 - PROGRAMAÇÃO INDEVIDA",
+  "16 - FALHA NO PLANEJAMENTO",
+  "17 - TAREFA ELIMINADA EQUIVOCADAMENTE DO SAP",
+  "18 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DO ED",
+  "19 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DO EE",
+  "20 - TAREFA ANTECESSORA NÃO EXECUTADA - EQUIPE DA EI",
+  "21 - EVENTOS EXTRAORDINÁRIOS (ASSEMBLÉIAS, MOVIMENTAÇÃO SINDICAL, ETC)",
+  "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
+  "23 - PT EMITIDA COM DIVERGENCIA",
+  "24 - PT NÃO FOI EMITIDA E/OU NÃO ESTÁ NA CCL",
+  "25 - NÃO CONSTA NA PROGRAMAÇÃO DIÁRIA",
+  "26 - MÃO DE OBRA DESVIADA PARA SERVIÇOS EXTRA PROGRAMADOS",
+  "27 - HH PROGRAMADO SUPERIOR AO HH DISPONÍVEL",
+  "28 - PENDENCIA DE MATERIAL",
+  "29 - OUTROS TIPOS DE PENDENCIAS",
+];
+
+function downloadWeeklyTemplate() {
+  const acompanhamento = XLSX.utils.aoa_to_sheet([[...WEEKLY_TEMPLATE_COLUMNS]]);
+  acompanhamento["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+    wch:
+      name === "TxtDesc.Oper."
+        ? 42
+        : name === "Justificativa" || name === "Observações"
+          ? 34
+          : Math.max(11, name.length + 2),
+  }));
+
+  const dadosRows = [["Status", "Justificativa"]];
+  const total = Math.max(TEMPLATE_STATUSES.length, TEMPLATE_JUSTIFICATIONS.length);
+  for (let i = 0; i < total; i++) dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
+  const dados = XLSX.utils.aoa_to_sheet(dadosRows);
+  dados["!cols"] = [{ wch: 22 }, { wch: 74 }];
+
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, acompanhamento, "Acompanhamento");
+  XLSX.utils.book_append_sheet(wb, dados, "Dados");
+  XLSX.writeFile(wb, "Modelo programação.xlsx");
+  toast.success("Modelo semanal baixado.");
+}
+
 function normalize(s: string) {
   return s
     .toString()
@@ -201,6 +284,9 @@ function PlanejamentoPage() {
               <div className="mt-3 text-lg font-semibold text-foreground">{activeWeek.data?.label ?? "—"}</div>
             </div>
             <div className="flex flex-wrap gap-2">
+              <button onClick={downloadWeeklyTemplate} className="btn-ghost">
+                <FileDown className="h-4 w-4" /> Baixar modelo semanal
+              </button>
               <button onClick={() => setShowImport(true)} className="btn-primary">
                 <Upload className="h-4 w-4" /> Importar planilha
               </button>
