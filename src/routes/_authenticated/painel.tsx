@@ -1,10 +1,22 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { CheckCircle2, XCircle, Clock, Zap, ListChecks, Percent } from "lucide-react";
 import { PageHeader, KpiCard, Panel, EmptyState, Skeleton } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
+import {
+  Bar,
+  CartesianGrid,
+  ComposedChart,
+  Legend,
+  Line,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
