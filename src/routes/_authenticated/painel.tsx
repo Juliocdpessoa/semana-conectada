@@ -19,6 +19,8 @@ type Row = {
   scheduled_date: string | null;
   is_immediate: boolean;
   reported_by_name: string | null;
+  reported_at: string | null;
+  planning_data: Record<string, unknown> | null;
 };
 
 function PainelPage() {
