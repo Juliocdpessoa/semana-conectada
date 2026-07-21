@@ -7,7 +7,7 @@ import { updateActivity, bulkUpdateActivities } from "@/lib/activities.functions
 import { toast } from "sonner";
 import { Search, X, Zap, CheckCircle2, AlertTriangle, Clock, RefreshCw, ListChecks, Percent } from "lucide-react";
 import type { SessionInfo } from "./route";
-import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, SyncPill, Modal, Field } from "@/components/ui-kit";
+import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -29,7 +29,6 @@ type ActivityRow = {
   reported_by_email: string | null;
   reported_at: string | null;
   is_immediate: boolean;
-  sync_status: "synced" | "pending" | "error";
   week_id: string;
   planning_data: Record<string, unknown> | null;
 };
@@ -155,11 +154,19 @@ function AtividadesPage() {
   const activeFilters = [search, statusFilter, areaFilter, dateFilter].filter(Boolean).length;
 
   function clearFilters() {
-    setSearch(""); setStatusFilter(""); setAreaFilter(""); setDateFilter(""); setPage(0);
+    setSearch("");
+    setStatusFilter("");
+    setAreaFilter("");
+    setDateFilter("");
+    setPage(0);
   }
 
   function toggleSelect(id: string) {
-    setSelected((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
+    setSelected((prev) => {
+      const n = new Set(prev);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
   }
 
   function toggleAll() {
@@ -204,11 +211,26 @@ function AtividadesPage() {
       {/* KPIs */}
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-        <KpiCard label="Executadas" value={kpis.concluded} tone="success" icon={<CheckCircle2 className="h-3.5 w-3.5" />} />
-        <KpiCard label="Não executadas" value={kpis.impeded} tone="destructive" icon={<AlertTriangle className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Executadas"
+          value={kpis.concluded}
+          tone="success"
+          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+        />
+        <KpiCard
+          label="Não executadas"
+          value={kpis.impeded}
+          tone="destructive"
+          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+        />
         <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
         <KpiCard label="Imediatas" value={kpis.immediates} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
-        <KpiCard label="Conclusão" value={`${kpis.percent}%`} tone="primary" icon={<Percent className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Conclusão"
+          value={`${kpis.percent}%`}
+          tone="primary"
+          icon={<Percent className="h-3.5 w-3.5" />}
+        />
       </section>
 
       {/* Toolbar */}
@@ -217,25 +239,53 @@ function AtividadesPage() {
           <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
           <input
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(0);
+            }}
             placeholder="Buscar por ordem, nota, descrição, área ou responsável…"
             className="input-base pl-8"
           />
         </div>
-        <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs">
+        <select
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value);
+            setPage(0);
+          }}
+          className="input-base w-auto py-2 text-xs"
+        >
           <option value="">Todos os status</option>
-          {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+          {STATUSES.map((s) => (
+            <option key={s} value={s}>
+              {s}
+            </option>
+          ))}
         </select>
-        <select value={areaFilter} onChange={(e) => { setAreaFilter(e.target.value); setPage(0); }} className="input-base w-auto py-2 text-xs">
+        <select
+          value={areaFilter}
+          onChange={(e) => {
+            setAreaFilter(e.target.value);
+            setPage(0);
+          }}
+          className="input-base w-auto py-2 text-xs"
+        >
           <option value="">Todas as áreas</option>
-          {areas.map((a) => <option key={a} value={a}>{a}</option>)}
+          {areas.map((a) => (
+            <option key={a} value={a}>
+              {a}
+            </option>
+          ))}
         </select>
         <label className="input-base flex w-auto min-w-[150px] items-center gap-2 py-2 text-xs">
           <span className="whitespace-nowrap text-muted-foreground">Data:</span>
           <input
             type="date"
             value={dateFilter}
-            onChange={(e) => { setDateFilter(e.target.value); setPage(0); }}
+            onChange={(e) => {
+              setDateFilter(e.target.value);
+              setPage(0);
+            }}
             className="flex-1 min-w-0 bg-transparent outline-none text-xs"
           />
         </label>
@@ -245,7 +295,8 @@ function AtividadesPage() {
           </button>
         )}
         <div className="ml-auto text-[11px] font-medium text-muted-foreground tabular">
-          {filtered.length.toLocaleString("pt-BR")} <span className="opacity-60">de {(activities.data?.length ?? 0).toLocaleString("pt-BR")}</span>
+          {filtered.length.toLocaleString("pt-BR")}{" "}
+          <span className="opacity-60">de {(activities.data?.length ?? 0).toLocaleString("pt-BR")}</span>
         </div>
       </Toolbar>
 
@@ -256,8 +307,12 @@ function AtividadesPage() {
             <span className="font-semibold tabular">{selected.size}</span> atividade(s) selecionada(s)
           </div>
           <div className="flex gap-2">
-            <button onClick={() => setSelected(new Set())} className="btn-ghost py-1 text-xs">Cancelar</button>
-            <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">Apontar em lote</button>
+            <button onClick={() => setSelected(new Set())} className="btn-ghost py-1 text-xs">
+              Cancelar
+            </button>
+            <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
+              Apontar em lote
+            </button>
           </div>
         </div>
       )}
@@ -265,14 +320,22 @@ function AtividadesPage() {
       {/* Tabela / Cards */}
       {activities.isLoading ? (
         <div className="space-y-2">
-          {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full" />
+          ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={<Search className="h-4 w-4" />}
           title="Nenhuma atividade encontrada"
           description="Ajuste os filtros ou limpe a busca para ver todas as atividades da semana."
-          action={activeFilters > 0 && <button onClick={clearFilters} className="btn-ghost text-xs"><X className="h-3 w-3" /> Limpar filtros</button>}
+          action={
+            activeFilters > 0 && (
+              <button onClick={clearFilters} className="btn-ghost text-xs">
+                <X className="h-3 w-3" /> Limpar filtros
+              </button>
+            )
+          }
         />
       ) : (
         <>
@@ -283,7 +346,11 @@ function AtividadesPage() {
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="w-8 px-2 py-2">
-                      <input type="checkbox" checked={paged.length > 0 && selected.size === paged.length} onChange={toggleAll} />
+                      <input
+                        type="checkbox"
+                        checked={paged.length > 0 && selected.size === paged.length}
+                        onChange={toggleAll}
+                      />
                     </th>
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
@@ -291,7 +358,6 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
-                    <th className="px-2 py-2 text-left font-semibold">Sinc.</th>
                     <th className="px-2 py-2 text-right font-semibold">Ação</th>
                   </tr>
                 </thead>
@@ -320,12 +386,17 @@ function AtividadesPage() {
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
                       <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.scheduled_date)}</td>
-                      <td className="px-2 py-2 align-top"><StatusPill status={r.status} /></td>
+                      <td className="px-2 py-2 align-top">
+                        <StatusPill status={r.status} />
+                      </td>
                       <td className="px-2 py-2 align-top text-[11px]">
                         {r.reported_by_name || <span className="text-muted-foreground">—</span>}
-                        {r.reported_at && <div className="text-[10px] text-muted-foreground tabular">{formatDateTime(r.reported_at)}</div>}
+                        {r.reported_at && (
+                          <div className="text-[10px] text-muted-foreground tabular">
+                            {formatDateTime(r.reported_at)}
+                          </div>
+                        )}
                       </td>
-                      <td className="px-2 py-2 align-top"><SyncPill status={r.sync_status} /></td>
                       <td className="px-2 py-2 text-right align-top">
                         <button onClick={() => setEditing(r)} className="btn-primary py-1 text-[11px]">
                           {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
@@ -353,10 +424,14 @@ function AtividadesPage() {
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="font-mono text-[11px] text-foreground">{r.order_number}</span>
                       {fmtPlan(r.planning_data, "Op") && (
-                        <span className="font-mono text-[11px] text-muted-foreground">· Op {fmtPlan(r.planning_data, "Op")}</span>
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          · Op {fmtPlan(r.planning_data, "Op")}
+                        </span>
                       )}
                       {fmtPlan(r.planning_data, "Subop") && (
-                        <span className="font-mono text-[11px] text-muted-foreground">· Sub {fmtPlan(r.planning_data, "Subop")}</span>
+                        <span className="font-mono text-[11px] text-muted-foreground">
+                          · Sub {fmtPlan(r.planning_data, "Subop")}
+                        </span>
                       )}
                       {r.is_immediate && (
                         <span className="inline-flex items-center gap-1 rounded-sm border border-warning/50 bg-warning/15 px-1 py-0.5 text-[9px] font-bold uppercase text-warning-foreground">
@@ -366,7 +441,8 @@ function AtividadesPage() {
                     </div>
                     <div className="mt-1 text-[13px] leading-snug text-foreground">{r.description}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      {r.area}{r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
+                      {r.area}
+                      {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
                     </div>
                   </div>
                 </div>
@@ -391,8 +467,20 @@ function AtividadesPage() {
               Página <span className="font-semibold text-foreground">{page + 1}</span> de {totalPages}
             </div>
             <div className="flex gap-1">
-              <button onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0} className="btn-ghost py-1 text-xs disabled:opacity-40">Anterior</button>
-              <button onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1} className="btn-ghost py-1 text-xs disabled:opacity-40">Próxima</button>
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="btn-ghost py-1 text-xs disabled:opacity-40"
+              >
+                Anterior
+              </button>
+              <button
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="btn-ghost py-1 text-xs disabled:opacity-40"
+              >
+                Próxima
+              </button>
             </div>
           </div>
         </>
@@ -402,7 +490,10 @@ function AtividadesPage() {
         <ApontarModal
           activity={editing}
           onClose={() => setEditing(null)}
-          onSaved={() => { setEditing(null); qc.invalidateQueries({ queryKey: ["activities"] }); }}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["activities"] });
+          }}
         />
       )}
       {bulkOpen && (
@@ -410,7 +501,11 @@ function AtividadesPage() {
           count={selected.size}
           ids={Array.from(selected)}
           onClose={() => setBulkOpen(false)}
-          onSaved={() => { setBulkOpen(false); setSelected(new Set()); qc.invalidateQueries({ queryKey: ["activities"] }); }}
+          onSaved={() => {
+            setBulkOpen(false);
+            setSelected(new Set());
+            qc.invalidateQueries({ queryKey: ["activities"] });
+          }}
         />
       )}
     </main>
@@ -432,8 +527,15 @@ function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null
   return String(v);
 }
 
-
-function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; onClose: () => void; onSaved: () => void }) {
+function ApontarModal({
+  activity,
+  onClose,
+  onSaved,
+}: {
+  activity: ActivityRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [status, setStatus] = useState(activity.status);
   const [justification, setJustification] = useState(activity.justification ?? "");
   const [observation, setObservation] = useState(activity.observation ?? "");
@@ -464,7 +566,9 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
       }
       toast.success("Apontamento salvo.");
       onSaved();
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -474,7 +578,9 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button onClick={save} disabled={saving} className="btn-primary">
             {saving ? "Salvando…" : "Salvar apontamento"}
           </button>
@@ -495,14 +601,22 @@ function ApontarModal({ activity, onClose, onSaved }: { activity: ActivityRow; o
       <div className="mt-4 space-y-3">
         <Field label="Status" required>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </Field>
 
         <Field label="Justificativa" required={needsJust}>
           <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
             <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
+            {JUSTIFICATIONS.map((j) => (
+              <option key={j} value={j}>
+                {j}
+              </option>
+            ))}
           </select>
         </Field>
 
@@ -529,7 +643,17 @@ function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: string[]; onClose: () => void; onSaved: () => void }) {
+function BulkModal({
+  count,
+  ids,
+  onClose,
+  onSaved,
+}: {
+  count: number;
+  ids: string[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [status, setStatus] = useState("EXECUTADO");
   const [justification, setJustification] = useState("");
   const [observation, setObservation] = useState("");
@@ -538,7 +662,10 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
 
   async function save() {
-    if (needsJust && !justification.trim()) { toast.error("Justificativa é obrigatória para este status."); return; }
+    if (needsJust && !justification.trim()) {
+      toast.error("Justificativa é obrigatória para este status.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await call({
@@ -547,7 +674,9 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
       if (!res.ok) return toast.error(res.error ?? "Erro ao salvar lote.");
       toast.success(`${res.count} atividade(s) atualizada(s).`);
       onSaved();
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   }
 
   return (
@@ -557,7 +686,9 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button onClick={save} disabled={saving} className="btn-primary">
             {saving ? "Salvando…" : `Aplicar a ${count}`}
           </button>
@@ -566,22 +697,39 @@ function BulkModal({ count, ids, onClose, onSaved }: { count: number; ids: strin
     >
       <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning-foreground">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div><b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como responsável em todas.</div>
+        <div>
+          <b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como
+          responsável em todas.
+        </div>
       </div>
       <div className="mt-4 space-y-3">
         <Field label="Status" required>
           <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
-            {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Justificativa" required={needsJust}>
           <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
             <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.map((j) => <option key={j} value={j}>{j}</option>)}
+            {JUSTIFICATIONS.map((j) => (
+              <option key={j} value={j}>
+                {j}
+              </option>
+            ))}
           </select>
         </Field>
         <Field label="Observação (opcional)">
-          <textarea value={observation} onChange={(e) => setObservation(e.target.value)} rows={2} maxLength={2000} className="input-base" />
+          <textarea
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            className="input-base"
+          />
         </Field>
       </div>
     </Modal>
