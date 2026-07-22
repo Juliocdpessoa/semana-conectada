@@ -2,7 +2,7 @@
   "name": "NEXO — Gestão integrada da manutenção",
   "short_name": "NEXO",
   "description": "Plataforma corporativa para acompanhamento diário de atividades semanais.",
-  "start_url": "/",
+  "start_url": "/atividades",
   "scope": "/",
   "display": "standalone",
   "background_color": "#F4F7F9",
