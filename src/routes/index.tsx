@@ -1,5 +1,6 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from "react";
 import { ClipboardList, ShieldCheck, BarChart3, ArrowRight } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 
@@ -13,6 +14,30 @@ export const Route = createFileRoute("/")({
 });
 
 function LandingPage() {
+  const navigate = useNavigate();
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    supabase.auth.getSession().then(({ data }) => {
+      if (!active) return;
+      if (data.session) {
+        navigate({ to: "/atividades", replace: true });
+      } else {
+        setChecking(false);
+      }
+    });
+    return () => { active = false; };
+  }, [navigate]);
+
+  if (checking) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <BrandLogo className="h-10 w-auto opacity-70" />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <header className="border-b border-border bg-card">
