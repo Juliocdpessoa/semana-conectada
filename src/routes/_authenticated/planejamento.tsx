@@ -537,7 +537,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         );
         const sourceParts = [order, operation, suboperation, note].map((value) => value?.trim()).filter(Boolean);
         return {
-          source_key: sourceParts.length ? sourceParts.join("|") : `ROW-${r.__row ?? idx + 2}`,
+          source_key: `${sourceParts.length ? sourceParts.join("|") : "SEM-CHAVE"}|ROW-${r.__row ?? idx + 2}`,
           order_number: order,
           note_number: note,
           description: desc,
