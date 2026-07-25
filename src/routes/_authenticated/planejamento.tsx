@@ -379,42 +379,54 @@ function PlanejamentoPage() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {!w.is_active && (
-                          <div className="flex justify-end gap-1">
-                            <button
-                              onClick={async () => {
-                                const res = await activateFn({ data: { weekId: w.id } });
-                                if (!res.ok) return toast.error(res.error);
-                                toast.success("Semana ativada.");
-                                qc.invalidateQueries({ queryKey: ["active-week"] });
-                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                                qc.invalidateQueries({ queryKey: ["activities"] });
-                              }}
-                              className="btn-ghost py-1 text-[11px]"
-                            >
-                              Ativar
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    `Excluir definitivamente ${w.code}? Exporte o backup antes de continuar.`,
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <button
+                            onClick={() => exportWeekById({ id: w.id, code: w.code })}
+                            disabled={exportingId === w.id}
+                            className="btn-ghost py-1 text-[11px] disabled:opacity-50"
+                            title={`Baixar apontamentos da semana ${w.code}`}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {exportingId === w.id ? "Baixando…" : "Baixar"}
+                          </button>
+                          {!w.is_active && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  const res = await activateFn({ data: { weekId: w.id } });
+                                  if (!res.ok) return toast.error(res.error);
+                                  toast.success("Semana ativada.");
+                                  qc.invalidateQueries({ queryKey: ["active-week"] });
+                                  qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                                  qc.invalidateQueries({ queryKey: ["activities"] });
+                                }}
+                                className="btn-ghost py-1 text-[11px]"
+                              >
+                                Ativar
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Excluir definitivamente ${w.code}? Exporte o backup antes de continuar.`,
+                                    )
                                   )
-                                )
-                                  return;
-                                const res = await deleteFn({ data: { weekId: w.id } });
-                                if (!res.ok) return toast.error(res.error);
-                                toast.success("Semana excluída.");
-                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                              }}
-                              className="btn-ghost py-1 text-[11px] text-destructive"
-                              title="Excluir semana inativa"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        )}
+                                    return;
+                                  const res = await deleteFn({ data: { weekId: w.id } });
+                                  if (!res.ok) return toast.error(res.error);
+                                  toast.success("Semana excluída.");
+                                  qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                                }}
+                                className="btn-ghost py-1 text-[11px] text-destructive"
+                                title="Excluir semana inativa"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
+
                     </tr>
                   ))}
                 </tbody>
