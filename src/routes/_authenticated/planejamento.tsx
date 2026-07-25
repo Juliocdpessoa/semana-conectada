@@ -246,7 +246,22 @@ function PlanejamentoPage() {
         return;
       }
 
-      const headers = [...WEEKLY_TEMPLATE_COLUMNS];
+      const RESPONSAVEL = "Responsável pela informação";
+      const DATA_INFO = "Data da informação";
+      const exportHeaders = [...WEEKLY_TEMPLATE_COLUMNS, RESPONSAVEL, DATA_INFO];
+
+      const formatReportedAt = (value: unknown): string => {
+        if (!value) return "";
+        try {
+          const d = new Date(value as string);
+          if (isNaN(d.getTime())) return "";
+          const pad = (n: number) => String(n).padStart(2, "0");
+          return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+        } catch {
+          return "";
+        }
+      };
+
       const rows = acts.map((activity: any) => {
         const planning = (activity.planning_data ?? {}) as Record<string, any>;
         const row: Record<string, any> = {};
@@ -256,18 +271,23 @@ function PlanejamentoPage() {
           else if (header === "Observações") row[header] = activity.observation ?? "";
           else row[header] = planning[header] ?? "";
         }
+        row[RESPONSAVEL] = activity.reported_by_name || activity.reported_by_email || "";
+        row[DATA_INFO] = formatReportedAt(activity.reported_at);
         return row;
       });
 
-      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-      ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+      const ws = XLSX.utils.json_to_sheet(rows, { header: exportHeaders });
+      ws["!cols"] = exportHeaders.map((name) => ({
         wch:
           name === "TxtDesc.Oper."
             ? 42
-            : name === "Justificativa" || name === "Observações"
+            : name === "Justificativa" || name === "Observações" || name === RESPONSAVEL
               ? 34
-              : Math.max(11, name.length + 2),
+              : name === DATA_INFO
+                ? 18
+                : Math.max(11, name.length + 2),
       }));
+
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
       XLSX.writeFile(wb, `${week.code.replace(/\//g, "-")}-apontamentos.xlsx`);
