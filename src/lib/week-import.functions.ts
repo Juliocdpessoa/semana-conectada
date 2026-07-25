@@ -75,9 +75,9 @@ export const importWeek = createServerFn({ method: "POST" })
       .single();
     if (wErr) return { ok: false as const, error: wErr.message };
 
-    const payload = data.rows.map((r) => ({
+    const payload = data.rows.map((r, index) => ({
       week_id: week.id,
-      source_key: r.source_key,
+      source_key: `${r.source_key}|IMPORT-${r.source_row_number ?? index + 2}`,
       order_number: r.order_number ?? null,
       note_number: r.note_number ?? null,
       description: r.description ?? "",
