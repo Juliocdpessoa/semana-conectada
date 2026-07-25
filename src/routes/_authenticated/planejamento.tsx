@@ -44,8 +44,6 @@ const IMMEDIATE_COLUMNS = [
 ] as const;
 type ImmCol = (typeof IMMEDIATE_COLUMNS)[number];
 
-const REPORT_HEADERS = ["Status", "Justificativa", "Observações", "Responsável pela informação"];
-
 const WEEKLY_TEMPLATE_COLUMNS = [
   "Tipo de Nota",
   "Nota",
@@ -235,30 +233,34 @@ function PlanejamentoPage() {
       acts.push(...data);
       if (data.length < chunk) break;
     }
-    const planningHeaders = Array.from(
-      new Set(
-        acts
-          .flatMap((a: any) => Object.keys((a.planning_data ?? {}) as Record<string, unknown>))
-          .filter((key) => key !== "__row"),
-      ),
-    );
-    const headers = [...planningHeaders, ...REPORT_HEADERS];
-    const rows = acts.map((a: any) => {
-      const pd = (a.planning_data ?? {}) as Record<string, any>;
-      const line: Record<string, any> = Object.fromEntries(planningHeaders.map((h) => [h, pd[h] ?? null]));
-      line["Status"] = a.status;
-      line["Justificativa"] = a.justification;
-      line["Observações"] = a.observation;
-      line["Responsável pela informação"] = a.reported_by_name
-        ? `${a.reported_by_name}${a.reported_by_email ? ` <${a.reported_by_email}>` : ""}`
-        : "";
-      return line;
+
+    const headers = [...WEEKLY_TEMPLATE_COLUMNS];
+    const rows = acts.map((activity: any) => {
+      const planning = (activity.planning_data ?? {}) as Record<string, any>;
+      const row: Record<string, any> = {};
+
+      for (const header of WEEKLY_TEMPLATE_COLUMNS) {
+        if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
+        else if (header === "Justificativa") row[header] = activity.justification ?? "";
+        else if (header === "Observações") row[header] = activity.observation ?? "";
+        else row[header] = planning[header] ?? "";
+      }
+      return row;
     });
+
     const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+    ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+      wch:
+        name === "TxtDesc.Oper."
+          ? 42
+          : name === "Justificativa" || name === "Observações"
+            ? 34
+            : Math.max(11, name.length + 2),
+    }));
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Programação");
+    XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
     XLSX.writeFile(wb, `${activeWeek.data.code.replace(/\//g, "-")}-apontamentos.xlsx`);
-    toast.success("Planilha exportada.");
+    toast.success("Planilha exportada na ordem do modelo.");
   }
 
   return (
