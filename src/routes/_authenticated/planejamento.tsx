@@ -219,51 +219,71 @@ function PlanejamentoPage() {
   const activateFn = useServerFn(activateWeek);
   const deleteFn = useServerFn(deleteWeek);
 
+  async function exportWeekById(week: { id: string; code: string }) {
+    if (exportingId) return;
+    setExportingId(week.id);
+    try {
+      const acts: any[] = [];
+      const chunk = 1000;
+      for (let from = 0; ; from += chunk) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("week_id", week.id)
+          .order("source_row_number", { ascending: true })
+          .range(from, from + chunk - 1);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        if (!data?.length) break;
+        acts.push(...data);
+        if (data.length < chunk) break;
+      }
+
+      if (acts.length === 0) {
+        toast.error("Esta semana não possui atividades para exportar.");
+        return;
+      }
+
+      const headers = [...WEEKLY_TEMPLATE_COLUMNS];
+      const rows = acts.map((activity: any) => {
+        const planning = (activity.planning_data ?? {}) as Record<string, any>;
+        const row: Record<string, any> = {};
+        for (const header of WEEKLY_TEMPLATE_COLUMNS) {
+          if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
+          else if (header === "Justificativa") row[header] = activity.justification ?? "";
+          else if (header === "Observações") row[header] = activity.observation ?? "";
+          else row[header] = planning[header] ?? "";
+        }
+        return row;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+        wch:
+          name === "TxtDesc.Oper."
+            ? 42
+            : name === "Justificativa" || name === "Observações"
+              ? 34
+              : Math.max(11, name.length + 2),
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
+      XLSX.writeFile(wb, `${week.code.replace(/\//g, "-")}-apontamentos.xlsx`);
+      toast.success(`Semana ${week.code} exportada.`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao exportar.");
+    } finally {
+      setExportingId(null);
+    }
+  }
+
   async function exportWeek() {
     if (!activeWeek.data) return;
-    const acts: any[] = [];
-    const chunk = 1000;
-    for (let from = 0; ; from += chunk) {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("week_id", activeWeek.data.id)
-        .order("source_row_number", { ascending: true })
-        .range(from, from + chunk - 1);
-      if (error) return toast.error(error.message);
-      if (!data?.length) break;
-      acts.push(...data);
-      if (data.length < chunk) break;
-    }
-
-    const headers = [...WEEKLY_TEMPLATE_COLUMNS];
-    const rows = acts.map((activity: any) => {
-      const planning = (activity.planning_data ?? {}) as Record<string, any>;
-      const row: Record<string, any> = {};
-
-      for (const header of WEEKLY_TEMPLATE_COLUMNS) {
-        if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
-        else if (header === "Justificativa") row[header] = activity.justification ?? "";
-        else if (header === "Observações") row[header] = activity.observation ?? "";
-        else row[header] = planning[header] ?? "";
-      }
-      return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-    ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
-      wch:
-        name === "TxtDesc.Oper."
-          ? 42
-          : name === "Justificativa" || name === "Observações"
-            ? 34
-            : Math.max(11, name.length + 2),
-    }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
-    XLSX.writeFile(wb, `${activeWeek.data.code.replace(/\//g, "-")}-apontamentos.xlsx`);
-    toast.success("Planilha exportada na ordem do modelo.");
+    await exportWeekById({ id: activeWeek.data.id, code: activeWeek.data.code });
   }
+
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
