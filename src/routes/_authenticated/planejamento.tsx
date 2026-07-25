@@ -197,6 +197,8 @@ function PlanejamentoPage() {
   const [showImm, setShowImm] = useState(false);
   const [showImmImport, setShowImmImport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
 
   const activeWeek = useQuery({
     queryKey: ["active-week"],
