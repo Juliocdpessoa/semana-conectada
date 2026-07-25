@@ -262,6 +262,39 @@ function PlanejamentoPage() {
         }
       };
 
+      const pad2 = (n: number) => String(n).padStart(2, "0");
+      const formatDateOnly = (value: unknown): string => {
+        if (value === null || value === undefined || value === "") return "";
+        try {
+          if (value instanceof Date) {
+            if (isNaN(value.getTime())) return "";
+            return `${pad2(value.getDate())}/${pad2(value.getMonth() + 1)}/${value.getFullYear()}`;
+          }
+          if (typeof value === "number" && isFinite(value)) {
+            // Excel serial date (days since 1899-12-30)
+            const ms = Math.round((value - 25569) * 86400 * 1000);
+            const d = new Date(ms);
+            if (isNaN(d.getTime())) return "";
+            return `${pad2(d.getUTCDate())}/${pad2(d.getUTCMonth() + 1)}/${d.getUTCFullYear()}`;
+          }
+          if (typeof value === "string") {
+            const s = value.trim();
+            if (!s) return "";
+            const iso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+            const br = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+            if (br) return `${pad2(Number(br[1]))}/${pad2(Number(br[2]))}/${br[3]}`;
+            const d = new Date(s);
+            if (!isNaN(d.getTime())) {
+              return `${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}/${d.getFullYear()}`;
+            }
+          }
+          return "";
+        } catch {
+          return "";
+        }
+      };
+
       const rows = acts.map((activity: any) => {
         const planning = (activity.planning_data ?? {}) as Record<string, any>;
         const row: Record<string, any> = {};
@@ -269,8 +302,11 @@ function PlanejamentoPage() {
           if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
           else if (header === "Justificativa") row[header] = activity.justification ?? "";
           else if (header === "Observações") row[header] = activity.observation ?? "";
+          else if (header === "Data início" || header === "Data fim")
+            row[header] = formatDateOnly(planning[header]);
           else row[header] = planning[header] ?? "";
         }
+
         row[RESPONSAVEL] = activity.reported_by_name || activity.reported_by_email || "";
         row[DATA_INFO] = formatReportedAt(activity.reported_at);
         return row;
