@@ -314,9 +314,17 @@ function PlanejamentoPage() {
               <button onClick={() => setShowImport(true)} className="btn-primary">
                 <Upload className="h-4 w-4" /> Importar planilha
               </button>
-              <button onClick={exportWeek} disabled={!activeWeek.data} className="btn-ghost">
-                <Download className="h-4 w-4" /> Exportar apontamentos
+              <button
+                onClick={exportWeek}
+                disabled={!activeWeek.data || exportingId !== null}
+                className="btn-ghost disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                {exportingId && activeWeek.data && exportingId === activeWeek.data.id
+                  ? "Exportando…"
+                  : "Exportar apontamentos"}
               </button>
+
             </div>
           </div>
         </Panel>
