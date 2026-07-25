@@ -197,6 +197,8 @@ function PlanejamentoPage() {
   const [showImm, setShowImm] = useState(false);
   const [showImmImport, setShowImmImport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
 
   const activeWeek = useQuery({
     queryKey: ["active-week"],
@@ -217,51 +219,71 @@ function PlanejamentoPage() {
   const activateFn = useServerFn(activateWeek);
   const deleteFn = useServerFn(deleteWeek);
 
+  async function exportWeekById(week: { id: string; code: string }) {
+    if (exportingId) return;
+    setExportingId(week.id);
+    try {
+      const acts: any[] = [];
+      const chunk = 1000;
+      for (let from = 0; ; from += chunk) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select("*")
+          .eq("week_id", week.id)
+          .order("source_row_number", { ascending: true })
+          .range(from, from + chunk - 1);
+        if (error) {
+          toast.error(error.message);
+          return;
+        }
+        if (!data?.length) break;
+        acts.push(...data);
+        if (data.length < chunk) break;
+      }
+
+      if (acts.length === 0) {
+        toast.error("Esta semana não possui atividades para exportar.");
+        return;
+      }
+
+      const headers = [...WEEKLY_TEMPLATE_COLUMNS];
+      const rows = acts.map((activity: any) => {
+        const planning = (activity.planning_data ?? {}) as Record<string, any>;
+        const row: Record<string, any> = {};
+        for (const header of WEEKLY_TEMPLATE_COLUMNS) {
+          if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
+          else if (header === "Justificativa") row[header] = activity.justification ?? "";
+          else if (header === "Observações") row[header] = activity.observation ?? "";
+          else row[header] = planning[header] ?? "";
+        }
+        return row;
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
+      ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+        wch:
+          name === "TxtDesc.Oper."
+            ? 42
+            : name === "Justificativa" || name === "Observações"
+              ? 34
+              : Math.max(11, name.length + 2),
+      }));
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
+      XLSX.writeFile(wb, `${week.code.replace(/\//g, "-")}-apontamentos.xlsx`);
+      toast.success(`Semana ${week.code} exportada.`);
+    } catch (e: any) {
+      toast.error(e?.message ?? "Falha ao exportar.");
+    } finally {
+      setExportingId(null);
+    }
+  }
+
   async function exportWeek() {
     if (!activeWeek.data) return;
-    const acts: any[] = [];
-    const chunk = 1000;
-    for (let from = 0; ; from += chunk) {
-      const { data, error } = await supabase
-        .from("activities")
-        .select("*")
-        .eq("week_id", activeWeek.data.id)
-        .order("source_row_number", { ascending: true })
-        .range(from, from + chunk - 1);
-      if (error) return toast.error(error.message);
-      if (!data?.length) break;
-      acts.push(...data);
-      if (data.length < chunk) break;
-    }
-
-    const headers = [...WEEKLY_TEMPLATE_COLUMNS];
-    const rows = acts.map((activity: any) => {
-      const planning = (activity.planning_data ?? {}) as Record<string, any>;
-      const row: Record<string, any> = {};
-
-      for (const header of WEEKLY_TEMPLATE_COLUMNS) {
-        if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
-        else if (header === "Justificativa") row[header] = activity.justification ?? "";
-        else if (header === "Observações") row[header] = activity.observation ?? "";
-        else row[header] = planning[header] ?? "";
-      }
-      return row;
-    });
-
-    const ws = XLSX.utils.json_to_sheet(rows, { header: headers });
-    ws["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
-      wch:
-        name === "TxtDesc.Oper."
-          ? 42
-          : name === "Justificativa" || name === "Observações"
-            ? 34
-            : Math.max(11, name.length + 2),
-    }));
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Acompanhamento");
-    XLSX.writeFile(wb, `${activeWeek.data.code.replace(/\//g, "-")}-apontamentos.xlsx`);
-    toast.success("Planilha exportada na ordem do modelo.");
+    await exportWeekById({ id: activeWeek.data.id, code: activeWeek.data.code });
   }
+
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
@@ -292,9 +314,17 @@ function PlanejamentoPage() {
               <button onClick={() => setShowImport(true)} className="btn-primary">
                 <Upload className="h-4 w-4" /> Importar planilha
               </button>
-              <button onClick={exportWeek} disabled={!activeWeek.data} className="btn-ghost">
-                <Download className="h-4 w-4" /> Exportar apontamentos
+              <button
+                onClick={exportWeek}
+                disabled={!activeWeek.data || exportingId !== null}
+                className="btn-ghost disabled:opacity-50"
+              >
+                <Download className="h-4 w-4" />
+                {exportingId && activeWeek.data && exportingId === activeWeek.data.id
+                  ? "Exportando…"
+                  : "Exportar apontamentos"}
               </button>
+
             </div>
           </div>
         </Panel>
@@ -357,42 +387,54 @@ function PlanejamentoPage() {
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {!w.is_active && (
-                          <div className="flex justify-end gap-1">
-                            <button
-                              onClick={async () => {
-                                const res = await activateFn({ data: { weekId: w.id } });
-                                if (!res.ok) return toast.error(res.error);
-                                toast.success("Semana ativada.");
-                                qc.invalidateQueries({ queryKey: ["active-week"] });
-                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                                qc.invalidateQueries({ queryKey: ["activities"] });
-                              }}
-                              className="btn-ghost py-1 text-[11px]"
-                            >
-                              Ativar
-                            </button>
-                            <button
-                              onClick={async () => {
-                                if (
-                                  !window.confirm(
-                                    `Excluir definitivamente ${w.code}? Exporte o backup antes de continuar.`,
+                        <div className="flex flex-wrap justify-end gap-1">
+                          <button
+                            onClick={() => exportWeekById({ id: w.id, code: w.code })}
+                            disabled={exportingId === w.id}
+                            className="btn-ghost py-1 text-[11px] disabled:opacity-50"
+                            title={`Baixar apontamentos da semana ${w.code}`}
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            {exportingId === w.id ? "Baixando…" : "Baixar"}
+                          </button>
+                          {!w.is_active && (
+                            <>
+                              <button
+                                onClick={async () => {
+                                  const res = await activateFn({ data: { weekId: w.id } });
+                                  if (!res.ok) return toast.error(res.error);
+                                  toast.success("Semana ativada.");
+                                  qc.invalidateQueries({ queryKey: ["active-week"] });
+                                  qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                                  qc.invalidateQueries({ queryKey: ["activities"] });
+                                }}
+                                className="btn-ghost py-1 text-[11px]"
+                              >
+                                Ativar
+                              </button>
+                              <button
+                                onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Excluir definitivamente ${w.code}? Exporte o backup antes de continuar.`,
+                                    )
                                   )
-                                )
-                                  return;
-                                const res = await deleteFn({ data: { weekId: w.id } });
-                                if (!res.ok) return toast.error(res.error);
-                                toast.success("Semana excluída.");
-                                qc.invalidateQueries({ queryKey: ["weeks-list"] });
-                              }}
-                              className="btn-ghost py-1 text-[11px] text-destructive"
-                              title="Excluir semana inativa"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
-                          </div>
-                        )}
+                                    return;
+                                  const res = await deleteFn({ data: { weekId: w.id } });
+                                  if (!res.ok) return toast.error(res.error);
+                                  toast.success("Semana excluída.");
+                                  qc.invalidateQueries({ queryKey: ["weeks-list"] });
+                                }}
+                                className="btn-ghost py-1 text-[11px] text-destructive"
+                                title="Excluir semana inativa"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
+                          )}
+                        </div>
                       </td>
+
                     </tr>
                   ))}
                 </tbody>
