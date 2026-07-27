@@ -43,6 +43,7 @@ type OvertimeRow = {
   order_number: string | null;
   service_description: string;
   overtime_date: string;
+  entry_time: string | null;
   departure_time: string;
   needs_snack: boolean;
   justification: string;
@@ -408,9 +409,9 @@ function RequestsTable({
                 <dd className="break-words font-medium">{r.order_number || "—"}</dd>
               </div>
               <div>
-                <dt className="text-[10px] uppercase text-muted-foreground">Saída / Lanche</dt>
+                <dt className="text-[10px] uppercase text-muted-foreground">Entrada / Saída / Lanche</dt>
                 <dd>
-                  {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
+                  {r.entry_time || "—"} · {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
                 </dd>
               </div>
               <div className="col-span-2">
@@ -476,6 +477,7 @@ function RequestsTable({
               <th className="px-3 py-2 text-left font-semibold">Função</th>
               <th className="px-3 py-2 text-left font-semibold">Ordem</th>
               <th className="px-3 py-2 text-left font-semibold">Serviço</th>
+              <th className="px-3 py-2 text-left font-semibold">Entrada</th>
               <th className="px-3 py-2 text-left font-semibold">Saída</th>
               <th className="px-3 py-2 text-left font-semibold">Lanche</th>
               {showRequester && <th className="px-3 py-2 text-left font-semibold">Solicitante</th>}
@@ -498,6 +500,7 @@ function RequestsTable({
                 <td className="px-3 py-2 max-w-[240px]">
                   <div className="line-clamp-2">{r.service_description}</div>
                 </td>
+                <td className="px-3 py-2 tabular whitespace-nowrap">{r.entry_time || "—"}</td>
                 <td className="px-3 py-2 tabular whitespace-nowrap">{r.departure_time}</td>
                 <td className="px-3 py-2">{r.needs_snack ? "Sim" : "Não"}</td>
                 {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
@@ -883,11 +886,45 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     order_number: "",
     service_description: "",
     overtime_date: new Date().toISOString().slice(0, 10),
+    entry_time: "",
     departure_time: "18:30",
     needs_snack: false,
     justification: "",
   });
+  const [customEntryTime, setCustomEntryTime] = useState(false);
   const [search, setSearch] = useState("");
+  const [dateYear, dateMonth, dateDay] = form.overtime_date.split("-");
+  const monthOptions = [
+    ["01", "Jan"],
+    ["02", "Fev"],
+    ["03", "Mar"],
+    ["04", "Abr"],
+    ["05", "Mai"],
+    ["06", "Jun"],
+    ["07", "Jul"],
+    ["08", "Ago"],
+    ["09", "Set"],
+    ["10", "Out"],
+    ["11", "Nov"],
+    ["12", "Dez"],
+  ];
+  const currentYear = new Date().getFullYear();
+  const dateYears = Array.from({ length: 4 }, (_, index) => String(currentYear - 1 + index));
+  const dateDays = Array.from({ length: new Date(Number(dateYear), Number(dateMonth), 0).getDate() }, (_, index) =>
+    String(index + 1).padStart(2, "0"),
+  );
+
+  function setDatePart(part: "year" | "month" | "day", value: string) {
+    let year = dateYear;
+    let month = dateMonth;
+    let day = dateDay;
+    if (part === "year") year = value;
+    if (part === "month") month = value;
+    if (part === "day") day = value;
+    const lastDay = new Date(Number(year), Number(month), 0).getDate();
+    day = String(Math.min(Number(day), lastDay)).padStart(2, "0");
+    setForm((current) => ({ ...current, overtime_date: year + "-" + month + "-" + day }));
+  }
   const employees = useQuery({
     queryKey: ["active-employees"],
     queryFn: async () => {
@@ -971,6 +1008,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           order_number: form.order_number.trim() || null,
           service_description: form.service_description.trim(),
           overtime_date: form.overtime_date,
+          entry_time: form.entry_time || null,
           departure_time: form.departure_time,
           needs_snack: form.needs_snack,
           justification: form.justification.trim(),
@@ -1065,13 +1103,77 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       <div className="mt-3 grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
         <div className="min-w-0 max-w-full">
           <Field label="Data da hora extra" required>
-            <input
-              type="date"
+            <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+              <select
+                aria-label="Dia da hora extra"
+                className="input-base min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+                value={dateDay}
+                onChange={(e) => setDatePart("day", e.target.value)}
+              >
+                {dateDays.map((day) => (
+                  <option key={day} value={day}>
+                    {day}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Mês da hora extra"
+                className="input-base min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+                value={dateMonth}
+                onChange={(e) => setDatePart("month", e.target.value)}
+              >
+                {monthOptions.map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+              <select
+                aria-label="Ano da hora extra"
+                className="input-base min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+                value={dateYear}
+                onChange={(e) => setDatePart("year", e.target.value)}
+              >
+                {dateYears.map((year) => (
+                  <option key={year} value={year}>
+                    {year}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </Field>
+        </div>
+        <div className="min-w-0 max-w-full">
+          <Field label="Horário de entrada (opcional)">
+            <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
-              value={form.overtime_date}
-              onChange={(e) => setForm({ ...form, overtime_date: e.target.value })}
-            />
+              value={
+                customEntryTime ? "__other__" : departureTimeOptions.includes(form.entry_time) ? form.entry_time : ""
+              }
+              onChange={(e) => {
+                const isOther = e.target.value === "__other__";
+                setCustomEntryTime(isOther);
+                setForm({ ...form, entry_time: isOther ? "" : e.target.value });
+              }}
+            >
+              <option value="">Sem horário de entrada</option>
+              {departureTimeOptions.map((time) => (
+                <option key={time} value={time}>
+                  {time.replace(/^0/, "")}
+                </option>
+              ))}
+              <option value="__other__">Outro horário</option>
+            </select>
+            {customEntryTime && (
+              <input
+                type="time"
+                aria-label="Outro horário de entrada"
+                className="input-base mt-2 block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+                style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+                value={form.entry_time}
+                onChange={(e) => setForm({ ...form, entry_time: e.target.value })}
+              />
+            )}
           </Field>
         </div>
         <div className="min-w-0 max-w-full">
@@ -1259,8 +1361,8 @@ function DecideModal({
           <b>Colaborador:</b> {row.employee_name} · {row.employee_registration} · {row.employee_role}
         </div>
         <div>
-          <b>Ordem:</b> {row.order_number || "—"} · <b>Saída:</b> {row.departure_time} · <b>Lanche:</b>{" "}
-          {row.needs_snack ? "Sim" : "Não"}
+          <b>Ordem:</b> {row.order_number || "—"} · <b>Entrada:</b> {row.entry_time || "—"} · <b>Saída:</b>{" "}
+          {row.departure_time} · <b>Lanche:</b> {row.needs_snack ? "Sim" : "Não"}
         </div>
         <div className="mt-1">
           <b>Serviço:</b> {row.service_description}
