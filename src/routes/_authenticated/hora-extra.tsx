@@ -3,12 +3,31 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Timer, CheckCircle2, XCircle, Clock, Utensils, ListChecks, Search, Plus } from "lucide-react";
+import {
+  Timer,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Utensils,
+  ListChecks,
+  Search,
+  Plus,
+  Users,
+  Upload,
+  UserCheck,
+  UserX,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import type { SessionInfo } from "./route";
-import { createOvertimeRequest, decideOvertimeRequest, cancelOvertimeRequest } from "@/lib/overtime.functions";
+import {
+  createOvertimeRequest,
+  decideOvertimeRequest,
+  cancelOvertimeRequest,
+  upsertEmployees,
+  setEmployeeActive,
+} from "@/lib/overtime.functions";
 
 type OvertimeRow = {
   id: string;
@@ -35,6 +54,16 @@ type OvertimeRow = {
   created_at: string;
 };
 
+type EmployeeRow = {
+  id: string;
+  badge: string;
+  employee_id: string;
+  admission_date: string;
+  full_name: string;
+  job_title: string;
+  is_active: boolean;
+};
+
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
@@ -51,7 +80,7 @@ function OvertimePage() {
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin";
 
-  const [tab, setTab] = useState<"list" | "queue" | "new">(canRequest ? "list" : "queue");
+  const [tab, setTab] = useState<"list" | "queue" | "employees">(canRequest ? "list" : "queue");
   const [showNew, setShowNew] = useState(false);
 
   const qc = useQueryClient();
@@ -134,6 +163,11 @@ function OvertimePage() {
             )}
           </TabBtn>
         )}
+        {isManager && (
+          <TabBtn active={tab === "employees"} onClick={() => setTab("employees")}>
+            Colaboradores
+          </TabBtn>
+        )}
       </div>
 
       {tab === "list" && canRequest && (
@@ -156,6 +190,8 @@ function OvertimePage() {
       {tab === "queue" && isManager && (
         <ApprovalQueue rows={rows} onDecided={() => qc.invalidateQueries({ queryKey: ["overtime-requests"] })} />
       )}
+
+      {tab === "employees" && isManager && <EmployeeManagement />}
 
       {showNew && canRequest && (
         <NewRequestModal
@@ -489,14 +525,321 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
   return <span className={cn("status-pill", s.cls)}>{s.label}</span>;
 }
 
+/* ---------- Employee Management ---------- */
+function EmployeeManagement() {
+  const qc = useQueryClient();
+  const toggleActive = useServerFn(setEmployeeActive);
+  const [search, setSearch] = useState("");
+  const [showImport, setShowImport] = useState(false);
+  const [changingId, setChangingId] = useState<string | null>(null);
+  const employees = useQuery({
+    queryKey: ["employees"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("employees")
+        .select("id,badge,employee_id,admission_date,full_name,job_title,is_active")
+        .order("full_name")
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? []) as EmployeeRow[];
+    },
+  });
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    if (!term) return employees.data ?? [];
+    return (employees.data ?? []).filter((employee) =>
+      [employee.full_name, employee.badge, employee.employee_id, employee.job_title].some((value) =>
+        value.toLocaleLowerCase("pt-BR").includes(term),
+      ),
+    );
+  }, [employees.data, search]);
+
+  async function changeStatus(employee: EmployeeRow) {
+    setChangingId(employee.id);
+    try {
+      const res = await toggleActive({ data: { id: employee.id, active: !employee.is_active } });
+      if (!res.ok) return toast.error(res.error);
+      toast.success(employee.is_active ? "Colaborador inativado." : "Colaborador reativado.");
+      qc.invalidateQueries({ queryKey: ["employees"] });
+      qc.invalidateQueries({ queryKey: ["active-employees"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível alterar o colaborador.");
+    } finally {
+      setChangingId(null);
+    }
+  }
+
+  return (
+    <Panel title="Cadastro de colaboradores" padded={false}>
+      <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <input
+            className="input-base pl-7 text-[12px]"
+            placeholder="Buscar por nome, chapa, ID ou função…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+        <button
+          onClick={() => setShowImport(true)}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
+        >
+          <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
+        </button>
+      </div>
+      {employees.isLoading ? (
+        <div className="p-6 text-center text-[12px] text-muted-foreground">Carregando colaboradores…</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-6">
+          <EmptyState
+            icon={<Users className="h-4 w-4" />}
+            title="Nenhum colaborador"
+            description="Importe a lista para disponibilizá-la nas solicitações."
+          />
+        </div>
+      ) : (
+        <>
+          <div className="divide-y divide-border md:hidden">
+            {filtered.map((employee) => (
+              <div key={employee.id} className="p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold">{employee.full_name}</div>
+                    <div className="mt-0.5 text-[11px] text-muted-foreground">
+                      Chapa {employee.badge} · ID {employee.employee_id}
+                    </div>
+                  </div>
+                  <span
+                    className={cn(
+                      "rounded px-2 py-1 text-[10px] font-medium",
+                      employee.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {employee.is_active ? "Ativo" : "Inativo"}
+                  </span>
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2 text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground">Admissão</span>
+                    <div>{formatDate(employee.admission_date)}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Função</span>
+                    <div className="truncate">{employee.job_title}</div>
+                  </div>
+                </div>
+                <button
+                  disabled={changingId === employee.id}
+                  onClick={() => changeStatus(employee)}
+                  className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
+                >
+                  {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                  {employee.is_active ? "Inativar" : "Reativar"}
+                </button>
+              </div>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="w-full min-w-[850px] text-left text-[12px]">
+              <thead className="border-b border-border bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Chapa</th>
+                  <th className="px-3 py-2">ID</th>
+                  <th className="px-3 py-2">Admissão</th>
+                  <th className="px-3 py-2">Nome</th>
+                  <th className="px-3 py-2">Função</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2 text-right">Ação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {filtered.map((employee) => (
+                  <tr key={employee.id} className="hover:bg-muted/30">
+                    <td className="px-3 py-2 tabular">{employee.badge}</td>
+                    <td className="px-3 py-2 tabular">{employee.employee_id}</td>
+                    <td className="px-3 py-2">{formatDate(employee.admission_date)}</td>
+                    <td className="px-3 py-2 font-medium">{employee.full_name}</td>
+                    <td className="px-3 py-2">{employee.job_title}</td>
+                    <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        disabled={changingId === employee.id}
+                        onClick={() => changeStatus(employee)}
+                        className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
+                      >
+                        {employee.is_active ? "Inativar" : "Reativar"}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+      {showImport && (
+        <BulkEmployeeModal
+          onClose={() => setShowImport(false)}
+          onSaved={() => {
+            setShowImport(false);
+            qc.invalidateQueries({ queryKey: ["employees"] });
+            qc.invalidateQueries({ queryKey: ["active-employees"] });
+          }}
+        />
+      )}
+    </Panel>
+  );
+}
+
+function normalizeEmployeeDate(value: string) {
+  const clean = value.trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(clean)) return clean;
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(clean);
+  if (!match) return null;
+  const day = match[1].padStart(2, "0");
+  const month = match[2].padStart(2, "0");
+  const iso = `${match[3]}-${month}-${day}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return date.getUTCFullYear() === Number(match[3]) &&
+    date.getUTCMonth() + 1 === Number(month) &&
+    date.getUTCDate() === Number(day)
+    ? iso
+    : null;
+}
+
+function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const call = useServerFn(upsertEmployees);
+  const [raw, setRaw] = useState("");
+  const [saving, setSaving] = useState(false);
+  const parsed = useMemo(() => {
+    const records: Array<{
+      badge: string;
+      employee_id: string;
+      admission_date: string;
+      full_name: string;
+      job_title: string;
+    }> = [];
+    const errors: string[] = [];
+    raw.split(/\r?\n/).forEach((line, index) => {
+      if (!line.trim()) return;
+      const columns = line.includes("\t") ? line.split("\t") : line.split(";");
+      const values = columns.map((value) => value.trim());
+      if (index === 0 && /chapa/i.test(values[0] ?? "")) return;
+      if (values.length < 5) {
+        errors.push(`Linha ${index + 1}: informe as 5 colunas.`);
+        return;
+      }
+      const date = normalizeEmployeeDate(values[2]);
+      if (!values[0] || !values[1] || !date || !values[3] || !values[4]) {
+        errors.push(`Linha ${index + 1}: dados obrigatórios ou data inválida.`);
+        return;
+      }
+      records.push({
+        badge: values[0],
+        employee_id: values[1],
+        admission_date: date,
+        full_name: values[3],
+        job_title: values.slice(4).join(" "),
+      });
+    });
+    return { records, errors };
+  }, [raw]);
+  async function save() {
+    if (!parsed.records.length) return toast.error("Cole ao menos um colaborador válido.");
+    if (parsed.errors.length) return toast.error("Corrija as linhas inválidas antes de salvar.");
+    setSaving(true);
+    try {
+      const res = await call({ data: { employees: parsed.records } });
+      if (!res.ok) return toast.error(res.error);
+      toast.success(`${res.count} colaborador(es) atualizado(s).`);
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a lista.");
+    } finally {
+      setSaving(false);
+    }
+  }
+  return (
+    <Modal onClose={onClose} title="Importar / atualizar colaboradores" size="lg">
+      <div className="rounded border border-primary/20 bg-primary/5 p-3 text-[12px]">
+        <b>Como usar:</b> copie as linhas do Excel e cole abaixo, nesta ordem:{" "}
+        <b>Chapa, ID, Data de Admissão, Nome, Função</b>. A data aceita dd/mm/aaaa ou aaaa-mm-dd. Chapas existentes
+        serão atualizadas e reativadas.
+      </div>
+      <textarea
+        rows={10}
+        className="input-base mt-3 min-h-56 font-mono text-[12px]"
+        value={raw}
+        onChange={(e) => setRaw(e.target.value)}
+        placeholder={"Chapa\tID\tData de Admissão\tNome\tFunção\n1234\t9876\t15/01/2024\tMaria da Silva\tEletricista"}
+      />
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+        <span className="rounded bg-success/10 px-2 py-1 text-success">{parsed.records.length} linha(s) válida(s)</span>
+        {parsed.errors.length > 0 && (
+          <span className="rounded bg-destructive/10 px-2 py-1 text-destructive">{parsed.errors.length} erro(s)</span>
+        )}
+      </div>
+      {parsed.errors.length > 0 && (
+        <div className="mt-2 max-h-24 overflow-auto rounded border border-destructive/20 bg-destructive/5 p-2 text-[11px] text-destructive">
+          {parsed.errors.slice(0, 20).map((error) => (
+            <div key={error}>{error}</div>
+          ))}
+        </div>
+      )}
+      {parsed.records.length > 0 && (
+        <div className="mt-3 max-h-40 overflow-auto rounded border border-border">
+          <table className="w-full min-w-[650px] text-left text-[11px]">
+            <thead className="sticky top-0 bg-muted">
+              <tr>
+                <th className="p-2">Chapa</th>
+                <th className="p-2">ID</th>
+                <th className="p-2">Admissão</th>
+                <th className="p-2">Nome</th>
+                <th className="p-2">Função</th>
+              </tr>
+            </thead>
+            <tbody>
+              {parsed.records.slice(0, 100).map((employee, index) => (
+                <tr key={`${employee.badge}-${index}`} className="border-t border-border">
+                  <td className="p-2">{employee.badge}</td>
+                  <td className="p-2">{employee.employee_id}</td>
+                  <td className="p-2">{formatDate(employee.admission_date)}</td>
+                  <td className="p-2">{employee.full_name}</td>
+                  <td className="p-2">{employee.job_title}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button
+          onClick={onClose}
+          disabled={saving}
+          className="min-h-10 w-full rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
+        >
+          Cancelar
+        </button>
+        <button
+          onClick={save}
+          disabled={saving || !parsed.records.length || parsed.errors.length > 0}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-60 sm:w-auto"
+        >
+          {saving ? "Salvando…" : `Salvar ${parsed.records.length} colaborador(es)`}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
 /* ---------- New Request Modal ---------- */
 function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const call = useServerFn(createOvertimeRequest);
   const [saving, setSaving] = useState(false);
+  const [employeeSearch, setEmployeeSearch] = useState("");
+  const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [form, setForm] = useState({
-    employee_name: "",
-    employee_registration: "",
-    employee_role: "",
     activity_id: null as string | null,
     week_id: null as string | null,
     order_number: "",
@@ -507,6 +850,32 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     justification: "",
   });
   const [search, setSearch] = useState("");
+  const employees = useQuery({
+    queryKey: ["active-employees"],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("employees")
+        .select("id,badge,employee_id,admission_date,full_name,job_title,is_active")
+        .eq("is_active", true)
+        .order("full_name")
+        .limit(2000);
+      if (error) throw error;
+      return (data ?? []) as EmployeeRow[];
+    },
+  });
+  const selectedEmployees = (employees.data ?? []).filter((employee) => selectedEmployeeIds.includes(employee.id));
+  const filteredEmployees = useMemo(() => {
+    const term = employeeSearch.trim().toLocaleLowerCase("pt-BR");
+    if (term.length < 2) return [];
+    return (employees.data ?? [])
+      .filter((employee) =>
+        [employee.full_name, employee.badge, employee.employee_id, employee.job_title].some((value) =>
+          value.toLocaleLowerCase("pt-BR").includes(term),
+        ),
+      )
+      .slice(0, 30);
+  }, [employees.data, employeeSearch]);
+
   const activeWeek = useQuery({
     queryKey: ["active-week"],
     queryFn: async () => {
@@ -534,6 +903,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     },
   });
 
+  function toggleEmployee(id: string) {
+    setSelectedEmployeeIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
   function pickActivity(a: { id: string; week_id: string; order_number: string | null; description: string }) {
     setForm((f) => ({
       ...f,
@@ -544,21 +918,15 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     }));
     setSearch("");
   }
-
   async function submit() {
-    if (!form.employee_name.trim() || !form.employee_registration.trim() || !form.employee_role.trim()) {
-      return toast.error("Preencha os dados do colaborador.");
-    }
-    if (!form.service_description.trim() || !form.justification.trim()) {
+    if (selectedEmployeeIds.length === 0) return toast.error("Selecione ao menos um colaborador.");
+    if (!form.service_description.trim() || !form.justification.trim())
       return toast.error("Descreva o serviço e a justificativa.");
-    }
     setSaving(true);
     try {
       const res = await call({
         data: {
-          employee_name: form.employee_name.trim(),
-          employee_registration: form.employee_registration.trim(),
-          employee_role: form.employee_role.trim(),
+          employee_ids: selectedEmployeeIds,
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
@@ -570,10 +938,10 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         },
       });
       if (!res.ok) return toast.error(res.error);
-      toast.success(`Solicitação #${res.number} enviada.`);
+      toast.success(`${res.count} solicitação(ões) enviada(s).`);
       onCreated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível enviar a solicitação.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível enviar as solicitações.");
     } finally {
       setSaving(false);
     }
@@ -581,28 +949,81 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <Modal onClose={onClose} title="Nova solicitação de hora extra" size="lg">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <Field label="Nome do colaborador" required>
+      <div className="rounded-md border border-border bg-muted/30 p-3">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+            Colaboradores *
+          </span>
+          <span className="rounded bg-primary/10 px-2 py-1 text-[11px] font-medium text-primary">
+            {selectedEmployeeIds.length} selecionado(s)
+          </span>
+        </div>
+        <div className="relative">
+          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <input
-            className="input-base"
-            value={form.employee_name}
-            onChange={(e) => setForm({ ...form, employee_name: e.target.value })}
+            className="input-base pl-7 text-[12px]"
+            placeholder="Buscar por nome, chapa, ID ou função…"
+            value={employeeSearch}
+            onChange={(e) => setEmployeeSearch(e.target.value)}
           />
-        </Field>
-        <Field label="Matrícula" required>
-          <input
-            className="input-base"
-            value={form.employee_registration}
-            onChange={(e) => setForm({ ...form, employee_registration: e.target.value })}
-          />
-        </Field>
-        <Field label="Função" required>
-          <input
-            className="input-base"
-            value={form.employee_role}
-            onChange={(e) => setForm({ ...form, employee_role: e.target.value })}
-          />
-        </Field>
+        </div>
+        {employees.isLoading && <div className="mt-2 text-[12px] text-muted-foreground">Carregando colaboradores…</div>}
+        {employeeSearch.trim().length >= 2 && (
+          <div className="mt-2 max-h-48 divide-y divide-border overflow-auto rounded border border-border bg-card">
+            {filteredEmployees.map((employee) => {
+              const selected = selectedEmployeeIds.includes(employee.id);
+              return (
+                <button
+                  key={employee.id}
+                  type="button"
+                  onClick={() => toggleEmployee(employee.id)}
+                  className={cn(
+                    "flex w-full items-start gap-2 p-2 text-left text-[12px] hover:bg-muted",
+                    selected && "bg-primary/5",
+                  )}
+                >
+                  <input type="checkbox" readOnly checked={selected} className="mt-0.5" />
+                  <span className="min-w-0 flex-1">
+                    <b>{employee.full_name}</b>
+                    <span className="block text-[11px] text-muted-foreground">
+                      Chapa {employee.badge} · ID {employee.employee_id} · {employee.job_title}
+                    </span>
+                  </span>
+                </button>
+              );
+            })}
+            {filteredEmployees.length === 0 && (
+              <div className="p-3 text-[12px] text-muted-foreground">Nenhum colaborador ativo encontrado.</div>
+            )}
+          </div>
+        )}
+        {selectedEmployees.length > 0 && (
+          <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            {selectedEmployees.map((employee) => (
+              <div
+                key={employee.id}
+                className="flex items-start justify-between gap-2 rounded border border-primary/20 bg-primary/5 p-2 text-[12px]"
+              >
+                <span className="min-w-0">
+                  <b className="block truncate">{employee.full_name}</b>
+                  <span className="text-[11px] text-muted-foreground">
+                    {employee.badge} · {employee.job_title}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleEmployee(employee.id)}
+                  className="text-[11px] text-muted-foreground hover:text-destructive"
+                >
+                  Remover
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
         <Field label="Data da hora extra" required>
           <input
             type="date"
@@ -701,7 +1122,6 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           />
         </Field>
       </div>
-
       <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button
           onClick={onClose}
@@ -712,10 +1132,10 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </button>
         <button
           onClick={submit}
-          disabled={saving}
+          disabled={saving || selectedEmployeeIds.length === 0}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-60 sm:w-auto"
         >
-          {saving ? "Enviando…" : "Enviar solicitação"}
+          {saving ? "Enviando…" : `Enviar para ${selectedEmployeeIds.length} colaborador(es)`}
         </button>
       </div>
     </Modal>
