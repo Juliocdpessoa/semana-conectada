@@ -199,7 +199,6 @@ function PlanejamentoPage() {
   const [showImport, setShowImport] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
 
-
   const activeWeek = useQuery({
     queryKey: ["active-week"],
     queryFn: async () => (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
@@ -302,8 +301,7 @@ function PlanejamentoPage() {
           if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
           else if (header === "Justificativa") row[header] = activity.justification ?? "";
           else if (header === "Observações") row[header] = activity.observation ?? "";
-          else if (header === "Data início" || header === "Data fim")
-            row[header] = formatDateOnly(planning[header]);
+          else if (header === "Data início" || header === "Data fim") row[header] = formatDateOnly(planning[header]);
           else row[header] = planning[header] ?? "";
         }
 
@@ -339,7 +337,6 @@ function PlanejamentoPage() {
     if (!activeWeek.data) return;
     await exportWeekById({ id: activeWeek.data.id, code: activeWeek.data.code });
   }
-
 
   return (
     <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
@@ -380,7 +377,6 @@ function PlanejamentoPage() {
                   ? "Exportando…"
                   : "Exportar apontamentos"}
               </button>
-
             </div>
           </div>
         </Panel>
@@ -490,7 +486,6 @@ function PlanejamentoPage() {
                           )}
                         </div>
                       </td>
-
                     </tr>
                   ))}
                 </tbody>
@@ -622,7 +617,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         const operation = extractField(r, "Op", "Operação", "Operacao");
         const suboperation = extractField(r, "Subop", "Sub operação", "Sub operacao");
         const desc = extractField(r, "TxtDesc.Oper.", "Descrição", "Descricao", "Serviço", "Servico") ?? "";
-        const area = extractField(r, "Área op", "Área", "Area");
+        const area = extractField(r, "Gerência", "Gerencia");
         const spec = extractField(r, "CenTrab", "Centro de trabalho", "Especialidade", "Disciplina");
         const dateRaw = extractField(
           r,
