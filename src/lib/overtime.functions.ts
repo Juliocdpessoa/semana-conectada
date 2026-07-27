@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { supabaseAdmin } from "@/integrations/supabase/client.server";
 import { z } from "zod";
 
 async function loadRoleAndProfile(supabase: any, userId: string) {
@@ -63,6 +62,8 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     if (!(info.isLeader || info.isAdmin)) {
       return { ok: false as const, error: "Somente líder ou administrador pode solicitar hora extra." };
     }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
 
     let activityId: string | null = null;
     let weekId: string | null = null;
@@ -130,6 +131,8 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Comentário é obrigatório para reprovação." };
     }
 
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: updated, error } = await supabaseAdmin
       .from("overtime_requests")
       .update({
