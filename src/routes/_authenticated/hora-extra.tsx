@@ -33,6 +33,7 @@ import {
 
 type OvertimeRow = {
   id: string;
+  batch_id: string | null;
   request_number: number;
   requester_user_id: string;
   requester_name: string;
@@ -113,11 +114,25 @@ function OvertimePage() {
 
   const rows = requests.data ?? [];
   const kpis = useMemo(() => {
-    const total = rows.length;
-    const pending = rows.filter((r) => r.status === "pending").length;
-    const approved = rows.filter((r) => r.status === "approved").length;
-    const rejected = rows.filter((r) => r.status === "rejected").length;
-    const snacks = rows.filter((r) => r.needs_snack && r.status === "approved").length;
+    const approvalGroups = new Map<string, OvertimeRow[]>();
+    rows.forEach((row) => {
+      const key = row.batch_id || row.id;
+      approvalGroups.set(key, [...(approvalGroups.get(key) ?? []), row]);
+    });
+    const statuses = [...approvalGroups.values()].map((members) =>
+      members.some((member) => member.status === "pending")
+        ? "pending"
+        : members.every((member) => member.status === "approved")
+          ? "approved"
+          : members.some((member) => member.status === "rejected")
+            ? "rejected"
+            : "cancelled",
+    );
+    const total = statuses.length;
+    const pending = statuses.filter((status) => status === "pending").length;
+    const approved = statuses.filter((status) => status === "approved").length;
+    const rejected = statuses.filter((status) => status === "rejected").length;
+    const snacks = rows.filter((row) => row.needs_snack && row.status === "approved").length;
     return { total, pending, approved, rejected, snacks };
   }, [rows]);
 
@@ -291,13 +306,38 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
   const [q, setQ] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [decideRow, setDecideRow] = useState<{ row: OvertimeRow; decision: "approved" | "rejected" } | null>(null);
+  const groupedRows = useMemo(() => {
+    const groups = new Map<string, OvertimeRow[]>();
+    rows.forEach((row) => {
+      const key = row.batch_id || row.id;
+      groups.set(key, [...(groups.get(key) ?? []), row]);
+    });
+    return [...groups.values()].map((members) => {
+      const representative = members.find((member) => member.status === "pending") ?? members[0];
+      const status: OvertimeRow["status"] = members.some((member) => member.status === "pending")
+        ? "pending"
+        : members.every((member) => member.status === "approved")
+          ? "approved"
+          : members.some((member) => member.status === "rejected")
+            ? "rejected"
+            : "cancelled";
+      return {
+        ...representative,
+        request_number: Math.min(...members.map((member) => member.request_number)),
+        employee_name: members.map((member) => member.employee_name).join(", "),
+        employee_registration: `${members.length} colaborador(es)`,
+        employee_role: [...new Set(members.map((member) => member.employee_role))].join(", "),
+        status,
+      };
+    });
+  }, [rows]);
   const availableDates = useMemo(
-    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [rows],
+    () => [...new Set(groupedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [groupedRows],
   );
 
   const filtered = useMemo(() => {
-    return rows.filter((r) => {
+    return groupedRows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
       if (selectedDate && r.overtime_date !== selectedDate) return false;
       if (q) {
@@ -308,7 +348,7 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
       }
       return true;
     });
-  }, [rows, status, selectedDate, q]);
+  }, [groupedRows, status, selectedDate, q]);
 
   return (
     <>
@@ -1463,7 +1503,13 @@ function DecideModal({
         else toast.error(res.error);
         return;
       }
-      toast.success(isReject ? "Solicitação reprovada." : "Solicitação aprovada.");
+      toast.success(
+        res.count > 1
+          ? `${res.count} colaboradores ${isReject ? "reprovados" : "aprovados"} em uma única decisão.`
+          : isReject
+            ? "Solicitação reprovada."
+            : "Solicitação aprovada.",
+      );
       onDone();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar a decisão.");
