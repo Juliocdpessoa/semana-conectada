@@ -566,6 +566,7 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 function EmployeeManagement() {
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
+  const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);
@@ -882,7 +883,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     order_number: "",
     service_description: "",
     overtime_date: new Date().toISOString().slice(0, 10),
-    departure_time: "18:00",
+    departure_time: "18:30",
     needs_snack: false,
     justification: "",
   });
@@ -957,6 +958,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
   async function submit() {
     if (selectedEmployeeIds.length === 0) return toast.error("Selecione ao menos um colaborador.");
+    if (!form.overtime_date || !form.departure_time) return toast.error("Informe a data e o horário da hora extra.");
     if (!form.service_description.trim() || !form.justification.trim())
       return toast.error("Descreva o serviço e a justificativa.");
     setSaving(true);
@@ -1060,27 +1062,45 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
       </div>
 
-      <div className="mt-3 grid min-w-0 max-w-full grid-cols-1 gap-3 overflow-hidden sm:grid-cols-2">
-        <div className="min-w-0 max-w-full overflow-hidden">
+      <div className="mt-3 grid min-w-0 max-w-full grid-cols-1 gap-3 sm:grid-cols-2">
+        <div className="min-w-0 max-w-full">
           <Field label="Data da hora extra" required>
             <input
               type="date"
-              className="input-base block min-w-0 w-full max-w-full overflow-hidden text-[16px] sm:text-[12px]"
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
               style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
               value={form.overtime_date}
               onChange={(e) => setForm({ ...form, overtime_date: e.target.value })}
             />
           </Field>
         </div>
-        <div className="min-w-0 max-w-full overflow-hidden">
+        <div className="min-w-0 max-w-full">
           <Field label="Horário de saída" required>
-            <input
-              type="time"
-              className="input-base block min-w-0 w-full max-w-full overflow-hidden text-[16px] sm:text-[12px]"
+            <select
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
               style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
-              value={form.departure_time}
-              onChange={(e) => setForm({ ...form, departure_time: e.target.value })}
-            />
+              value={departureTimeOptions.includes(form.departure_time) ? form.departure_time : "__other__"}
+              onChange={(e) =>
+                setForm({ ...form, departure_time: e.target.value === "__other__" ? "" : e.target.value })
+              }
+            >
+              {departureTimeOptions.map((time) => (
+                <option key={time} value={time}>
+                  {time.replace(/^0/, "")}
+                </option>
+              ))}
+              <option value="__other__">Outro horário</option>
+            </select>
+            {!departureTimeOptions.includes(form.departure_time) && (
+              <input
+                type="time"
+                aria-label="Outro horário de saída"
+                className="input-base mt-2 block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+                style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+                value={form.departure_time}
+                onChange={(e) => setForm({ ...form, departure_time: e.target.value })}
+              />
+            )}
           </Field>
         </div>
         <Field label="Precisa de lanche?">
