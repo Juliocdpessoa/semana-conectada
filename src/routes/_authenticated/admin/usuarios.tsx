@@ -98,6 +98,7 @@ function AdminUsers() {
                         className="input-base w-auto py-1 text-[12px]"
                       >
                         <option value="leader">Líder</option>
+                        <option value="manager">Gerente</option>
                         <option value="planning">Planejamento</option>
                         <option value="viewer">Consulta</option>
                         <option value="admin">Administrador</option>
