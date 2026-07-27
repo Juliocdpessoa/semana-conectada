@@ -222,6 +222,13 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
 
 /* ---------- My Requests ---------- */
 function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: OvertimeRow) => void }) {
+  const [selectedDate, setSelectedDate] = useState("");
+  const availableDates = useMemo(
+    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [rows],
+  );
+  const filteredRows = selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows;
+
   if (rows.length === 0) {
     return (
       <Panel padded={false}>
@@ -237,7 +244,29 @@ function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: Ove
   }
   return (
     <Panel title="Minhas solicitações" padded={false}>
-      <RequestsTable rows={rows} showRequester={false} onCancel={onCancel} />
+      <div className="border-b border-border p-3">
+        <Field label="Filtrar por data">
+          <select
+            value={selectedDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="input-base block min-w-0 w-full max-w-full text-[12px] sm:max-w-xs"
+          >
+            <option value="">Todas as datas</option>
+            {availableDates.map((date) => (
+              <option key={date} value={date}>
+                {formatDate(date)}
+              </option>
+            ))}
+          </select>
+        </Field>
+      </div>
+      {filteredRows.length === 0 ? (
+        <div className="p-6">
+          <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma solicitação nesta data" />
+        </div>
+      ) : (
+        <RequestsTable rows={filteredRows} showRequester={false} onCancel={onCancel} />
+      )}
     </Panel>
   );
 }
@@ -246,15 +275,17 @@ function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: Ove
 function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: () => void }) {
   const [status, setStatus] = useState<"all" | OvertimeRow["status"]>("pending");
   const [q, setQ] = useState("");
-  const [from, setFrom] = useState("");
-  const [to, setTo] = useState("");
+  const [selectedDate, setSelectedDate] = useState("");
   const [decideRow, setDecideRow] = useState<{ row: OvertimeRow; decision: "approved" | "rejected" } | null>(null);
+  const availableDates = useMemo(
+    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [rows],
+  );
 
   const filtered = useMemo(() => {
     return rows.filter((r) => {
       if (status !== "all" && r.status !== status) return false;
-      if (from && r.overtime_date < from) return false;
-      if (to && r.overtime_date > to) return false;
+      if (selectedDate && r.overtime_date !== selectedDate) return false;
       if (q) {
         const t = q.toLowerCase();
         const hay =
@@ -263,20 +294,20 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
       }
       return true;
     });
-  }, [rows, status, from, to, q]);
+  }, [rows, status, selectedDate, q]);
 
   return (
     <>
       <Panel padded={false}>
-        <div className="grid grid-cols-1 gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5">
+        <div className="grid min-w-0 grid-cols-1 gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Buscar">
-            <div className="relative">
+            <div className="relative min-w-0">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Colaborador, matrícula, ordem…"
-                className="input-base pl-7 text-[12px]"
+                className="input-base block min-w-0 w-full max-w-full pl-7 text-[12px]"
               />
             </div>
           </Field>
@@ -284,7 +315,7 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as any)}
-              className="input-base text-[12px]"
+              className="input-base block min-w-0 w-full max-w-full text-[12px]"
             >
               <option value="all">Todos</option>
               <option value="pending">Pendentes</option>
@@ -293,16 +324,19 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
               <option value="cancelled">Canceladas</option>
             </select>
           </Field>
-          <Field label="De">
-            <input
-              type="date"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              className="input-base text-[12px]"
-            />
-          </Field>
-          <Field label="Até">
-            <input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="input-base text-[12px]" />
+          <Field label="Data da hora extra">
+            <select
+              value={selectedDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="input-base block min-w-0 w-full max-w-full text-[12px]"
+            >
+              <option value="">Todas as datas</option>
+              {availableDates.map((date) => (
+                <option key={date} value={date}>
+                  {formatDate(date)}
+                </option>
+              ))}
+            </select>
           </Field>
         </div>
         {filtered.length === 0 ? (
@@ -353,17 +387,20 @@ function RequestsTable({
       <div className="grid gap-3 p-3 md:hidden">
         {rows.map((r) => (
           <article key={r.id} className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
-            <div className="flex items-start justify-between gap-2">
+            <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
               <div className="min-w-0">
-                <div className="text-[11px] font-semibold text-muted-foreground">
-                  #{r.request_number} · {formatDate(r.overtime_date)}
+                <div className="min-w-0 break-words text-[11px] font-semibold leading-4 text-muted-foreground">
+                  <span className="inline-block">#{r.request_number}</span> ·{" "}
+                  <span className="inline-block">{formatDate(r.overtime_date)}</span>
                 </div>
                 <h3 className="break-words text-sm font-semibold">{r.employee_name}</h3>
                 <p className="break-words text-[11px] text-muted-foreground">
                   {r.employee_registration} · {r.employee_role}
                 </p>
               </div>
-              <OvertimeStatus status={r.status} />
+              <span className="max-w-full shrink-0">
+                <OvertimeStatus status={r.status} />
+              </span>
             </div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
               <div>
@@ -393,7 +430,7 @@ function RequestsTable({
               {r.decided_at && (
                 <div className="col-span-2">
                   <dt className="text-[10px] uppercase text-muted-foreground">Decisão</dt>
-                  <dd className="break-words">
+                  <dd className="min-w-0 break-words [overflow-wrap:anywhere]">
                     {r.decided_by_name} · {formatDateTime(r.decided_at)}
                     {r.manager_comment ? ` · ${r.manager_comment}` : ""}
                   </dd>
@@ -950,7 +987,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   return (
     <Modal onClose={onClose} title="Nova solicitação de hora extra" size="lg">
       <div className="rounded-md border border-border bg-muted/30 p-3">
-        <div className="mb-2 flex items-center justify-between gap-2">
+        <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Colaboradores *
           </span>
@@ -1023,11 +1060,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
       </div>
 
-      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+      <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Data da hora extra" required>
           <input
             type="date"
-            className="input-base"
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             value={form.overtime_date}
             onChange={(e) => setForm({ ...form, overtime_date: e.target.value })}
           />
@@ -1035,14 +1072,14 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         <Field label="Horário de saída" required>
           <input
             type="time"
-            className="input-base"
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             value={form.departure_time}
             onChange={(e) => setForm({ ...form, departure_time: e.target.value })}
           />
         </Field>
         <Field label="Precisa de lanche?">
           <select
-            className="input-base"
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             value={form.needs_snack ? "1" : "0"}
             onChange={(e) => setForm({ ...form, needs_snack: e.target.value === "1" })}
           >
