@@ -34,6 +34,7 @@ CREATE TABLE public.overtime_requests (
   order_number TEXT,
   service_description TEXT NOT NULL,
   overtime_date DATE NOT NULL,
+  entry_time TEXT,
   departure_time TEXT NOT NULL,
   needs_snack BOOLEAN NOT NULL DEFAULT false,
   justification TEXT NOT NULL,
