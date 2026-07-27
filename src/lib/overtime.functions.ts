@@ -64,6 +64,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
 
     let activityId: string | null = null;
     let weekId: string | null = null;
@@ -71,7 +72,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     let serviceDescription = data.service_description.trim();
 
     if (data.activity_id && data.week_id) {
-      const { data: activity, error: activityError } = await supabaseAdmin
+      const { data: activity, error: activityError } = await db
         .from("activities")
         .select("id, week_id, order_number, description, weeks!inner(is_active)")
         .eq("id", data.activity_id)
@@ -86,7 +87,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       serviceDescription = activity.description;
     }
 
-    const { data: created, error } = await supabaseAdmin
+    const { data: created, error } = await db
       .from("overtime_requests")
       .insert({
         requester_user_id: userId,
@@ -132,7 +133,8 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: updated, error } = await supabaseAdmin
+    const db = supabaseAdmin as any;
+    const { data: updated, error } = await db
       .from("overtime_requests")
       .update({
         status: data.decision,
@@ -150,7 +152,7 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
     if (!updated) {
-      const { data: current } = await supabaseAdmin
+      const { data: current } = await db
         .from("overtime_requests")
         .select("id, status, version, decided_by_name, decided_at")
         .eq("id", data.id)
@@ -172,7 +174,8 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Usuário sem permissão para cancelar." };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { data: updated, error } = await supabaseAdmin
+    const db = supabaseAdmin as any;
+    const { data: updated, error } = await db
       .from("overtime_requests")
       .update({ status: "cancelled", version: data.expectedVersion + 1 })
       .eq("id", data.id)
