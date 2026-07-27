@@ -187,6 +187,7 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
 function roleLabel(role: SessionInfo["role"]) {
   switch (role) {
     case "admin": return "Administrador";
+    case "manager": return "Gerente";
     case "planning": return "Planejamento";
     case "leader": return "Líder";
     case "viewer": return "Consulta";
