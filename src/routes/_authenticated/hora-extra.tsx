@@ -72,6 +72,32 @@ type EmployeeRow = {
 const MISSING_BADGE_PREFIX = "__missing_badge__:";
 const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
 
+const WEEKLY_ACTIVITY_EXPORT_COLUMNS = [
+  "Tipo de Nota",
+  "Nota",
+  "Confirmação",
+  "Ordem",
+  "Op",
+  "Subop",
+  "Data início",
+  "Hora início",
+  "Data fim",
+  "Hora fim",
+  "Gr pl",
+  "Área op",
+  "CenTrab",
+  "TxtDesc.Oper.",
+  "Localização",
+  "Nº",
+  "Dur n",
+  "Trab",
+  "Gerência",
+  "Local",
+  "Status",
+  "Justificativa",
+  "Observações",
+] as const;
+
 function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
   return {
     ...employee,
@@ -94,10 +120,10 @@ function OvertimePage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const s = session;
   const isManager = s.role === "manager" || s.role === "admin";
-  const canRequest = s.role === "leader" || s.role === "admin";
+  const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
 
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export">(
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     isMeasurementControl ? "export" : canRequest ? "list" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
@@ -199,6 +225,11 @@ function OvertimePage() {
             Exportação diária
           </TabBtn>
         )}
+        {isMeasurementControl && (
+          <TabBtn active={tab === "weekly_export"} onClick={() => setTab("weekly_export")}>
+            Exportação semanal
+          </TabBtn>
+        )}
         {canRequest && (
           <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
             {isManager ? "Minhas solicitações" : "Minhas solicitações"}
@@ -222,6 +253,8 @@ function OvertimePage() {
       </div>
 
       {tab === "export" && isMeasurementControl && <ApprovedDailyExport rows={rows} />}
+
+      {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
       {tab === "list" && canRequest && (
         <MyRequests
@@ -270,6 +303,158 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     >
       {children}
     </button>
+  );
+}
+
+/* ---------- Weekly activity export ---------- */
+function WeeklyActivityExport() {
+  const [selectedWeekId, setSelectedWeekId] = useState("");
+  const weeks = useQuery({
+    queryKey: ["measurement-weeks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("weeks")
+        .select("id,code,label,start_date,end_date,is_active")
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+  const effectiveWeekId = selectedWeekId || weeks.data?.[0]?.id || "";
+  const selectedWeek = (weeks.data ?? []).find((week) => week.id === effectiveWeekId);
+  const activities = useQuery({
+    queryKey: ["measurement-weekly-export", effectiveWeekId],
+    enabled: Boolean(effectiveWeekId),
+    queryFn: async () => {
+      const all: any[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select(
+            "id,status,justification,observation,reported_by_name,reported_by_email,reported_at,planning_data,source_row_number",
+          )
+          .eq("week_id", effectiveWeekId)
+          .in("status", ["EXECUTADO", "NÃO EXECUTADO"])
+          .order("source_row_number", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data?.length) break;
+        all.push(...data);
+        if (data.length < pageSize) break;
+      }
+      return all;
+    },
+  });
+
+  function formatPlanningDate(value: unknown) {
+    if (value === null || value === undefined || value === "") return "";
+    if (value instanceof Date && !isNaN(value.getTime())) {
+      return (
+        String(value.getDate()).padStart(2, "0") +
+        "/" +
+        String(value.getMonth() + 1).padStart(2, "0") +
+        "/" +
+        value.getFullYear()
+      );
+    }
+    const text = String(value).trim();
+    const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+    if (iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
+    const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
+    if (br) return String(Number(br[1])).padStart(2, "0") + "/" + String(Number(br[2])).padStart(2, "0") + "/" + br[3];
+    return text;
+  }
+
+  function formatReportedDate(value: unknown) {
+    if (!value) return "";
+    const date = new Date(String(value));
+    if (isNaN(date.getTime())) return "";
+    const pad = (number: number) => String(number).padStart(2, "0");
+    return (
+      pad(date.getDate()) +
+      "/" +
+      pad(date.getMonth() + 1) +
+      "/" +
+      date.getFullYear() +
+      " " +
+      pad(date.getHours()) +
+      ":" +
+      pad(date.getMinutes())
+    );
+  }
+
+  function exportWeeklyExcel() {
+    if (!selectedWeek || !activities.data?.length) {
+      return toast.error("Esta semana não possui atividades apontadas como executadas ou não executadas.");
+    }
+    const responsibleHeader = "Responsável pela informação";
+    const reportedAtHeader = "Data da informação";
+    const headers = [...WEEKLY_ACTIVITY_EXPORT_COLUMNS, responsibleHeader, reportedAtHeader];
+    const values = activities.data.map((activity) => {
+      const planning = (activity.planning_data ?? {}) as Record<string, unknown>;
+      return headers.map((header) => {
+        if (header === "Status") return activity.status;
+        if (header === "Justificativa") return activity.justification ?? "";
+        if (header === "Observações") return activity.observation ?? "";
+        if (header === responsibleHeader) return activity.reported_by_name || activity.reported_by_email || "";
+        if (header === reportedAtHeader) return formatReportedDate(activity.reported_at);
+        if (header === "Data início" || header === "Data fim") return formatPlanningDate(planning[header]);
+        return planning[header] ?? "";
+      });
+    });
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = headers.map((header) => ({
+      wch:
+        header === "TxtDesc.Oper."
+          ? 42
+          : header === "Justificativa" || header === "Observações" || header === responsibleHeader
+            ? 34
+            : header === reportedAtHeader
+              ? 18
+              : Math.max(11, header.length + 2),
+    }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Acompanhamento");
+    XLSX.writeFile(workbook, selectedWeek.code.replace(/\//g, "-") + "-atividades-apontadas.xlsx");
+    toast.success(activities.data.length + " atividade(s) exportada(s).");
+  }
+
+  return (
+    <Panel
+      title="Exportação semanal de atividades"
+      description="Baixe as atividades apontadas pelos encarregados como EXECUTADO ou NÃO EXECUTADO."
+      padded={false}
+    >
+      <div className="grid gap-3 p-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
+        <Field label="Semana">
+          <select
+            value={effectiveWeekId}
+            onChange={(event) => setSelectedWeekId(event.target.value)}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          >
+            {(weeks.data ?? []).map((week) => (
+              <option key={week.id} value={week.id}>
+                {week.label} · {formatDate(week.start_date)} a {formatDate(week.end_date)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <button
+          type="button"
+          onClick={exportWeeklyExcel}
+          disabled={!selectedWeek || activities.isLoading || !activities.data?.length}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
+        >
+          <Download className="h-4 w-4" /> {activities.isLoading ? "Carregando…" : "Exportar semana"}
+        </button>
+      </div>
+      <div className="border-t border-border p-3 text-[12px] text-muted-foreground">
+        {activities.isLoading
+          ? "Carregando atividades apontadas…"
+          : (activities.data?.length ?? 0) + " atividade(s) com apontamento EXECUTADO ou NÃO EXECUTADO."}
+      </div>
+    </Panel>
   );
 }
 
