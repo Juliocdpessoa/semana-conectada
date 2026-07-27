@@ -1060,23 +1060,29 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         )}
       </div>
 
-      <div className="mt-3 grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
-        <Field label="Data da hora extra" required>
-          <input
-            type="date"
-            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-            value={form.overtime_date}
-            onChange={(e) => setForm({ ...form, overtime_date: e.target.value })}
-          />
-        </Field>
-        <Field label="Horário de saída" required>
-          <input
-            type="time"
-            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-            value={form.departure_time}
-            onChange={(e) => setForm({ ...form, departure_time: e.target.value })}
-          />
-        </Field>
+      <div className="mt-3 grid min-w-0 max-w-full grid-cols-1 gap-3 overflow-hidden sm:grid-cols-2">
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <Field label="Data da hora extra" required>
+            <input
+              type="date"
+              className="input-base block min-w-0 w-full max-w-full overflow-hidden text-[16px] sm:text-[12px]"
+              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+              value={form.overtime_date}
+              onChange={(e) => setForm({ ...form, overtime_date: e.target.value })}
+            />
+          </Field>
+        </div>
+        <div className="min-w-0 max-w-full overflow-hidden">
+          <Field label="Horário de saída" required>
+            <input
+              type="time"
+              className="input-base block min-w-0 w-full max-w-full overflow-hidden text-[16px] sm:text-[12px]"
+              style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
+              value={form.departure_time}
+              onChange={(e) => setForm({ ...form, departure_time: e.target.value })}
+            />
+          </Field>
+        </div>
         <Field label="Precisa de lanche?">
           <select
             className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
