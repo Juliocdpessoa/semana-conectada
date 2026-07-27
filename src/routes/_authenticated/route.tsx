@@ -9,7 +9,7 @@ export type SessionInfo = {
   userId: string;
   email: string;
   fullName: string;
-  role: "admin" | "manager" | "planning" | "leader" | "viewer" | null;
+  role: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "viewer" | null;
   approvalStatus: "pending" | "approved" | "blocked";
 };
 
@@ -21,7 +21,7 @@ async function loadSession(): Promise<SessionInfo | null> {
     supabase.from("user_roles").select("role").eq("user_id", data.user.id),
   ]);
   const rolesRows = roles.data ?? [];
-  const priority: SessionInfo["role"][] = ["admin", "manager", "planning", "leader", "viewer"];
+  const priority: SessionInfo["role"][] = ["admin", "manager", "planning", "leader", "measurement_control", "viewer"];
   const role = priority.find((r) => rolesRows.some((row) => row.role === r)) ?? null;
   return {
     userId: data.user.id,
@@ -56,17 +56,26 @@ function AuthedLayout() {
     return () => sub.subscription.unsubscribe();
   }, [router]);
 
-  useEffect(() => { setMenuOpen(false); }, [pathname]);
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [pathname]);
 
   const s = session as SessionInfo;
   const isPlanning = s.role === "planning" || s.role === "admin";
   const isAdmin = s.role === "admin";
   const isManager = s.role === "manager" || s.role === "admin";
-  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin";
+  const isMeasurementControl = s.role === "measurement_control";
+  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin" || isMeasurementControl;
+
+  useEffect(() => {
+    if (isMeasurementControl && pathname !== "/hora-extra") {
+      router.navigate({ to: "/hora-extra", replace: true });
+    }
+  }, [isMeasurementControl, pathname, router]);
 
   const nav = [
-    { to: "/atividades", label: "Atividades", icon: ClipboardList, show: true },
-    { to: "/painel", label: "Painel", icon: BarChart3, show: true },
+    { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !isMeasurementControl },
+    { to: "/painel", label: "Painel", icon: BarChart3, show: !isMeasurementControl },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
@@ -84,7 +93,7 @@ function AuthedLayout() {
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-primary-foreground shadow-sm">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-2 sm:px-6">
           {/* Marca */}
-          <Link to="/atividades" className="flex items-center gap-2.5">
+          <Link to={isMeasurementControl ? "/hora-extra" : "/atividades"} className="flex items-center gap-2.5">
             <BrandLogo className="h-8 w-auto brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]" />
             <div className="hidden leading-tight sm:block">
               <div className="text-[13px] font-semibold">NEXO</div>
@@ -98,7 +107,9 @@ function AuthedLayout() {
 
           {/* Navegação desktop */}
           <nav className="hidden items-center gap-0.5 sm:flex">
-            {nav.map((n) => <DesktopNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-3.5 w-3.5" />} />)}
+            {nav.map((n) => (
+              <DesktopNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-3.5 w-3.5" />} />
+            ))}
           </nav>
 
           {/* Ações à direita */}
@@ -132,7 +143,9 @@ function AuthedLayout() {
           <nav className="border-t border-white/10 bg-[oklch(0.42_0.13_142)] px-3 py-2 sm:hidden">
             <div className="mb-2 rounded-md bg-white/10 px-3 py-2 text-[11px]">
               <div className="font-medium">{s.fullName || s.email}</div>
-              <div className="text-primary-foreground/70">{s.email} · {roleLabel(s.role)}</div>
+              <div className="text-primary-foreground/70">
+                {s.email} · {roleLabel(s.role)}
+              </div>
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
@@ -186,11 +199,19 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
 
 function roleLabel(role: SessionInfo["role"]) {
   switch (role) {
-    case "admin": return "Administrador";
-    case "manager": return "Gerente";
-    case "planning": return "Planejamento";
-    case "leader": return "Líder";
-    case "viewer": return "Consulta";
-    default: return "Sem perfil";
+    case "admin":
+      return "Administrador";
+    case "manager":
+      return "Gerente";
+    case "planning":
+      return "Planejamento";
+    case "leader":
+      return "Líder";
+    case "measurement_control":
+      return "Medição e Controle";
+    case "viewer":
+      return "Consulta";
+    default:
+      return "Sem perfil";
   }
 }
