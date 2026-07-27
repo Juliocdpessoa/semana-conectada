@@ -95,3 +95,39 @@ WITH CHECK (public.is_approved(auth.uid()));
 CREATE TRIGGER trg_overtime_touch_updated_at
 BEFORE UPDATE ON public.overtime_requests
 FOR EACH ROW EXECUTE FUNCTION public.tg_touch_updated_at();
+
+
+-- 8) Medição e Controle: consulta exclusiva de horas extras aprovadas
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'measurement_control';
+
+CREATE OR REPLACE FUNCTION public.current_role_label(_user_id uuid)
+RETURNS text
+LANGUAGE sql
+STABLE SECURITY DEFINER
+SET search_path TO 'public'
+AS $$ SELECT CASE
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='admin') THEN 'admin'
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='manager') THEN 'manager'
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='planning') THEN 'planning'
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='leader') THEN 'leader'
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='measurement_control') THEN 'measurement_control'
+  WHEN EXISTS(SELECT 1 FROM public.user_roles WHERE user_id=_user_id AND role::text='viewer') THEN 'viewer'
+  ELSE NULL END $$;
+
+DROP POLICY IF EXISTS "ot select" ON public.overtime_requests;
+CREATE POLICY "ot select"
+ON public.overtime_requests FOR SELECT TO authenticated
+USING (
+  public.is_approved(auth.uid()) AND (
+    requester_user_id = auth.uid()
+    OR public.has_role(auth.uid(), 'admin')
+    OR EXISTS (SELECT 1 FROM public.user_roles ur WHERE ur.user_id = auth.uid() AND ur.role::text = 'manager')
+    OR (
+      status = 'approved'
+      AND EXISTS (
+        SELECT 1 FROM public.user_roles ur
+        WHERE ur.user_id = auth.uid() AND ur.role::text = 'measurement_control'
+      )
+    )
+  )
+);
