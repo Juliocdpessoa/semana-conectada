@@ -28,6 +28,7 @@ type Row = {
   description: string;
   status: string;
   justification: string | null;
+  observation: string | null;
   area: string | null;
   specialty: string | null;
   scheduled_date: string | null;
@@ -54,7 +55,7 @@ function PainelPage() {
         const { data, error } = await supabase
           .from("activities")
           .select(
-            "id,order_number,description,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
+            "id,order_number,description,status,justification,observation,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
           )
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
@@ -81,8 +82,17 @@ function PainelPage() {
     return { total, executado, naoExec, semApont, imediatas, aderencia, progresso };
   }, [rows]);
 
-  const byArea = useMemo(() => groupCounts(rows, (r) => r.area || "—"), [rows]);
-  const bySpecialty = useMemo(() => groupCounts(rows, (r) => r.specialty || "—"), [rows]);
+  const byArea = useMemo(
+    () =>
+      groupCounts(rows, (r) => {
+        const management = r.planning_data?.["Gerência"];
+        return management === null || management === undefined || management === ""
+          ? r.area || "—"
+          : String(management);
+      }),
+    [rows],
+  );
+  const bySpecialty = useMemo(() => groupCounts(rows, (r) => r.specialty || "—").slice(0, 10), [rows]);
   const byDay = useMemo(() => {
     const map = new Map<string, { total: number; exec: number; nao: number }>();
     for (const r of rows) {
@@ -336,6 +346,9 @@ function PendingByJustification({
                       </span>
                     </div>
                     <div className="mt-2 text-[12px] leading-snug text-foreground">{task.description}</div>
+                    <div className="mt-2 rounded bg-muted/60 px-2 py-1.5 text-[11px] leading-snug text-foreground">
+                      <b>Observação:</b> {task.observation?.trim() || "—"}
+                    </div>
                     <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
                       <span>
                         <b>Data:</b> {formatDate(task.scheduled_date || "—")}
