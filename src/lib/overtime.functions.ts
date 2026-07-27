@@ -108,9 +108,9 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       requester_name: info.fullName,
       requester_email: info.email,
       employee_master_id: employee.id,
-      employee_external_id: employee.employee_id,
+      employee_external_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
       employee_name: employee.full_name,
-      employee_registration: employee.badge,
+      employee_registration: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
       employee_role: employee.job_title,
       activity_id: activityId,
       week_id: weekId,
@@ -132,13 +132,20 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     };
   });
 
-const employeeSchema = z.object({
-  badge: z.string().trim().min(1).max(50),
-  employee_id: z.string().trim().min(1).max(50),
-  admission_date: z.string().refine(isValidDate, "Data de admissão inválida"),
-  full_name: z.string().trim().min(2).max(150),
-  job_title: z.string().trim().min(1).max(120),
-});
+const MISSING_BADGE_PREFIX = "__missing_badge__:";
+const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
+
+const employeeSchema = z
+  .object({
+    badge: z.string().trim().max(50),
+    employee_id: z.string().trim().max(50),
+    admission_date: z.string().refine(isValidDate, "Data de admissão inválida"),
+    full_name: z.string().trim().min(2).max(150),
+    job_title: z.string().trim().min(1).max(120),
+  })
+  .refine((employee) => Boolean(employee.badge || employee.employee_id), {
+    message: "Informe a Chapa ou o ID do colaborador",
+  });
 
 export const upsertEmployees = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -149,8 +156,10 @@ export const upsertEmployees = createServerFn({ method: "POST" })
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
       return { ok: false as const, error: "Somente gerente ou administrador pode atualizar colaboradores." };
     }
-    const badges = data.employees.map((employee) => employee.badge.toLocaleLowerCase("pt-BR"));
-    const externalIds = data.employees.map((employee) => employee.employee_id.toLocaleLowerCase("pt-BR"));
+    const badges = data.employees.map((employee) => employee.badge.toLocaleLowerCase("pt-BR")).filter(Boolean);
+    const externalIds = data.employees
+      .map((employee) => employee.employee_id.toLocaleLowerCase("pt-BR"))
+      .filter(Boolean);
     if (new Set(badges).size !== badges.length)
       return { ok: false as const, error: "Há chapas repetidas no arquivo informado." };
     if (new Set(externalIds).size !== externalIds.length)
@@ -159,8 +168,8 @@ export const upsertEmployees = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const rows = data.employees.map((employee) => ({
-      badge: employee.badge,
-      employee_id: employee.employee_id,
+      badge: employee.badge || `${MISSING_BADGE_PREFIX}${employee.employee_id}`,
+      employee_id: employee.employee_id || `${MISSING_EMPLOYEE_ID_PREFIX}${employee.badge}`,
       admission_date: employee.admission_date,
       full_name: employee.full_name,
       job_title: employee.job_title,
