@@ -166,6 +166,105 @@ export type Database = {
           },
         ]
       }
+      overtime_requests: {
+        Row: {
+          activity_id: string | null
+          created_at: string
+          decided_at: string | null
+          decided_by_email: string | null
+          decided_by_name: string | null
+          decided_by_user_id: string | null
+          departure_time: string
+          employee_name: string
+          employee_registration: string
+          employee_role: string
+          id: string
+          justification: string
+          manager_comment: string | null
+          needs_snack: boolean
+          order_number: string | null
+          overtime_date: string
+          request_number: number
+          requester_email: string
+          requester_name: string
+          requester_user_id: string
+          service_description: string
+          status: string
+          updated_at: string
+          version: number
+          week_id: string | null
+        }
+        Insert: {
+          activity_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by_email?: string | null
+          decided_by_name?: string | null
+          decided_by_user_id?: string | null
+          departure_time: string
+          employee_name: string
+          employee_registration: string
+          employee_role: string
+          id?: string
+          justification: string
+          manager_comment?: string | null
+          needs_snack?: boolean
+          order_number?: string | null
+          overtime_date: string
+          request_number?: number
+          requester_email?: string
+          requester_name?: string
+          requester_user_id: string
+          service_description: string
+          status?: string
+          updated_at?: string
+          version?: number
+          week_id?: string | null
+        }
+        Update: {
+          activity_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decided_by_email?: string | null
+          decided_by_name?: string | null
+          decided_by_user_id?: string | null
+          departure_time?: string
+          employee_name?: string
+          employee_registration?: string
+          employee_role?: string
+          id?: string
+          justification?: string
+          manager_comment?: string | null
+          needs_snack?: boolean
+          order_number?: string | null
+          overtime_date?: string
+          request_number?: number
+          requester_email?: string
+          requester_name?: string
+          requester_user_id?: string
+          service_description?: string
+          status?: string
+          updated_at?: string
+          version?: number
+          week_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "overtime_requests_activity_id_fkey"
+            columns: ["activity_id"]
+            isOneToOne: false
+            referencedRelation: "activities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "overtime_requests_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       profiles: {
         Row: {
           approval_status: Database["public"]["Enums"]["approval_status"]
@@ -367,7 +466,7 @@ export type Database = {
       is_approved: { Args: { _user_id: string }; Returns: boolean }
     }
     Enums: {
-      app_role: "admin" | "planning" | "leader" | "viewer"
+      app_role: "admin" | "planning" | "leader" | "viewer" | "manager"
       approval_status: "pending" | "approved" | "blocked"
       change_source: "individual" | "bulk" | "import" | "sync"
       sync_status: "synced" | "pending" | "error"
@@ -498,7 +597,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "planning", "leader", "viewer"],
+      app_role: ["admin", "planning", "leader", "viewer", "manager"],
       approval_status: ["pending", "approved", "blocked"],
       change_source: ["individual", "bulk", "import", "sync"],
       sync_status: ["synced", "pending", "error"],
