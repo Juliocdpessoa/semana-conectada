@@ -36,6 +36,11 @@ const createSchema = z
     order_number: z.string().trim().max(64).nullable().optional(),
     service_description: z.string().trim().min(3).max(1000),
     overtime_date: z.string().refine(isValidDate, "Data inválida"),
+    entry_time: z
+      .string()
+      .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário de entrada inválido")
+      .nullable()
+      .optional(),
     departure_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido"),
     needs_snack: z.boolean(),
     justification: z.string().trim().min(3).max(1000),
@@ -112,6 +117,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       order_number: orderNumber,
       service_description: serviceDescription,
       overtime_date: data.overtime_date,
+      entry_time: data.entry_time || null,
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
       justification: data.justification,
