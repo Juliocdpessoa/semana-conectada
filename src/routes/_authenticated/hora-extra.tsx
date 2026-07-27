@@ -16,7 +16,9 @@ import {
   Upload,
   UserCheck,
   UserX,
+  Download,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
@@ -38,6 +40,8 @@ type OvertimeRow = {
   employee_name: string;
   employee_registration: string;
   employee_role: string;
+  employee_external_id: string | null;
+  needs_transport: boolean;
   activity_id: string | null;
   week_id: string | null;
   order_number: string | null;
@@ -296,6 +300,33 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
     });
   }, [rows, status, selectedDate, q]);
 
+  function exportApprovedForDay() {
+    if (!selectedDate) {
+      toast.error("Selecione uma data para exportar os aprovados do dia.");
+      return;
+    }
+    const approved = rows.filter((row) => row.status === "approved" && row.overtime_date === selectedDate);
+    if (approved.length === 0) {
+      toast.error("Não há colaboradores aprovados nesta data.");
+      return;
+    }
+    const exportRows = approved.map((row) => ({
+      Chapa: row.employee_registration,
+      ID: row.employee_external_id ?? "",
+      Nome: row.employee_name,
+      Função: row.employee_role,
+      "Precisa de transporte": row.needs_transport ? "Sim" : "Não",
+    }));
+    const worksheet = XLSX.utils.json_to_sheet(exportRows, {
+      header: ["Chapa", "ID", "Nome", "Função", "Precisa de transporte"],
+    });
+    worksheet["!cols"] = [{ wch: 14 }, { wch: 14 }, { wch: 34 }, { wch: 24 }, { wch: 24 }];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Aprovados");
+    XLSX.writeFile(workbook, `hora-extra-aprovados-${selectedDate}.xlsx`);
+    toast.success(`Planilha gerada com ${approved.length} colaborador(es).`);
+  }
+
   return (
     <>
       <Panel padded={false}>
@@ -338,6 +369,16 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
               ))}
             </select>
           </Field>
+          <div className="flex items-end sm:col-span-2 lg:col-span-3">
+            <button
+              type="button"
+              onClick={exportApprovedForDay}
+              disabled={!selectedDate}
+              className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <Download className="h-3.5 w-3.5" /> Exportar aprovados do dia
+            </button>
+          </div>
         </div>
         {filtered.length === 0 ? (
           <div className="p-6">
@@ -410,7 +451,8 @@ function RequestsTable({
               <div>
                 <dt className="text-[10px] uppercase text-muted-foreground">Saída / Lanche</dt>
                 <dd>
-                  {r.departure_time} · {r.needs_snack ? "Sim" : "Não"}
+                  {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
+                  <span className="mt-0.5 block">Transporte: {r.needs_transport ? "Sim" : "Não"}</span>
                 </dd>
               </div>
               <div className="col-span-2">
@@ -478,6 +520,7 @@ function RequestsTable({
               <th className="px-3 py-2 text-left font-semibold">Serviço</th>
               <th className="px-3 py-2 text-left font-semibold">Saída</th>
               <th className="px-3 py-2 text-left font-semibold">Lanche</th>
+              <th className="px-3 py-2 text-left font-semibold">Transporte</th>
               {showRequester && <th className="px-3 py-2 text-left font-semibold">Solicitante</th>}
               <th className="px-3 py-2 text-left font-semibold">Status</th>
               <th className="px-3 py-2 text-left font-semibold">Decisão</th>
@@ -500,6 +543,7 @@ function RequestsTable({
                 </td>
                 <td className="px-3 py-2 tabular whitespace-nowrap">{r.departure_time}</td>
                 <td className="px-3 py-2">{r.needs_snack ? "Sim" : "Não"}</td>
+                <td className="px-3 py-2">{r.needs_transport ? "Sim" : "Não"}</td>
                 {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
                 <td className="px-3 py-2">
                   <OvertimeStatus status={r.status} />
@@ -876,6 +920,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [saving, setSaving] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [transportByEmployeeId, setTransportByEmployeeId] = useState<Record<string, boolean>>({});
   const [form, setForm] = useState({
     activity_id: null as string | null,
     week_id: null as string | null,
@@ -941,9 +986,18 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   });
 
   function toggleEmployee(id: string) {
-    setSelectedEmployeeIds((current) =>
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
-    );
+    const removing = selectedEmployeeIds.includes(id);
+    setSelectedEmployeeIds((current) => (removing ? current.filter((item) => item !== id) : [...current, id]));
+    if (removing) {
+      setTransportByEmployeeId((current) => {
+        const next = { ...current };
+        delete next[id];
+        return next;
+      });
+    }
+  }
+  function setEmployeeTransport(id: string, needsTransport: boolean) {
+    setTransportByEmployeeId((current) => ({ ...current, [id]: needsTransport }));
   }
   function pickActivity(a: { id: string; week_id: string; order_number: string | null; description: string }) {
     setForm((f) => ({
@@ -963,7 +1017,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     try {
       const res = await call({
         data: {
-          employee_ids: selectedEmployeeIds,
+          employees: selectedEmployeeIds.map((id) => ({ id, needs_transport: transportByEmployeeId[id] ?? false })),
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
@@ -1037,23 +1091,33 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         {selectedEmployees.length > 0 && (
           <div className="mt-2 grid gap-2 sm:grid-cols-2">
             {selectedEmployees.map((employee) => (
-              <div
-                key={employee.id}
-                className="flex items-start justify-between gap-2 rounded border border-primary/20 bg-primary/5 p-2 text-[12px]"
-              >
-                <span className="min-w-0">
-                  <b className="block truncate">{employee.full_name}</b>
-                  <span className="text-[11px] text-muted-foreground">
-                    {employee.badge} · {employee.job_title}
+              <div key={employee.id} className="min-w-0 rounded border border-primary/20 bg-primary/5 p-2 text-[12px]">
+                <div className="flex min-w-0 items-start justify-between gap-2">
+                  <span className="min-w-0">
+                    <b className="block truncate">{employee.full_name}</b>
+                    <span className="text-[11px] text-muted-foreground">
+                      {employee.badge} · {employee.job_title}
+                    </span>
                   </span>
-                </span>
-                <button
-                  type="button"
-                  onClick={() => toggleEmployee(employee.id)}
-                  className="text-[11px] text-muted-foreground hover:text-destructive"
-                >
-                  Remover
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => toggleEmployee(employee.id)}
+                    className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive"
+                  >
+                    Remover
+                  </button>
+                </div>
+                <label className="mt-2 flex min-w-0 items-center justify-between gap-2 border-t border-primary/15 pt-2">
+                  <span className="text-[11px] font-medium">Precisa de transporte?</span>
+                  <select
+                    value={transportByEmployeeId[employee.id] ? "1" : "0"}
+                    onChange={(event) => setEmployeeTransport(employee.id, event.target.value === "1")}
+                    className="input-base h-9 min-w-0 w-24 text-[12px]"
+                  >
+                    <option value="0">Não</option>
+                    <option value="1">Sim</option>
+                  </select>
+                </label>
               </div>
             ))}
           </div>
