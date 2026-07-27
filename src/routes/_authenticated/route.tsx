@@ -21,7 +21,7 @@ async function loadSession(): Promise<SessionInfo | null> {
     supabase.from("user_roles").select("role").eq("user_id", data.user.id),
   ]);
   const rolesRows = roles.data ?? [];
-  const priority: SessionInfo["role"][] = ["admin", "planning", "leader", "viewer"];
+  const priority: SessionInfo["role"][] = ["admin", "manager", "planning", "leader", "viewer"];
   const role = priority.find((r) => rolesRows.some((row) => row.role === r)) ?? null;
   return {
     userId: data.user.id,
