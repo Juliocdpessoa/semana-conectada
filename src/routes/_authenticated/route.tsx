@@ -9,7 +9,7 @@ export type SessionInfo = {
   userId: string;
   email: string;
   fullName: string;
-  role: "admin" | "planning" | "leader" | "viewer" | null;
+  role: "admin" | "manager" | "planning" | "leader" | "viewer" | null;
   approvalStatus: "pending" | "approved" | "blocked";
 };
 
