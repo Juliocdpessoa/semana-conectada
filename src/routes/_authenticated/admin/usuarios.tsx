@@ -42,7 +42,7 @@ function AdminUsers() {
     },
   });
 
-  async function updateUser(id: string, status: Row["approval_status"], role?: "admin" | "planning" | "leader" | "viewer") {
+  async function updateUser(id: string, status: Row["approval_status"], role?: "admin" | "manager" | "planning" | "leader" | "viewer") {
     const res = await call({ data: { targetUserId: id, approvalStatus: status, role } });
     if (!res.ok) return toast.error(res.error);
     toast.success("Usuário atualizado.");
