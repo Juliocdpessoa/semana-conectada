@@ -14,9 +14,11 @@ import {
   Plus,
   Users,
   Upload,
+  Download,
   UserCheck,
   UserX,
 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
@@ -566,6 +568,16 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 }
 
 /* ---------- Employee Management ---------- */
+const EMPLOYEE_TEMPLATE_HEADERS = ["Chapa", "ID", "Data de Admissão", "Nome", "Função"] as const;
+
+function downloadEmployeeTemplate() {
+  const worksheet = XLSX.utils.aoa_to_sheet([EMPLOYEE_TEMPLATE_HEADERS]);
+  worksheet["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 38 }, { wch: 28 }];
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores");
+  XLSX.writeFile(workbook, "modelo_importacao_colaboradores.xlsx");
+}
+
 function EmployeeManagement() {
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
@@ -621,12 +633,24 @@ function EmployeeManagement() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <button
-          onClick={() => setShowImport(true)}
-          className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
-        >
-          <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
-        </button>
+        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+          <button
+            type="button"
+            onClick={downloadEmployeeTemplate}
+            className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              <Download className="h-3.5 w-3.5" /> Baixar modelo
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowImport(true)}
+            className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
+          >
+            <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
+          </button>
+        </div>
       </div>
       {employees.isLoading ? (
         <div className="p-6 text-center text-[12px] text-muted-foreground">Carregando colaboradores…</div>
