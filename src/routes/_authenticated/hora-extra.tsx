@@ -566,7 +566,6 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 function EmployeeManagement() {
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
-  const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);
@@ -877,6 +876,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [saving, setSaving] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
   const [form, setForm] = useState({
     activity_id: null as string | null,
     week_id: null as string | null,
