@@ -30,9 +30,7 @@ function isValidDate(value: string) {
 
 const createSchema = z
   .object({
-    employee_name: z.string().trim().min(2).max(150),
-    employee_registration: z.string().trim().min(1).max(50),
-    employee_role: z.string().trim().min(1).max(120),
+    employee_ids: z.array(z.string().uuid()).min(1, "Selecione ao menos um colaborador").max(100),
     activity_id: z.string().uuid().nullable().optional(),
     week_id: z.string().uuid().nullable().optional(),
     order_number: z.string().trim().max(64).nullable().optional(),
@@ -59,18 +57,29 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
-    if (!(info.isLeader || info.isAdmin)) {
+    if (!(info.isLeader || info.isAdmin))
       return { ok: false as const, error: "Somente líder ou administrador pode solicitar hora extra." };
-    }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    const uniqueEmployeeIds = [...new Set(data.employee_ids)];
+    const { data: employees, error: employeeError } = await db
+      .from("employees")
+      .select("id, badge, employee_id, full_name, job_title")
+      .in("id", uniqueEmployeeIds)
+      .eq("is_active", true);
+    if (employeeError) return { ok: false as const, error: "Não foi possível validar os colaboradores." };
+    if (!employees || employees.length !== uniqueEmployeeIds.length) {
+      return {
+        ok: false as const,
+        error: "Um ou mais colaboradores não existem ou estão inativos. Atualize a lista e tente novamente.",
+      };
+    }
 
     let activityId: string | null = null;
     let weekId: string | null = null;
     let orderNumber = data.order_number?.trim() || null;
     let serviceDescription = data.service_description.trim();
-
     if (data.activity_id && data.week_id) {
       const { data: activity, error: activityError } = await db
         .from("activities")
@@ -87,29 +96,97 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       serviceDescription = activity.description;
     }
 
-    const { data: created, error } = await db
-      .from("overtime_requests")
-      .insert({
-        requester_user_id: userId,
-        requester_name: info.fullName,
-        requester_email: info.email,
-        employee_name: data.employee_name,
-        employee_registration: data.employee_registration,
-        employee_role: data.employee_role,
-        activity_id: activityId,
-        week_id: weekId,
-        order_number: orderNumber,
-        service_description: serviceDescription,
-        overtime_date: data.overtime_date,
-        departure_time: data.departure_time,
-        needs_snack: data.needs_snack,
-        justification: data.justification,
-        status: "pending",
-      })
-      .select("id, request_number")
-      .single();
+    const batchId = crypto.randomUUID();
+    const rows = employees.map((employee: any) => ({
+      batch_id: batchId,
+      requester_user_id: userId,
+      requester_name: info.fullName,
+      requester_email: info.email,
+      employee_master_id: employee.id,
+      employee_external_id: employee.employee_id,
+      employee_name: employee.full_name,
+      employee_registration: employee.badge,
+      employee_role: employee.job_title,
+      activity_id: activityId,
+      week_id: weekId,
+      order_number: orderNumber,
+      service_description: serviceDescription,
+      overtime_date: data.overtime_date,
+      departure_time: data.departure_time,
+      needs_snack: data.needs_snack,
+      justification: data.justification,
+      status: "pending",
+    }));
+    const { data: created, error } = await db.from("overtime_requests").insert(rows).select("id, request_number");
     if (error) return { ok: false as const, error: error.message };
-    return { ok: true as const, id: created.id, number: created.request_number };
+    return {
+      ok: true as const,
+      count: created?.length ?? 0,
+      numbers: (created ?? []).map((item: any) => item.request_number),
+    };
+  });
+
+const employeeSchema = z.object({
+  badge: z.string().trim().min(1).max(50),
+  employee_id: z.string().trim().min(1).max(50),
+  admission_date: z.string().refine(isValidDate, "Data de admissão inválida"),
+  full_name: z.string().trim().min(2).max(150),
+  job_title: z.string().trim().min(1).max(120),
+});
+
+export const upsertEmployees = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ employees: z.array(employeeSchema).min(1).max(2000) }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
+      return { ok: false as const, error: "Somente gerente ou administrador pode atualizar colaboradores." };
+    }
+    const badges = data.employees.map((employee) => employee.badge.toLocaleLowerCase("pt-BR"));
+    const externalIds = data.employees.map((employee) => employee.employee_id.toLocaleLowerCase("pt-BR"));
+    if (new Set(badges).size !== badges.length)
+      return { ok: false as const, error: "Há chapas repetidas no arquivo informado." };
+    if (new Set(externalIds).size !== externalIds.length)
+      return { ok: false as const, error: "Há IDs repetidos no arquivo informado." };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const rows = data.employees.map((employee) => ({
+      badge: employee.badge,
+      employee_id: employee.employee_id,
+      admission_date: employee.admission_date,
+      full_name: employee.full_name,
+      job_title: employee.job_title,
+      is_active: true,
+      updated_by_user_id: userId,
+      updated_by_name: info.fullName,
+    }));
+    const { data: saved, error } = await db.from("employees").upsert(rows, { onConflict: "badge" }).select("id");
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, count: saved?.length ?? 0 };
+  });
+
+export const setEmployeeActive = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
+      return { ok: false as const, error: "Somente gerente ou administrador pode alterar colaboradores." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: updated, error } = await db
+      .from("employees")
+      .update({ is_active: data.active, updated_by_user_id: userId, updated_by_name: info.fullName })
+      .eq("id", data.id)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!updated) return { ok: false as const, error: "Colaborador não encontrado." };
+    return { ok: true as const };
   });
 
 const decideSchema = z.object({
