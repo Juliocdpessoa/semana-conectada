@@ -40,6 +40,7 @@ type OvertimeRow = {
   requester_email: string;
   employee_name: string;
   employee_registration: string;
+  employee_external_id: string | null;
   employee_role: string;
   activity_id: string | null;
   week_id: string | null;
@@ -82,7 +83,7 @@ function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "leader" && s.role !== "manager" && s.role !== "admin") {
+    if (s.role !== "leader" && s.role !== "manager" && s.role !== "admin" && s.role !== "measurement_control") {
       throw redirect({ to: "/atividades" });
     }
   },
@@ -94,8 +95,11 @@ function OvertimePage() {
   const s = session;
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin";
+  const isMeasurementControl = s.role === "measurement_control";
 
-  const [tab, setTab] = useState<"list" | "queue" | "employees">(canRequest ? "list" : "queue");
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export">(
+    isMeasurementControl ? "export" : canRequest ? "list" : "queue",
+  );
   const [showNew, setShowNew] = useState(false);
 
   const qc = useQueryClient();
@@ -190,6 +194,11 @@ function OvertimePage() {
       </div>
 
       <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
+        {isMeasurementControl && (
+          <TabBtn active={tab === "export"} onClick={() => setTab("export")}>
+            Exportação diária
+          </TabBtn>
+        )}
         {canRequest && (
           <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
             {isManager ? "Minhas solicitações" : "Minhas solicitações"}
@@ -211,6 +220,8 @@ function OvertimePage() {
           </TabBtn>
         )}
       </div>
+
+      {tab === "export" && isMeasurementControl && <ApprovedDailyExport rows={rows} />}
 
       {tab === "list" && canRequest && (
         <MyRequests
@@ -259,6 +270,189 @@ function TabBtn({ active, onClick, children }: { active: boolean; onClick: () =>
     >
       {children}
     </button>
+  );
+}
+
+/* ---------- Approved daily export ---------- */
+function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
+  const approvedRows = useMemo(() => rows.filter((row) => row.status === "approved"), [rows]);
+  const availableDates = useMemo(
+    () => [...new Set(approvedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [approvedRows],
+  );
+  const [selectedDate, setSelectedDate] = useState("");
+  const effectiveDate = selectedDate || availableDates[0] || "";
+  const dailyRows = useMemo(
+    () => approvedRows.filter((row) => row.overtime_date === effectiveDate),
+    [approvedRows, effectiveDate],
+  );
+
+  function exportDailyExcel() {
+    if (!effectiveDate || dailyRows.length === 0)
+      return toast.error("Não há horas extras aprovadas para exportar nesta data.");
+    const headers = [
+      "Data",
+      "Chapa",
+      "ID",
+      "Nome",
+      "Função",
+      "Horário de entrada",
+      "Horário de saída",
+      "Solicitante",
+      "Ordem",
+      "Serviço",
+      "Justificativa",
+    ];
+    const values = dailyRows.map((row) => [
+      formatDate(row.overtime_date),
+      row.employee_registration || "",
+      row.employee_external_id || "",
+      row.employee_name,
+      row.employee_role,
+      row.entry_time || "",
+      row.departure_time,
+      row.requester_name || row.requester_email,
+      row.order_number || "",
+      row.service_description,
+      row.justification,
+    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = [
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 32 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 28 },
+      { wch: 16 },
+      { wch: 48 },
+      { wch: 48 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras aprovadas");
+    XLSX.writeFile(workbook, "horas-extras-aprovadas-" + effectiveDate + ".xlsx");
+    toast.success(dailyRows.length + " registro(s) exportado(s).");
+  }
+
+  return (
+    <Panel
+      title="Horas extras aprovadas"
+      description="Consulte e exporte as horas extras aprovadas de cada dia."
+      padded={false}
+    >
+      <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="w-full min-w-0 sm:max-w-xs">
+          <Field label="Data da hora extra">
+            <select
+              value={effectiveDate}
+              onChange={(event) => setSelectedDate(event.target.value)}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            >
+              {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
+              {availableDates.map((date) => (
+                <option key={date} value={date}>
+                  {formatDate(date)}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <button
+          type="button"
+          onClick={exportDailyExcel}
+          disabled={!effectiveDate || dailyRows.length === 0}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
+        >
+          <Download className="h-4 w-4" /> Exportar Excel do dia
+        </button>
+      </div>
+
+      {dailyRows.length === 0 ? (
+        <div className="p-6">
+          <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma hora extra aprovada nesta data" />
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 p-3 md:hidden">
+            {dailyRows.map((row) => (
+              <article
+                key={row.id}
+                className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm"
+              >
+                <div className="font-semibold text-foreground">{row.employee_name}</div>
+                <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
+                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} · {row.employee_role}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <b>Entrada:</b> {row.entry_time || "—"}
+                  </div>
+                  <div>
+                    <b>Saída:</b> {row.departure_time}
+                  </div>
+                </div>
+                <div className="mt-2 break-words">
+                  <b>Solicitante:</b> {row.requester_name || row.requester_email}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Ordem:</b> {row.order_number || "—"}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Serviço:</b> {row.service_description}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Justificativa:</b> {row.justification}
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[1400px] w-full text-[12px]">
+              <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  {[
+                    "Data",
+                    "Chapa",
+                    "ID",
+                    "Nome",
+                    "Função",
+                    "Entrada",
+                    "Saída",
+                    "Solicitante",
+                    "Ordem",
+                    "Serviço",
+                    "Justificativa",
+                  ].map((header) => (
+                    <th key={header} className="px-3 py-2 text-left font-semibold">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {dailyRows.map((row) => (
+                  <tr key={row.id} className="row-zebra align-top">
+                    <td className="whitespace-nowrap px-3 py-2">{formatDate(row.overtime_date)}</td>
+                    <td className="px-3 py-2">{row.employee_registration || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_external_id || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_name}</td>
+                    <td className="px-3 py-2">{row.employee_role}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
+                    <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="px-3 py-2">{row.order_number || "—"}</td>
+                    <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
+                    <td className="max-w-[280px] px-3 py-2">{row.justification}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Panel>
   );
 }
 
