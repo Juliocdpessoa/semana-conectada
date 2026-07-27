@@ -132,7 +132,6 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
     }
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: updated, error } = await supabaseAdmin
       .from("overtime_requests")
       .update({
@@ -172,6 +171,7 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
     if (info.approvalStatus !== "approved" || !(info.isLeader || info.isAdmin)) {
       return { ok: false as const, error: "Usuário sem permissão para cancelar." };
     }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: updated, error } = await supabaseAdmin
       .from("overtime_requests")
       .update({ status: "cancelled", version: data.expectedVersion + 1 })
