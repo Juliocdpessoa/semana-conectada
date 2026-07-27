@@ -776,6 +776,7 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const call = useServerFn(upsertEmployees);
   const [raw, setRaw] = useState("");
   const [saving, setSaving] = useState(false);
+  const [readingFile, setReadingFile] = useState(false);
   const parsed = useMemo(() => {
     const records: Array<{
       badge: string;
@@ -809,8 +810,42 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     });
     return { records, errors };
   }, [raw]);
+  async function importSpreadsheet(file?: File) {
+    if (!file) return;
+    setReadingFile(true);
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: false });
+      const firstSheetName = workbook.SheetNames[0];
+      if (!firstSheetName) throw new Error("A planilha não possui nenhuma aba.");
+      const worksheet = workbook.Sheets[firstSheetName];
+      const rows = XLSX.utils.sheet_to_json<(string | number)[]>(worksheet, {
+        header: 1,
+        defval: "",
+        raw: false,
+        dateNF: "dd/mm/yyyy",
+      });
+      if (!rows.length) throw new Error("A planilha está vazia.");
+      const receivedHeaders = rows[0].slice(0, EMPLOYEE_TEMPLATE_HEADERS.length).map((value) => String(value).trim());
+      const validHeaders = EMPLOYEE_TEMPLATE_HEADERS.every((header, index) => receivedHeaders[index] === header);
+      if (!validHeaders) {
+        throw new Error("Cabeçalhos inválidos. Use exatamente: Chapa, ID, Data de Admissão, Nome, Função.");
+      }
+      const employeeRows = rows
+        .slice(1)
+        .map((row) => row.slice(0, EMPLOYEE_TEMPLATE_HEADERS.length).map((value) => String(value).trim()))
+        .filter((row) => row.some(Boolean));
+      if (!employeeRows.length) throw new Error("A planilha não possui colaboradores preenchidos.");
+      setRaw([Array.from(EMPLOYEE_TEMPLATE_HEADERS), ...employeeRows].map((row) => row.join("\t")).join("\n"));
+      toast.success(`${employeeRows.length} colaborador(es) carregado(s) da planilha.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível ler a planilha.");
+    } finally {
+      setReadingFile(false);
+    }
+  }
+
   async function save() {
-    if (!parsed.records.length) return toast.error("Cole ao menos um colaborador válido.");
+    if (!parsed.records.length) return toast.error("Importe ou cole ao menos um colaborador válido.");
     if (parsed.errors.length) return toast.error("Corrija as linhas inválidas antes de salvar.");
     setSaving(true);
     try {
@@ -831,9 +866,37 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         <b>Chapa, ID, Data de Admissão, Nome, Função</b>. A data aceita dd/mm/aaaa ou aaaa-mm-dd. Chapas existentes
         serão atualizadas e reativadas.
       </div>
+      <div className="mt-3 rounded border border-border p-3">
+        <label
+          className={cn(
+            "flex min-h-10 w-full cursor-pointer items-center justify-center gap-1.5 rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-fit",
+            readingFile && "pointer-events-none opacity-60",
+          )}
+        >
+          <Upload className="h-3.5 w-3.5" />
+          {readingFile ? "Lendo planilha…" : "Selecionar planilha preenchida"}
+          <input
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            disabled={readingFile || saving}
+            onChange={async (event) => {
+              await importSpreadsheet(event.target.files?.[0]);
+              event.target.value = "";
+            }}
+          />
+        </label>
+        <p className="mt-2 text-[11px] text-muted-foreground">
+          Aceita arquivos .xlsx ou .xls gerados pelo botão Baixar modelo. Os cabeçalhos e a ordem são validados antes da
+          importação.
+        </p>
+      </div>
+      <div className="mt-3 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        ou cole os dados abaixo
+      </div>
       <textarea
         rows={10}
-        className="input-base mt-3 min-h-56 font-mono text-[12px]"
+        className="input-base mt-2 min-h-56 font-mono text-[12px]"
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
         placeholder={"Chapa\tID\tData de Admissão\tNome\tFunção\n1234\t9876\t15/01/2024\tMaria da Silva\tEletricista"}
