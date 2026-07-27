@@ -226,7 +226,23 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    const { data: updated, error } = await db
+    const { data: target, error: targetError } = await db
+      .from("overtime_requests")
+      .select("id, batch_id, status, version")
+      .eq("id", data.id)
+      .eq("version", data.expectedVersion)
+      .maybeSingle();
+    if (targetError) return { ok: false as const, error: targetError.message };
+    if (!target || target.status !== "pending") {
+      const { data: current } = await db
+        .from("overtime_requests")
+        .select("id, status, version, decided_by_name, decided_at")
+        .eq("id", data.id)
+        .maybeSingle();
+      return { ok: false as const, conflict: true, current };
+    }
+
+    let updateQuery = db
       .from("overtime_requests")
       .update({
         status: data.decision,
@@ -237,21 +253,12 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
         decided_at: new Date().toISOString(),
         version: data.expectedVersion + 1,
       })
-      .eq("id", data.id)
-      .eq("version", data.expectedVersion)
-      .eq("status", "pending")
-      .select("id, status, version")
-      .maybeSingle();
+      .eq("status", "pending");
+    updateQuery = target.batch_id ? updateQuery.eq("batch_id", target.batch_id) : updateQuery.eq("id", target.id);
+    const { data: updated, error } = await updateQuery.select("id, status, version");
     if (error) return { ok: false as const, error: error.message };
-    if (!updated) {
-      const { data: current } = await db
-        .from("overtime_requests")
-        .select("id, status, version, decided_by_name, decided_at")
-        .eq("id", data.id)
-        .maybeSingle();
-      return { ok: false as const, conflict: true, current };
-    }
-    return { ok: true as const, updated };
+    if (!updated?.length) return { ok: false as const, conflict: true, current: target };
+    return { ok: true as const, updated, count: updated.length };
   });
 
 const cancelSchema = z.object({ id: z.string().uuid(), expectedVersion: z.number().int().min(1) });
