@@ -463,7 +463,7 @@ export type Database = {
       is_approved: { Args: { _user_id: string }; Returns: boolean };
     };
     Enums: {
-      app_role: "admin" | "planning" | "leader" | "viewer" | "manager";
+      app_role: "admin" | "planning" | "leader" | "viewer" | "manager" | "measurement_control";
       approval_status: "pending" | "approved" | "blocked";
       change_source: "individual" | "bulk" | "import" | "sync";
       sync_status: "synced" | "pending" | "error";
@@ -586,7 +586,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "planning", "leader", "viewer", "manager"],
+      app_role: ["admin", "planning", "leader", "viewer", "manager", "measurement_control"],
       approval_status: ["pending", "approved", "blocked"],
       change_source: ["individual", "bulk", "import", "sync"],
       sync_status: ["synced", "pending", "error"],
