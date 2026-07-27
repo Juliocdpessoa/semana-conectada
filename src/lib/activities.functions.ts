@@ -164,7 +164,7 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
     return { ok: true as const, count: created?.length ?? 0 };
   });
 
-const roleSchema = z.enum(["admin", "planning", "leader", "viewer"]);
+const roleSchema = z.enum(["admin", "manager", "planning", "leader", "viewer"]);
 const approveSchema = z.object({
   targetUserId: z.string().uuid(),
   approvalStatus: z.enum(["approved", "blocked", "pending"]),

@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
-import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X } from "lucide-react";
+import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
@@ -9,7 +9,7 @@ export type SessionInfo = {
   userId: string;
   email: string;
   fullName: string;
-  role: "admin" | "planning" | "leader" | "viewer" | null;
+  role: "admin" | "manager" | "planning" | "leader" | "viewer" | null;
   approvalStatus: "pending" | "approved" | "blocked";
 };
 
@@ -21,7 +21,7 @@ async function loadSession(): Promise<SessionInfo | null> {
     supabase.from("user_roles").select("role").eq("user_id", data.user.id),
   ]);
   const rolesRows = roles.data ?? [];
-  const priority: SessionInfo["role"][] = ["admin", "planning", "leader", "viewer"];
+  const priority: SessionInfo["role"][] = ["admin", "manager", "planning", "leader", "viewer"];
   const role = priority.find((r) => rolesRows.some((row) => row.role === r)) ?? null;
   return {
     userId: data.user.id,
@@ -61,14 +61,18 @@ function AuthedLayout() {
   const s = session as SessionInfo;
   const isPlanning = s.role === "planning" || s.role === "admin";
   const isAdmin = s.role === "admin";
+  const isManager = s.role === "manager" || s.role === "admin";
+  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin";
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: true },
     { to: "/painel", label: "Painel", icon: BarChart3, show: true },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
+    { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
+  void isManager;
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -183,6 +187,7 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
 function roleLabel(role: SessionInfo["role"]) {
   switch (role) {
     case "admin": return "Administrador";
+    case "manager": return "Gerente";
     case "planning": return "Planejamento";
     case "leader": return "Líder";
     case "viewer": return "Consulta";
