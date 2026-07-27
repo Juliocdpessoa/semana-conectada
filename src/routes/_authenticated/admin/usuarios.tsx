@@ -16,7 +16,13 @@ export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   component: AdminUsers,
 });
 
-type Row = { id: string; email: string; full_name: string; approval_status: "pending" | "approved" | "blocked"; roles: string[] };
+type Row = {
+  id: string;
+  email: string;
+  full_name: string;
+  approval_status: "pending" | "approved" | "blocked";
+  roles: string[];
+};
 
 function AdminUsers() {
   const qc = useQueryClient();
@@ -35,14 +41,20 @@ function AdminUsers() {
         rolesByUser.set(r.user_id, arr);
       });
       return (pRes.data ?? []).map((p) => ({
-        id: p.id, email: p.email, full_name: p.full_name,
+        id: p.id,
+        email: p.email,
+        full_name: p.full_name,
         approval_status: p.approval_status,
         roles: rolesByUser.get(p.id) ?? [],
       })) as Row[];
     },
   });
 
-  async function updateUser(id: string, status: Row["approval_status"], role?: "admin" | "manager" | "planning" | "leader" | "viewer") {
+  async function updateUser(
+    id: string,
+    status: Row["approval_status"],
+    role?: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "viewer",
+  ) {
     const res = await call({ data: { targetUserId: id, approvalStatus: status, role } });
     if (!res.ok) return toast.error(res.error);
     toast.success("Usuário atualizado.");
@@ -58,10 +70,12 @@ function AdminUsers() {
         eyebrow="Administração"
         title="Usuários"
         description="Aprove cadastros, defina perfis e bloqueie acessos."
-        meta={<>
-          <span>{total} usuários</span>
-          {pending > 0 && <span className="text-warning-foreground">{pending} aguardando aprovação</span>}
-        </>}
+        meta={
+          <>
+            <span>{total} usuários</span>
+            {pending > 0 && <span className="text-warning-foreground">{pending} aguardando aprovação</span>}
+          </>
+        }
       />
 
       <Panel title="Lista de usuários" padded={false}>
@@ -83,12 +97,20 @@ function AdminUsers() {
                     <td className="px-3 py-2">{u.full_name || <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-3 py-2 text-[12px] text-muted-foreground">{u.email}</td>
                     <td className="px-3 py-2">
-                      <span className={`status-pill ${
-                        u.approval_status === "approved" ? "border-success/40 bg-success/10 text-success"
-                        : u.approval_status === "pending" ? "border-warning/40 bg-warning/15 text-warning-foreground"
-                        : "border-destructive/40 bg-destructive/10 text-destructive"
-                      }`}>
-                        {u.approval_status === "approved" ? "Aprovado" : u.approval_status === "pending" ? "Pendente" : "Bloqueado"}
+                      <span
+                        className={`status-pill ${
+                          u.approval_status === "approved"
+                            ? "border-success/40 bg-success/10 text-success"
+                            : u.approval_status === "pending"
+                              ? "border-warning/40 bg-warning/15 text-warning-foreground"
+                              : "border-destructive/40 bg-destructive/10 text-destructive"
+                        }`}
+                      >
+                        {u.approval_status === "approved"
+                          ? "Aprovado"
+                          : u.approval_status === "pending"
+                            ? "Pendente"
+                            : "Bloqueado"}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-[12px]">
@@ -100,6 +122,7 @@ function AdminUsers() {
                         <option value="leader">Líder</option>
                         <option value="manager">Gerente</option>
                         <option value="planning">Planejamento</option>
+                        <option value="measurement_control">Medição e Controle</option>
                         <option value="viewer">Consulta</option>
                         <option value="admin">Administrador</option>
                       </select>
@@ -107,11 +130,15 @@ function AdminUsers() {
                     <td className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1.5">
                         {u.approval_status !== "approved" && (
-                          <button onClick={() => updateUser(u.id, "approved")} className="btn-success py-1 text-[11px]">Aprovar</button>
+                          <button onClick={() => updateUser(u.id, "approved")} className="btn-success py-1 text-[11px]">
+                            Aprovar
+                          </button>
                         )}
                         {u.approval_status !== "blocked" && (
-                          <button onClick={() => updateUser(u.id, "blocked")}
-                            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/15">
+                          <button
+                            onClick={() => updateUser(u.id, "blocked")}
+                            className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/15"
+                          >
                             Bloquear
                           </button>
                         )}
@@ -123,12 +150,15 @@ function AdminUsers() {
             </table>
           </div>
         ) : (
-          <div className="p-4"><EmptyState icon={<Users className="h-4 w-4" />} title="Nenhum usuário cadastrado" /></div>
+          <div className="p-4">
+            <EmptyState icon={<Users className="h-4 w-4" />} title="Nenhum usuário cadastrado" />
+          </div>
         )}
       </Panel>
 
       <p className="mt-4 text-[11px] text-muted-foreground">
-        Para se tornar o primeiro administrador, cadastre-se pela tela de login e peça a um administrador existente que promova seu perfil.
+        Para se tornar o primeiro administrador, cadastre-se pela tela de login e peça a um administrador existente que
+        promova seu perfil.
       </p>
     </main>
   );
