@@ -102,13 +102,26 @@ function OvertimePage() {
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("overtime_requests")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
-      if (error) throw error;
-      return (data ?? []) as OvertimeRow[];
+      const pageSize = 1000;
+      const allRows: OvertimeRow[] = [];
+      let from = 0;
+
+      while (true) {
+        const { data, error } = await supabase
+          .from("overtime_requests")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+
+        const page = (data ?? []) as OvertimeRow[];
+        allRows.push(...page);
+        if (page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return allRows;
     },
   });
 
