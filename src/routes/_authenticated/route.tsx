@@ -61,14 +61,18 @@ function AuthedLayout() {
   const s = session as SessionInfo;
   const isPlanning = s.role === "planning" || s.role === "admin";
   const isAdmin = s.role === "admin";
+  const isManager = s.role === "manager" || s.role === "admin";
+  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin";
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: true },
     { to: "/painel", label: "Painel", icon: BarChart3, show: true },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
+    { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
+  void isManager;
 
   async function signOut() {
     await supabase.auth.signOut();
