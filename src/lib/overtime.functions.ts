@@ -30,10 +30,7 @@ function isValidDate(value: string) {
 
 const createSchema = z
   .object({
-    employees: z
-      .array(z.object({ id: z.string().uuid(), needs_transport: z.boolean() }))
-      .min(1, "Selecione ao menos um colaborador")
-      .max(100),
+    employee_ids: z.array(z.string().uuid()).min(1, "Selecione ao menos um colaborador").max(100),
     activity_id: z.string().uuid().nullable().optional(),
     week_id: z.string().uuid().nullable().optional(),
     order_number: z.string().trim().max(64).nullable().optional(),
@@ -65,11 +62,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    const uniqueEmployeeIds = [...new Set(data.employees.map((employee) => employee.id))];
-    if (uniqueEmployeeIds.length !== data.employees.length) {
-      return { ok: false as const, error: "Há colaboradores repetidos na solicitação." };
-    }
-    const requestByEmployeeId = new Map(data.employees.map((employee) => [employee.id, employee]));
+    const uniqueEmployeeIds = [...new Set(data.employee_ids)];
     const { data: employees, error: employeeError } = await db
       .from("employees")
       .select("id, badge, employee_id, full_name, job_title")
@@ -121,7 +114,6 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       overtime_date: data.overtime_date,
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
-      needs_transport: requestByEmployeeId.get(employee.id)?.needs_transport ?? false,
       justification: data.justification,
       status: "pending",
     }));
