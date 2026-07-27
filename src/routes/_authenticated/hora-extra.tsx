@@ -67,6 +67,17 @@ type EmployeeRow = {
   is_active: boolean;
 };
 
+const MISSING_BADGE_PREFIX = "__missing_badge__:";
+const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
+
+function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
+  return {
+    ...employee,
+    badge: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
+    employee_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
+  };
+}
+
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
@@ -593,7 +604,7 @@ function EmployeeManagement() {
         .order("full_name")
         .limit(2000);
       if (error) throw error;
-      return (data ?? []) as EmployeeRow[];
+      return ((data ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
     },
   });
   const filtered = useMemo(() => {
@@ -816,8 +827,8 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         return;
       }
       const date = normalizeEmployeeDate(values[2]);
-      if (!values[0] || !values[1] || !date || !values[3] || !values[4]) {
-        errors.push(`Linha ${index + 1}: dados obrigatórios ou data inválida.`);
+      if ((!values[0] && !values[1]) || !date || !values[3] || !values[4]) {
+        errors.push(`Linha ${index + 1}: informe Chapa ou ID e verifique data, nome e função.`);
         return;
       }
       records.push({
@@ -1045,7 +1056,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         .order("full_name")
         .limit(2000);
       if (error) throw error;
-      return (data ?? []) as EmployeeRow[];
+      return ((data ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
     },
   });
   const selectedEmployees = (employees.data ?? []).filter((employee) => selectedEmployeeIds.includes(employee.id));
