@@ -12,6 +12,7 @@ async function loadRoleAndProfile(supabase: any, userId: string) {
     isAdmin: roles.includes("admin"),
     isManager: roles.includes("manager"),
     isLeader: roles.includes("leader"),
+    isMeasurementControl: roles.includes("measurement_control"),
     fullName: profRes.data?.full_name ?? "",
     email: profRes.data?.email ?? "",
     approvalStatus: profRes.data?.approval_status ?? "pending",
@@ -62,8 +63,8 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
-    if (!(info.isLeader || info.isAdmin))
-      return { ok: false as const, error: "Somente líder ou administrador pode solicitar hora extra." };
+    if (!(info.isLeader || info.isAdmin || info.isMeasurementControl))
+      return { ok: false as const, error: "Usuário sem permissão para solicitar hora extra." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
