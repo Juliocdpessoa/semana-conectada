@@ -790,6 +790,7 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
           <RequestsTable
             rows={filtered}
             showRequester
+            groupedTeamView
             onApprove={(row) => setDecideRow({ row, decision: "approved" })}
             onReject={(row) => setDecideRow({ row, decision: "rejected" })}
           />
@@ -818,12 +819,14 @@ function RequestsTable({
   onApprove,
   onReject,
   onCancel,
+  groupedTeamView = false,
 }: {
   rows: DisplayOvertimeRow[];
   showRequester: boolean;
   onApprove?: (r: OvertimeRow) => void;
   onReject?: (r: OvertimeRow) => void;
   onCancel?: (r: OvertimeRow) => void;
+  groupedTeamView?: boolean;
 }) {
   return (
     <>
@@ -836,10 +839,17 @@ function RequestsTable({
                   <span className="inline-block">#{r.request_number}</span> ·{" "}
                   <span className="inline-block">{formatDate(r.overtime_date)}</span>
                 </div>
-                <h3 className="break-words text-sm font-semibold">{r.employee_name}</h3>
-                <p className="break-words text-[11px] text-muted-foreground">
-                  {r.employee_registration} · {r.employee_role}
-                </p>
+                {!groupedTeamView && <h3 className="break-words text-sm font-semibold">{r.employee_name}</h3>}
+                {!groupedTeamView && (
+                  <p className="break-words text-[11px] text-muted-foreground">
+                    {r.employee_registration} · {r.employee_role}
+                  </p>
+                )}
+                {groupedTeamView && (
+                  <p className="text-[12px] font-medium text-foreground">
+                    {r.groupMembers?.length ?? 1} colaborador(es)
+                  </p>
+                )}
               </div>
               <span className="max-w-full shrink-0">
                 <OvertimeStatus status={r.status} />
@@ -886,14 +896,14 @@ function RequestsTable({
                   Equipe desta solicitação
                 </div>
                 <div className="max-h-64 divide-y divide-border overflow-y-auto">
-                  {r.groupMembers.map((member, index) => (
-                    <div key={member.id} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 px-2.5 py-2 text-[11px]">
-                      <span className="tabular text-muted-foreground">{index + 1}.</span>
+                  {r.groupMembers.map((member) => (
+                    <div key={member.id} className="px-2.5 py-2 text-[11px]">
                       <div className="min-w-0">
-                        <div className="break-words font-semibold">{member.employee_name}</div>
-                        <div className="mt-0.5 break-words text-muted-foreground">
-                          Matrícula {member.employee_registration || "—"} · {member.employee_role}
+                        <div className="tabular text-muted-foreground">
+                          Matrícula {member.employee_registration || "—"}
                         </div>
+                        <div className="break-words font-semibold">{member.employee_name}</div>
+                        <div className="mt-0.5 break-words text-muted-foreground">{member.employee_role}</div>
                       </div>
                     </div>
                   ))}
@@ -934,9 +944,9 @@ function RequestsTable({
             <tr>
               <th className="px-3 py-2 text-left font-semibold">#</th>
               <th className="px-3 py-2 text-left font-semibold">Data</th>
-              <th className="px-3 py-2 text-left font-semibold">Colaborador</th>
-              <th className="px-3 py-2 text-left font-semibold">Matrícula</th>
-              <th className="px-3 py-2 text-left font-semibold">Função</th>
+              {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Colaborador</th>}
+              {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Matrícula</th>}
+              {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Função</th>}
               <th className="px-3 py-2 text-left font-semibold">Ordem</th>
               <th className="px-3 py-2 text-left font-semibold">Serviço</th>
               <th className="px-3 py-2 text-left font-semibold">Entrada</th>
@@ -954,9 +964,9 @@ function RequestsTable({
                 <tr className="row-zebra align-top">
                   <td className="px-3 py-2 tabular font-medium">#{r.request_number}</td>
                   <td className="px-3 py-2 tabular whitespace-nowrap">{formatDate(r.overtime_date)}</td>
-                  <td className="px-3 py-2">{r.employee_name}</td>
-                  <td className="px-3 py-2 tabular">{r.employee_registration}</td>
-                  <td className="px-3 py-2">{r.employee_role}</td>
+                  {!groupedTeamView && <td className="px-3 py-2">{r.employee_name}</td>}
+                  {!groupedTeamView && <td className="px-3 py-2 tabular">{r.employee_registration}</td>}
+                  {!groupedTeamView && <td className="px-3 py-2">{r.employee_role}</td>}
                   <td className="px-3 py-2 tabular">
                     {r.order_number || <span className="text-muted-foreground">—</span>}
                   </td>
@@ -1011,23 +1021,24 @@ function RequestsTable({
                 </tr>
                 {r.groupMembers && r.groupMembers.length > 1 && (
                   <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
-                    <td colSpan={showRequester ? 14 : 13} className="px-3 pb-3 pt-0">
+                    <td
+                      colSpan={groupedTeamView ? (showRequester ? 11 : 10) : showRequester ? 14 : 13}
+                      className="px-3 pb-3 pt-0"
+                    >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
-                        <div className="grid grid-cols-[48px_minmax(220px,1.3fr)_minmax(110px,0.7fr)_minmax(220px,1fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                          <span>Item</span>
-                          <span>Colaborador</span>
+                        <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           <span>Matrícula</span>
+                          <span>Colaborador</span>
                           <span>Função</span>
                         </div>
                         <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
-                          {r.groupMembers.map((member, index) => (
+                          {r.groupMembers.map((member) => (
                             <div
                               key={member.id}
-                              className="grid grid-cols-[48px_minmax(220px,1.3fr)_minmax(110px,0.7fr)_minmax(220px,1fr)] gap-3 px-3 py-2.5 text-[12px]"
+                              className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 px-3 py-2.5 text-[12px]"
                             >
-                              <span className="tabular text-muted-foreground">{index + 1}</span>
-                              <span className="font-medium">{member.employee_name}</span>
                               <span className="tabular">{member.employee_registration || "—"}</span>
+                              <span className="font-medium">{member.employee_name}</span>
                               <span>{member.employee_role}</span>
                             </div>
                           ))}
