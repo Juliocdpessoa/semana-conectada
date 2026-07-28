@@ -161,24 +161,10 @@ function OvertimePage() {
 
   const rows = requests.data ?? [];
   const kpis = useMemo(() => {
-    const approvalGroups = new Map<string, OvertimeRow[]>();
-    rows.forEach((row) => {
-      const key = row.batch_id || row.id;
-      approvalGroups.set(key, [...(approvalGroups.get(key) ?? []), row]);
-    });
-    const statuses = [...approvalGroups.values()].map((members) =>
-      members.some((member) => member.status === "pending")
-        ? "pending"
-        : members.every((member) => member.status === "approved")
-          ? "approved"
-          : members.some((member) => member.status === "rejected")
-            ? "rejected"
-            : "cancelled",
-    );
     const total = rows.length;
-    const pending = statuses.filter((status) => status === "pending").length;
-    const approved = statuses.filter((status) => status === "approved").length;
-    const rejected = statuses.filter((status) => status === "rejected").length;
+    const pending = rows.filter((row) => row.status === "pending").length;
+    const approved = rows.filter((row) => row.status === "approved").length;
+    const rejected = rows.filter((row) => row.status === "rejected").length;
     const snacks = rows.filter((row) => row.needs_snack && row.status === "approved").length;
     return { total, pending, approved, rejected, snacks };
   }, [rows]);
