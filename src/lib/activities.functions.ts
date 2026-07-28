@@ -8,11 +8,9 @@ const updateSchema = z.object({
   status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
-  immediateActivityIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
-const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 
 export const updateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -21,13 +19,6 @@ export const updateActivity = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
-    }
-    if (
-      data.status === "NÃO EXECUTADO" &&
-      data.justification === IMMEDIATE_JUSTIFICATION &&
-      data.immediateActivityIds.length === 0
-    ) {
-      return { ok: false as const, error: "Selecione ao menos uma atividade IMEDIATA relacionada." };
     }
     // Fetch profile for stamping name/email server-side
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
@@ -45,7 +36,7 @@ export const updateActivity = createServerFn({ method: "POST" })
       })
       .eq("id", data.activityId)
       .eq("version", data.expectedVersion)
-      .select("id, week_id, version, status, justification, observation, reported_by_name, reported_at")
+      .select("id, version, status, justification, observation, reported_by_name, reported_at")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
     if (!updated) {
@@ -57,36 +48,6 @@ export const updateActivity = createServerFn({ method: "POST" })
         .maybeSingle();
       return { ok: false as const, conflict: true, current };
     }
-    const { error: clearLinksError } = await supabase
-      .from("activity_immediate_links")
-      .delete()
-      .eq("planned_activity_id", data.activityId);
-    if (clearLinksError) {
-      return {
-        ok: false as const,
-        error: `Apontamento salvo, mas não foi possível atualizar o vínculo: ${clearLinksError.message}`,
-      };
-    }
-    const linkIds =
-      data.status === "NÃO EXECUTADO" && data.justification === IMMEDIATE_JUSTIFICATION
-        ? data.immediateActivityIds
-        : [];
-    if (linkIds.length > 0) {
-      const { error: linkError } = await supabase.from("activity_immediate_links").insert(
-        linkIds.map((immediateActivityId) => ({
-          week_id: updated.week_id,
-          planned_activity_id: data.activityId,
-          immediate_activity_id: immediateActivityId,
-          linked_by_user_id: userId,
-        })),
-      );
-      if (linkError) {
-        return {
-          ok: false as const,
-          error: `Apontamento salvo, mas o vínculo com a IMEDIATA falhou: ${linkError.message}`,
-        };
-      }
-    }
     return { ok: true as const, updated };
   });
 
@@ -95,7 +56,6 @@ const bulkSchema = z.object({
   status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
-  immediateActivityIds: z.array(z.string().uuid()).max(100).default([]),
 });
 
 export const bulkUpdateActivities = createServerFn({ method: "POST" })
@@ -105,13 +65,6 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
-    }
-    if (
-      data.status === "NÃO EXECUTADO" &&
-      data.justification === IMMEDIATE_JUSTIFICATION &&
-      data.immediateActivityIds.length === 0
-    ) {
-      return { ok: false as const, error: "Selecione ao menos uma atividade IMEDIATA relacionada." };
     }
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
     const { data: updated, error } = await supabase
@@ -126,40 +79,8 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
         reported_at: new Date().toISOString(),
       })
       .in("id", data.ids)
-      .select("id, week_id, is_immediate");
+      .select("id");
     if (error) return { ok: false as const, error: error.message };
-    const { error: clearLinksError } = await supabase
-      .from("activity_immediate_links")
-      .delete()
-      .in("planned_activity_id", data.ids);
-    if (clearLinksError) {
-      return {
-        ok: false as const,
-        error: `Atividades salvas, mas não foi possível atualizar os vínculos: ${clearLinksError.message}`,
-      };
-    }
-    const linkIds =
-      data.status === "NÃO EXECUTADO" && data.justification === IMMEDIATE_JUSTIFICATION
-        ? data.immediateActivityIds
-        : [];
-    const programmedUpdated = updated?.filter((activity) => !activity.is_immediate) ?? [];
-    if (linkIds.length > 0 && programmedUpdated.length) {
-      const links = programmedUpdated.flatMap((activity) =>
-        linkIds.map((immediateActivityId) => ({
-          week_id: activity.week_id,
-          planned_activity_id: activity.id,
-          immediate_activity_id: immediateActivityId,
-          linked_by_user_id: userId,
-        })),
-      );
-      const { error: linkError } = await supabase.from("activity_immediate_links").insert(links);
-      if (linkError) {
-        return {
-          ok: false as const,
-          error: `Atividades salvas, mas o vínculo com a IMEDIATA falhou: ${linkError.message}`,
-        };
-      }
-    }
     return { ok: true as const, count: updated?.length ?? 0 };
   });
 
@@ -243,7 +164,7 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
     return { ok: true as const, count: created?.length ?? 0 };
   });
 
-const roleSchema = z.enum(["admin", "manager", "planning", "leader", "viewer"]);
+const roleSchema = z.enum(["admin", "manager", "planning", "leader", "measurement_control", "viewer"]);
 const approveSchema = z.object({
   targetUserId: z.string().uuid(),
   approvalStatus: z.enum(["approved", "blocked", "pending"]),
