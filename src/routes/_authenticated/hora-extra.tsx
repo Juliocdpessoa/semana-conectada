@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Timer,
@@ -67,6 +67,10 @@ type EmployeeRow = {
   full_name: string;
   job_title: string;
   is_active: boolean;
+};
+
+type DisplayOvertimeRow = OvertimeRow & {
+  groupMembers?: OvertimeRow[];
 };
 
 const MISSING_BADGE_PREFIX = "__missing_badge__:";
@@ -716,9 +720,13 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
       return {
         ...representative,
         request_number: Math.min(...members.map((member) => member.request_number)),
-        employee_name: members.map((member) => member.employee_name).join(", "),
+        employee_name: members.length === 1 ? members[0].employee_name : `${members.length} colaboradores`,
         employee_registration: `${members.length} colaborador(es)`,
-        employee_role: [...new Set(members.map((member) => member.employee_role))].join(", "),
+        employee_role:
+          members.length === 1
+            ? members[0].employee_role
+            : `${new Set(members.map((member) => member.employee_role)).size} função(ões)`,
+        groupMembers: [...members].sort((a, b) => a.employee_name.localeCompare(b.employee_name, "pt-BR")),
         status,
       };
     });
@@ -734,8 +742,11 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
       if (selectedDate && r.overtime_date !== selectedDate) return false;
       if (q) {
         const t = q.toLowerCase();
+        const team = (r.groupMembers ?? [])
+          .map((member) => `${member.employee_name} ${member.employee_registration} ${member.employee_role}`)
+          .join(" ");
         const hay =
-          `${r.employee_name} ${r.employee_registration} ${r.requester_name} ${r.order_number ?? ""} ${r.service_description}`.toLowerCase();
+          `${r.employee_name} ${r.employee_registration} ${team} ${r.requester_name} ${r.order_number ?? ""} ${r.service_description}`.toLowerCase();
         if (!hay.includes(t)) return false;
       }
       return true;
@@ -822,7 +833,7 @@ function RequestsTable({
   onReject,
   onCancel,
 }: {
-  rows: OvertimeRow[];
+  rows: DisplayOvertimeRow[];
   showRequester: boolean;
   onApprove?: (r: OvertimeRow) => void;
   onReject?: (r: OvertimeRow) => void;
@@ -883,6 +894,26 @@ function RequestsTable({
                 </div>
               )}
             </dl>
+            {r.groupMembers && r.groupMembers.length > 1 && (
+              <div className="mt-3 overflow-hidden rounded-md border border-border">
+                <div className="border-b border-border bg-muted/50 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Equipe desta solicitação
+                </div>
+                <div className="max-h-64 divide-y divide-border overflow-y-auto">
+                  {r.groupMembers.map((member, index) => (
+                    <div key={member.id} className="grid grid-cols-[24px_minmax(0,1fr)] gap-2 px-2.5 py-2 text-[11px]">
+                      <span className="tabular text-muted-foreground">{index + 1}.</span>
+                      <div className="min-w-0">
+                        <div className="break-words font-semibold">{member.employee_name}</div>
+                        <div className="mt-0.5 break-words text-muted-foreground">
+                          Matrícula {member.employee_registration || "—"} · {member.employee_role}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {r.status === "pending" && (onApprove || onReject || onCancel) && (
               <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
                 {onApprove && (
@@ -933,64 +964,93 @@ function RequestsTable({
           </thead>
           <tbody className="divide-y divide-border/60">
             {rows.map((r) => (
-              <tr key={r.id} className="row-zebra align-top">
-                <td className="px-3 py-2 tabular font-medium">#{r.request_number}</td>
-                <td className="px-3 py-2 tabular whitespace-nowrap">{formatDate(r.overtime_date)}</td>
-                <td className="px-3 py-2">{r.employee_name}</td>
-                <td className="px-3 py-2 tabular">{r.employee_registration}</td>
-                <td className="px-3 py-2">{r.employee_role}</td>
-                <td className="px-3 py-2 tabular">
-                  {r.order_number || <span className="text-muted-foreground">—</span>}
-                </td>
-                <td className="px-3 py-2 max-w-[240px]">
-                  <div className="line-clamp-2">{r.service_description}</div>
-                </td>
-                <td className="px-3 py-2 tabular whitespace-nowrap">{r.entry_time || "—"}</td>
-                <td className="px-3 py-2 tabular whitespace-nowrap">{r.departure_time}</td>
-                <td className="px-3 py-2">{r.needs_snack ? "Sim" : "Não"}</td>
-                {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
-                <td className="px-3 py-2">
-                  <OvertimeStatus status={r.status} />
-                </td>
-                <td className="px-3 py-2 text-[11px]">
-                  {r.decided_at ? (
-                    <>
-                      <div className="font-medium">{r.decided_by_name}</div>
-                      <div className="text-muted-foreground">{formatDateTime(r.decided_at)}</div>
-                      {r.manager_comment && (
-                        <div className="mt-1 max-w-[240px] text-muted-foreground">"{r.manager_comment}"</div>
+              <Fragment key={r.id}>
+                <tr className="row-zebra align-top">
+                  <td className="px-3 py-2 tabular font-medium">#{r.request_number}</td>
+                  <td className="px-3 py-2 tabular whitespace-nowrap">{formatDate(r.overtime_date)}</td>
+                  <td className="px-3 py-2">{r.employee_name}</td>
+                  <td className="px-3 py-2 tabular">{r.employee_registration}</td>
+                  <td className="px-3 py-2">{r.employee_role}</td>
+                  <td className="px-3 py-2 tabular">
+                    {r.order_number || <span className="text-muted-foreground">—</span>}
+                  </td>
+                  <td className="px-3 py-2 max-w-[240px]">
+                    <div className="line-clamp-2">{r.service_description}</div>
+                  </td>
+                  <td className="px-3 py-2 tabular whitespace-nowrap">{r.entry_time || "—"}</td>
+                  <td className="px-3 py-2 tabular whitespace-nowrap">{r.departure_time}</td>
+                  <td className="px-3 py-2">{r.needs_snack ? "Sim" : "Não"}</td>
+                  {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
+                  <td className="px-3 py-2">
+                    <OvertimeStatus status={r.status} />
+                  </td>
+                  <td className="px-3 py-2 text-[11px]">
+                    {r.decided_at ? (
+                      <>
+                        <div className="font-medium">{r.decided_by_name}</div>
+                        <div className="text-muted-foreground">{formatDateTime(r.decided_at)}</div>
+                        {r.manager_comment && (
+                          <div className="mt-1 max-w-[240px] text-muted-foreground">"{r.manager_comment}"</div>
+                        )}
+                      </>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <div className="inline-flex flex-wrap justify-end gap-1">
+                      {onApprove && r.status === "pending" && (
+                        <button onClick={() => onApprove(r)} className="btn-success py-1 text-[11px]">
+                          Aprovar
+                        </button>
                       )}
-                    </>
-                  ) : (
-                    <span className="text-muted-foreground">—</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-right">
-                  <div className="inline-flex flex-wrap justify-end gap-1">
-                    {onApprove && r.status === "pending" && (
-                      <button onClick={() => onApprove(r)} className="btn-success py-1 text-[11px]">
-                        Aprovar
-                      </button>
-                    )}
-                    {onReject && r.status === "pending" && (
-                      <button
-                        onClick={() => onReject(r)}
-                        className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/15"
-                      >
-                        Reprovar
-                      </button>
-                    )}
-                    {onCancel && r.status === "pending" && (
-                      <button
-                        onClick={() => onCancel(r)}
-                        className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
-                      >
-                        Cancelar
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </tr>
+                      {onReject && r.status === "pending" && (
+                        <button
+                          onClick={() => onReject(r)}
+                          className="inline-flex items-center gap-1 rounded-md border border-destructive/40 bg-destructive/10 px-2 py-1 text-[11px] font-medium text-destructive hover:bg-destructive/15"
+                        >
+                          Reprovar
+                        </button>
+                      )}
+                      {onCancel && r.status === "pending" && (
+                        <button
+                          onClick={() => onCancel(r)}
+                          className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
+                        >
+                          Cancelar
+                        </button>
+                      )}
+                    </div>
+                  </td>
+                </tr>
+                {r.groupMembers && r.groupMembers.length > 1 && (
+                  <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
+                    <td colSpan={showRequester ? 14 : 13} className="px-3 pb-3 pt-0">
+                      <div className="overflow-hidden rounded-md border border-border bg-card">
+                        <div className="grid grid-cols-[48px_minmax(220px,1.3fr)_minmax(110px,0.7fr)_minmax(220px,1fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                          <span>Item</span>
+                          <span>Colaborador</span>
+                          <span>Matrícula</span>
+                          <span>Função</span>
+                        </div>
+                        <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
+                          {r.groupMembers.map((member, index) => (
+                            <div
+                              key={member.id}
+                              className="grid grid-cols-[48px_minmax(220px,1.3fr)_minmax(110px,0.7fr)_minmax(220px,1fr)] gap-3 px-3 py-2.5 text-[12px]"
+                            >
+                              <span className="tabular text-muted-foreground">{index + 1}</span>
+                              <span className="font-medium">{member.employee_name}</span>
+                              <span className="tabular">{member.employee_registration || "—"}</span>
+                              <span>{member.employee_role}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
             ))}
           </tbody>
         </table>
