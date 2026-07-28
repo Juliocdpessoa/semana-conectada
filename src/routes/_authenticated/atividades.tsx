@@ -31,6 +31,7 @@ type ActivityRow = {
   is_immediate: boolean;
   week_id: string;
   planning_data: Record<string, unknown> | null;
+  immediate_activity_ids: string[];
 };
 
 const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
@@ -66,6 +67,7 @@ const JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
+const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 
 function AtividadesPage() {
   const _ctx = Route.useRouteContext() as { session: SessionInfo };
@@ -109,9 +111,35 @@ function AtividadesPage() {
         all.push(...data);
         if (data.length < chunk) break;
       }
-      return all as ActivityRow[];
+      const links: { planned_activity_id: string; immediate_activity_id: string }[] = [];
+      for (let from = 0; ; from += chunk) {
+        const { data, error } = await supabase
+          .from("activity_immediate_links")
+          .select("planned_activity_id,immediate_activity_id")
+          .eq("week_id", activeWeek.data!.id)
+          .range(from, from + chunk - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        links.push(...data);
+        if (data.length < chunk) break;
+      }
+      const linksByPlanned = new Map<string, string[]>();
+      for (const link of links) {
+        const current = linksByPlanned.get(link.planned_activity_id) ?? [];
+        current.push(link.immediate_activity_id);
+        linksByPlanned.set(link.planned_activity_id, current);
+      }
+      return all.map((row) => ({
+        ...row,
+        immediate_activity_ids: linksByPlanned.get(row.id) ?? [],
+      })) as ActivityRow[];
     },
   });
+
+  const immediateOptions = useMemo(
+    () => (activities.data ?? []).filter((activity) => activity.is_immediate),
+    [activities.data],
+  );
 
   const filtered = useMemo(() => {
     const rows = activities.data ?? [];
@@ -489,6 +517,7 @@ function AtividadesPage() {
       {editing && (
         <ApontarModal
           activity={editing}
+          immediateOptions={immediateOptions}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -500,6 +529,7 @@ function AtividadesPage() {
         <BulkModal
           count={selected.size}
           ids={Array.from(selected)}
+          immediateOptions={immediateOptions}
           onClose={() => setBulkOpen(false)}
           onSaved={() => {
             setBulkOpen(false);
@@ -529,23 +559,32 @@ function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null
 
 function ApontarModal({
   activity,
+  immediateOptions,
   onClose,
   onSaved,
 }: {
   activity: ActivityRow;
+  immediateOptions: ActivityRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [status, setStatus] = useState(activity.status);
   const [justification, setJustification] = useState(activity.justification ?? "");
   const [observation, setObservation] = useState(activity.observation ?? "");
+  const [immediateActivityIds, setImmediateActivityIds] = useState<string[]>(activity.immediate_activity_ids ?? []);
   const [saving, setSaving] = useState(false);
   const call = useServerFn(updateActivity);
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
+  const needsImmediateLink =
+    !activity.is_immediate && status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
     if (needsJust && !justification.trim()) {
       toast.error("Justificativa é obrigatória para este status.");
+      return;
+    }
+    if (needsImmediateLink && immediateActivityIds.length === 0) {
+      toast.error("Selecione ao menos uma atividade IMEDIATA relacionada.");
       return;
     }
     setSaving(true);
@@ -557,6 +596,7 @@ function ApontarModal({
           status,
           justification: justification.trim() || null,
           observation: observation.trim() || null,
+          immediateActivityIds: needsImmediateLink ? immediateActivityIds : [],
         },
       });
       if (!res.ok) {
@@ -610,7 +650,14 @@ function ApontarModal({
         </Field>
 
         <Field label="Justificativa" required={needsJust}>
-          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
+          <select
+            value={justification}
+            onChange={(e) => {
+              setJustification(e.target.value);
+              if (e.target.value !== IMMEDIATE_JUSTIFICATION) setImmediateActivityIds([]);
+            }}
+            className="input-base"
+          >
             <option value="">— Selecione —</option>
             {JUSTIFICATIONS.map((j) => (
               <option key={j} value={j}>
@@ -619,6 +666,14 @@ function ApontarModal({
             ))}
           </select>
         </Field>
+
+        {needsImmediateLink && (
+          <ImmediateSelector
+            options={immediateOptions}
+            selected={immediateActivityIds}
+            onChange={setImmediateActivityIds}
+          />
+        )}
 
         <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
           <textarea
@@ -646,30 +701,44 @@ function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
 function BulkModal({
   count,
   ids,
+  immediateOptions,
   onClose,
   onSaved,
 }: {
   count: number;
   ids: string[];
+  immediateOptions: ActivityRow[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [status, setStatus] = useState("EXECUTADO");
   const [justification, setJustification] = useState("");
   const [observation, setObservation] = useState("");
+  const [immediateActivityIds, setImmediateActivityIds] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const call = useServerFn(bulkUpdateActivities);
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
+  const needsImmediateLink = status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
     if (needsJust && !justification.trim()) {
       toast.error("Justificativa é obrigatória para este status.");
       return;
     }
+    if (needsImmediateLink && immediateActivityIds.length === 0) {
+      toast.error("Selecione ao menos uma atividade IMEDIATA relacionada.");
+      return;
+    }
     setSaving(true);
     try {
       const res = await call({
-        data: { ids, status, justification: justification.trim() || null, observation: observation.trim() || null },
+        data: {
+          ids,
+          status,
+          justification: justification.trim() || null,
+          observation: observation.trim() || null,
+          immediateActivityIds: needsImmediateLink ? immediateActivityIds : [],
+        },
       });
       if (!res.ok) return toast.error(res.error ?? "Erro ao salvar lote.");
       toast.success(`${res.count} atividade(s) atualizada(s).`);
@@ -713,7 +782,14 @@ function BulkModal({
           </select>
         </Field>
         <Field label="Justificativa" required={needsJust}>
-          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
+          <select
+            value={justification}
+            onChange={(e) => {
+              setJustification(e.target.value);
+              if (e.target.value !== IMMEDIATE_JUSTIFICATION) setImmediateActivityIds([]);
+            }}
+            className="input-base"
+          >
             <option value="">— Selecione —</option>
             {JUSTIFICATIONS.map((j) => (
               <option key={j} value={j}>
@@ -722,6 +798,13 @@ function BulkModal({
             ))}
           </select>
         </Field>
+        {needsImmediateLink && (
+          <ImmediateSelector
+            options={immediateOptions}
+            selected={immediateActivityIds}
+            onChange={setImmediateActivityIds}
+          />
+        )}
         <Field label="Observação (opcional)">
           <textarea
             value={observation}
@@ -733,5 +816,80 @@ function BulkModal({
         </Field>
       </div>
     </Modal>
+  );
+}
+
+function ImmediateSelector({
+  options,
+  selected,
+  onChange,
+}: {
+  options: ActivityRow[];
+  selected: string[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const selectedSet = new Set(selected);
+  const query = search.trim().toLowerCase();
+  const filtered = options.filter(
+    (item) =>
+      !query ||
+      item.order_number?.toLowerCase().includes(query) ||
+      item.description.toLowerCase().includes(query) ||
+      item.area?.toLowerCase().includes(query) ||
+      item.specialty?.toLowerCase().includes(query),
+  );
+
+  function toggle(id: string) {
+    onChange(selectedSet.has(id) ? selected.filter((value) => value !== id) : [...selected, id]);
+  }
+
+  return (
+    <Field
+      label="Atividade(s) IMEDIATA(s) atendida(s)"
+      required
+      hint="O vínculo explicará o impacto na programação e será exibido na curva de avanço."
+    >
+      <div className="overflow-hidden rounded-md border border-border">
+        <div className="border-b border-border bg-muted/40 p-2">
+          <input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Buscar IMEDIATA por ordem ou descrição…"
+            className="input-base"
+          />
+          <div className="mt-1 text-[11px] text-muted-foreground">
+            {selected.length} selecionada(s) · apenas IMEDIATAS da semana ativa
+          </div>
+        </div>
+        <div className="max-h-52 overflow-y-auto p-1">
+          {filtered.length === 0 ? (
+            <div className="p-3 text-center text-[12px] text-muted-foreground">
+              Nenhuma IMEDIATA encontrada. Solicite ao Planejamento o cadastro antes de salvar.
+            </div>
+          ) : (
+            filtered.map((item) => (
+              <label
+                key={item.id}
+                className="flex cursor-pointer items-start gap-2 rounded p-2 text-[12px] hover:bg-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedSet.has(item.id)}
+                  onChange={() => toggle(item.id)}
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                />
+                <span className="min-w-0">
+                  <span className="block font-semibold text-foreground">
+                    {item.order_number || "Sem ordem"} · {formatDate(item.scheduled_date)}
+                  </span>
+                  <span className="block break-words text-muted-foreground">{item.description}</span>
+                </span>
+              </label>
+            ))
+          )}
+        </div>
+      </div>
+    </Field>
   );
 }
