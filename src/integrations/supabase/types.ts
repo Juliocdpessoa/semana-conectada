@@ -100,6 +100,55 @@ export type Database = {
           },
         ];
       };
+      activity_immediate_links: {
+        Row: {
+          id: string;
+          immediate_activity_id: string;
+          linked_at: string;
+          linked_by_user_id: string | null;
+          planned_activity_id: string;
+          week_id: string;
+        };
+        Insert: {
+          id?: string;
+          immediate_activity_id: string;
+          linked_at?: string;
+          linked_by_user_id?: string | null;
+          planned_activity_id: string;
+          week_id: string;
+        };
+        Update: {
+          id?: string;
+          immediate_activity_id?: string;
+          linked_at?: string;
+          linked_by_user_id?: string | null;
+          planned_activity_id?: string;
+          week_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "activity_immediate_links_immediate_activity_id_fkey";
+            columns: ["immediate_activity_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "activity_immediate_links_planned_activity_id_fkey";
+            columns: ["planned_activity_id"];
+            isOneToOne: false;
+            referencedRelation: "activities";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "activity_immediate_links_week_id_fkey";
+            columns: ["week_id"];
+            isOneToOne: false;
+            referencedRelation: "weeks";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       activity_history: {
         Row: {
           activity_id: string;
@@ -169,7 +218,6 @@ export type Database = {
           decided_by_name: string | null;
           decided_by_user_id: string | null;
           departure_time: string;
-          entry_time: string | null;
           employee_name: string;
           employee_registration: string;
           employee_role: string;
@@ -197,7 +245,6 @@ export type Database = {
           decided_by_name?: string | null;
           decided_by_user_id?: string | null;
           departure_time: string;
-          entry_time?: string | null;
           employee_name: string;
           employee_registration: string;
           employee_role: string;
@@ -225,7 +272,6 @@ export type Database = {
           decided_by_name?: string | null;
           decided_by_user_id?: string | null;
           departure_time?: string;
-          entry_time?: string | null;
           employee_name?: string;
           employee_registration?: string;
           employee_role?: string;
