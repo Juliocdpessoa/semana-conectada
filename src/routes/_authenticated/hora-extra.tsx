@@ -175,7 +175,7 @@ function OvertimePage() {
             ? "rejected"
             : "cancelled",
     );
-    const total = statuses.length;
+    const total = rows.length;
     const pending = statuses.filter((status) => status === "pending").length;
     const approved = statuses.filter((status) => status === "approved").length;
     const rejected = statuses.filter((status) => status === "rejected").length;
@@ -199,7 +199,7 @@ function OvertimePage() {
       />
 
       <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <KpiCard label="Total" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+        <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
         <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
         <KpiCard
           label="Aprovadas"
@@ -215,7 +215,7 @@ function OvertimePage() {
         />
         <div className="col-span-2 sm:col-span-1">
           <KpiCard
-            label="Lanches necessários"
+            label="Lanches aprovados"
             value={kpis.snacks}
             tone="primary"
             icon={<Utensils className="h-3.5 w-3.5" />}
