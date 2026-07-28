@@ -131,3 +131,28 @@ USING (
     )
   )
 );
+
+
+-- 9) Medição e Controle pode consultar colaboradores ativos ao criar solicitações
+DO $policy$
+BEGIN
+  IF to_regclass('public.employees') IS NOT NULL THEN
+    EXECUTE 'DROP POLICY IF EXISTS "employees select approved overtime users" ON public.employees';
+    EXECUTE $create$
+      CREATE POLICY "employees select approved overtime users"
+      ON public.employees FOR SELECT TO authenticated
+      USING (
+        public.is_approved(auth.uid()) AND (
+          public.has_role(auth.uid(), 'admin')
+          OR EXISTS (
+            SELECT 1
+            FROM public.user_roles ur
+            WHERE ur.user_id = auth.uid()
+              AND ur.role::text IN ('manager', 'leader', 'measurement_control')
+          )
+        )
+      )
+    $create$;
+  END IF;
+END
+$policy$;
