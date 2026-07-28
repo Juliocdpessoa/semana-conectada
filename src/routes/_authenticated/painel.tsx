@@ -28,7 +28,6 @@ type Row = {
   description: string;
   status: string;
   justification: string | null;
-  observation: string | null;
   area: string | null;
   specialty: string | null;
   scheduled_date: string | null;
@@ -36,6 +35,11 @@ type Row = {
   reported_by_name: string | null;
   reported_at: string | null;
   planning_data: Record<string, unknown> | null;
+};
+
+type ImmediateLink = {
+  planned_activity_id: string;
+  immediate_activity_id: string;
 };
 
 function PainelPage() {
@@ -55,7 +59,7 @@ function PainelPage() {
         const { data, error } = await supabase
           .from("activities")
           .select(
-            "id,order_number,description,status,justification,observation,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
+            "id,order_number,description,status,justification,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
           )
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
@@ -69,30 +73,59 @@ function PainelPage() {
   });
 
   const rows = activities.data ?? [];
+  const immediateLinks = useQuery({
+    queryKey: ["activity-immediate-links-painel", activeWeek.data?.id],
+    enabled: !!activeWeek.data?.id,
+    queryFn: async () => {
+      const chunk = 1000;
+      const all: ImmediateLink[] = [];
+      for (let from = 0; ; from += chunk) {
+        const { data, error } = await supabase
+          .from("activity_immediate_links")
+          .select("planned_activity_id,immediate_activity_id")
+          .eq("week_id", activeWeek.data!.id)
+          .range(from, from + chunk - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data);
+        if (data.length < chunk) break;
+      }
+      return all;
+    },
+  });
+  const links = immediateLinks.data ?? [];
+  const immediateById = useMemo(
+    () => new Map(rows.filter((row) => row.is_immediate).map((row) => [row.id, row])),
+    [rows],
+  );
+  const immediateIdsByPlanned = useMemo(() => {
+    const map = new Map<string, string[]>();
+    for (const link of links) {
+      const current = map.get(link.planned_activity_id) ?? [];
+      current.push(link.immediate_activity_id);
+      map.set(link.planned_activity_id, current);
+    }
+    return map;
+  }, [links]);
 
   const kpis = useMemo(() => {
-    const total = rows.length;
-    const executado = rows.filter((r) => r.status === "EXECUTADO").length;
-    const naoExec = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
-    const semApont = rows.filter((r) => !r.status || r.status === "Sem apontamento").length;
-    const imediatas = rows.filter((r) => r.is_immediate).length;
+    const planned = rows.filter((r) => !r.is_immediate);
+    const immediate = rows.filter((r) => r.is_immediate);
+    const total = planned.length;
+    const executado = planned.filter((r) => r.status === "EXECUTADO").length;
+    const naoExec = planned.filter((r) => r.status === "NÃO EXECUTADO").length;
+    const semApont = planned.filter((r) => !r.status || r.status === "Sem apontamento").length;
+    const imediatas = immediate.length;
+    const imediatasExecutadas = immediate.filter((r) => r.status === "EXECUTADO").length;
+    const impactadas = new Set(links.map((link) => link.planned_activity_id)).size;
     const apontadas = executado + naoExec;
     const aderencia = total > 0 ? Math.round((executado / total) * 100) : 0;
     const progresso = total > 0 ? Math.round((apontadas / total) * 100) : 0;
-    return { total, executado, naoExec, semApont, imediatas, aderencia, progresso };
-  }, [rows]);
+    return { total, executado, naoExec, semApont, imediatas, imediatasExecutadas, impactadas, aderencia, progresso };
+  }, [rows, links]);
 
-  const byArea = useMemo(
-    () =>
-      groupCounts(rows, (r) => {
-        const management = r.planning_data?.["Gerência"];
-        return management === null || management === undefined || management === ""
-          ? r.area || "—"
-          : String(management);
-      }),
-    [rows],
-  );
-  const bySpecialty = useMemo(() => groupCounts(rows, (r) => r.specialty || "—").slice(0, 10), [rows]);
+  const byArea = useMemo(() => groupCounts(rows, (r) => r.area || "—"), [rows]);
+  const bySpecialty = useMemo(() => groupCounts(rows, (r) => r.specialty || "—"), [rows]);
   const byDay = useMemo(() => {
     const map = new Map<string, { total: number; exec: number; nao: number }>();
     for (const r of rows) {
@@ -113,7 +146,7 @@ function PainelPage() {
     const only = rows.filter((r) => r.reported_by_name);
     return groupCounts(only, (r) => r.reported_by_name!).slice(0, 10);
   }, [rows]);
-  if (activeWeek.isLoading || activities.isLoading) {
+  if (activeWeek.isLoading || activities.isLoading || immediateLinks.isLoading) {
     return (
       <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
         <div className="mb-5 space-y-2">
@@ -171,17 +204,27 @@ function PainelPage() {
           icon={<XCircle className="h-3.5 w-3.5" />}
         />
         <KpiCard label="Sem apontamento" value={kpis.semApont} icon={<Clock className="h-3.5 w-3.5" />} />
-        <KpiCard label="Imediatas" value={kpis.imediatas} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
         <KpiCard
-          label="Aderência"
-          value={`${kpis.aderencia}%`}
+          label="IMEDIATAS executadas"
+          value={`${kpis.imediatasExecutadas}/${kpis.imediatas}`}
+          tone="warning"
+          icon={<Zap className="h-3.5 w-3.5" />}
+        />
+        <KpiCard
+          label="Impactadas por IMEDIATAS"
+          value={kpis.impactadas}
           tone="primary"
           icon={<Percent className="h-3.5 w-3.5" />}
         />
       </section>
 
       <section className="mb-4">
-        <ProgressCurve rows={rows} startDate={activeWeek.data.start_date} endDate={activeWeek.data.end_date} />
+        <ProgressCurve
+          rows={rows}
+          links={links}
+          startDate={activeWeek.data.start_date}
+          endDate={activeWeek.data.end_date}
+        />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
@@ -215,6 +258,8 @@ function PainelPage() {
           <PendingByJustification
             items={byJust}
             rows={rows}
+            immediateById={immediateById}
+            immediateIdsByPlanned={immediateIdsByPlanned}
             selected={selectedJustification}
             onSelect={(key) => setSelectedJustification((current) => (current === key ? null : key))}
           />
@@ -287,11 +332,15 @@ function BarList({
 function PendingByJustification({
   items,
   rows,
+  immediateById,
+  immediateIdsByPlanned,
   selected,
   onSelect,
 }: {
   items: [string, number][];
   rows: Row[];
+  immediateById: Map<string, Row>;
+  immediateIdsByPlanned: Map<string, string[]>;
   selected: string | null;
   onSelect: (key: string) => void;
 }) {
@@ -332,33 +381,52 @@ function PendingByJustification({
                 <div className="text-[11px] font-semibold text-foreground">
                   {tasks.length.toLocaleString("pt-BR")} tarefa(s) encontrada(s)
                 </div>
-                {tasks.map((task) => (
-                  <div key={task.id} className="rounded-md border border-border bg-card p-3 text-[11px] shadow-sm">
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-foreground">
-                      <span>
-                        <b>Ordem:</b> {task.order_number || "—"}
-                      </span>
-                      <span>
-                        <b>Op:</b> {planValue(task.planning_data, "Op")}
-                      </span>
-                      <span>
-                        <b>Subop:</b> {planValue(task.planning_data, "Subop")}
-                      </span>
+                {tasks.map((task) => {
+                  const linkedImmediateActivities = (immediateIdsByPlanned.get(task.id) ?? [])
+                    .map((id) => immediateById.get(id))
+                    .filter((item): item is Row => !!item);
+                  return (
+                    <div key={task.id} className="rounded-md border border-border bg-card p-3 text-[11px] shadow-sm">
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-foreground">
+                        <span>
+                          <b>Ordem:</b> {task.order_number || "—"}
+                        </span>
+                        <span>
+                          <b>Op:</b> {planValue(task.planning_data, "Op")}
+                        </span>
+                        <span>
+                          <b>Subop:</b> {planValue(task.planning_data, "Subop")}
+                        </span>
+                      </div>
+                      <div className="mt-2 text-[12px] leading-snug text-foreground">{task.description}</div>
+                      <div className="mt-2 rounded bg-muted/60 px-2 py-1.5 text-[11px] leading-snug text-foreground">
+                        <b>Observação:</b> {task.observation?.trim() || "—"}
+                      </div>
+                      {linkedImmediateActivities.length > 0 && (
+                        <div className="mt-2 rounded border border-warning/30 bg-warning/10 px-2 py-1.5 text-[11px]">
+                          <b className="text-foreground">IMEDIATA(s) relacionada(s):</b>
+                          <ul className="mt-1 space-y-1 text-foreground">
+                            {linkedImmediateActivities.map((immediate) => (
+                              <li key={immediate.id}>
+                                <span className="font-semibold">{immediate.order_number || "Sem ordem"}</span>
+                                {" · "}
+                                {immediate.description}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
+                        <span>
+                          <b>Data:</b> {formatDate(task.scheduled_date || "—")}
+                        </span>
+                        <span>
+                          <b>Responsável:</b> {task.reported_by_name || "—"}
+                        </span>
+                      </div>
                     </div>
-                    <div className="mt-2 text-[12px] leading-snug text-foreground">{task.description}</div>
-                    <div className="mt-2 rounded bg-muted/60 px-2 py-1.5 text-[11px] leading-snug text-foreground">
-                      <b>Observação:</b> {task.observation?.trim() || "—"}
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-muted-foreground">
-                      <span>
-                        <b>Data:</b> {formatDate(task.scheduled_date || "—")}
-                      </span>
-                      <span>
-                        <b>Responsável:</b> {task.reported_by_name || "—"}
-                      </span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
@@ -406,6 +474,7 @@ function formatDate(d: string) {
 /* ---------------- Curva de Avanço (S-Curve) ---------------- */
 
 type CurveRow = {
+  id: string;
   status: string;
   scheduled_date: string | null;
   reported_at: string | null;
@@ -459,12 +528,25 @@ function hoursOf(pd: Record<string, unknown> | null): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDate: string; endDate: string }) {
+function ProgressCurve({
+  rows,
+  links,
+  startDate,
+  endDate,
+}: {
+  rows: CurveRow[];
+  links: ImmediateLink[];
+  startDate: string;
+  endDate: string;
+}) {
   const [metric, setMetric] = useState<"count" | "hours">("count");
 
   const days = useMemo(() => daysBetween(startDate, endDate), [startDate, endDate]);
   const daySet = useMemo(() => new Set(days), [days]);
-  const totalHours = useMemo(() => rows.reduce((a, r) => a + hoursOf(r.planning_data), 0), [rows]);
+  const totalHours = useMemo(
+    () => rows.filter((row) => !row.is_immediate).reduce((a, r) => a + hoursOf(r.planning_data), 0),
+    [rows],
+  );
   const hoursDisabled = totalHours <= 0;
   const effectiveMetric = hoursDisabled && metric === "hours" ? "count" : metric;
 
@@ -472,8 +554,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
   const { data, totalPlanned, cutoffIso, indicators } = useMemo(() => {
     const dPlanned = new Map<string, number>();
-    const dExec = new Map<string, number>();
-    const dPlannedExec = new Map<string, number>();
+    const dProgrammedExec = new Map<string, number>();
+    const dImmediateExec = new Map<string, number>();
+    const dImpacted = new Map<string, number>();
+    const impactedIds = new Set(links.map((link) => link.planned_activity_id));
     let total = 0;
 
     for (const r of rows) {
@@ -483,25 +567,30 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       const reportedIso = reportedIsoDay(r.reported_at);
       const reportedInWeek = reportedIso && daySet.has(reportedIso) ? reportedIso : null;
 
-      // Planned day
-      let plannedIso: string | null = r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
-      if (!plannedIso && r.is_immediate && reportedInWeek) plannedIso = reportedInWeek;
+      if (r.is_immediate) {
+        if (r.status === "EXECUTADO") {
+          const execIso =
+            reportedInWeek ?? (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
+          if (execIso) dImmediateExec.set(execIso, (dImmediateExec.get(execIso) ?? 0) + unit);
+        }
+        continue;
+      }
 
+      // A linha de base considera somente a programação congelada.
+      const plannedIso: string | null = r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
       if (plannedIso) {
         dPlanned.set(plannedIso, (dPlanned.get(plannedIso) ?? 0) + unit);
         total += unit;
+        if (impactedIds.has(r.id)) {
+          dImpacted.set(plannedIso, (dImpacted.get(plannedIso) ?? 0) + unit);
+        }
       }
 
-      // Executed day
+      // Execução da programação original.
       if (r.status === "EXECUTADO") {
         const execIso = reportedInWeek ?? (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
         if (execIso) {
-          dExec.set(execIso, (dExec.get(execIso) ?? 0) + unit);
-          if (plannedIso === execIso) {
-            dPlannedExec.set(plannedIso, (dPlannedExec.get(plannedIso) ?? 0) + unit);
-          } else if (plannedIso) {
-            dPlannedExec.set(plannedIso, (dPlannedExec.get(plannedIso) ?? 0) + unit);
-          }
+          dProgrammedExec.set(execIso, (dProgrammedExec.get(execIso) ?? 0) + unit);
         }
       }
     }
@@ -516,16 +605,19 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
     // Series
     let cumP = 0;
-    let cumE = 0;
+    let cumProgrammed = 0;
+    let cumImmediate = 0;
     const series = days.map((day, idx) => {
       const planned = dPlanned.get(day) ?? 0;
-      const exec = dExec.get(day) ?? 0;
-      const plannedExec = dPlannedExec.get(day) ?? 0;
-      const remaining = Math.max(planned - plannedExec, 0);
+      const programmedExec = dProgrammedExec.get(day) ?? 0;
+      const immediateExec = dImmediateExec.get(day) ?? 0;
+      const impacted = dImpacted.get(day) ?? 0;
       cumP += planned;
-      cumE += exec;
+      cumProgrammed += programmedExec;
+      cumImmediate += immediateExec;
       const pctP = total > 0 ? (cumP / total) * 100 : 0;
-      const pctR = total > 0 ? (cumE / total) * 100 : 0;
+      const pctR = total > 0 ? (cumProgrammed / total) * 100 : 0;
+      const pctTotal = total > 0 ? ((cumProgrammed + cumImmediate) / total) * 100 : 0;
       const label = (() => {
         const d = parseIsoDay(day);
         const dd = String(d.getDate()).padStart(2, "0");
@@ -536,16 +628,20 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         day,
         label,
         planned: round2(planned),
-        exec: round2(exec),
-        remaining: round2(remaining),
+        programmedExec: round2(programmedExec),
+        immediateExec: round2(immediateExec),
+        impacted: round2(impacted),
         pctPlanned: round2(pctP),
         pctReal: idx <= cutoffIdx ? round2(pctR) : null,
-        _cumE: cumE,
+        pctTotal: idx <= cutoffIdx ? round2(pctTotal) : null,
+        _cumE: cumProgrammed,
+        _cumImmediate: cumImmediate,
       };
     });
 
     // Projection
     const realizedAtCut = series[cutoffIdx]?._cumE ?? 0;
+    const immediateAtCut = series[cutoffIdx]?._cumImmediate ?? 0;
     const daysElapsed = cutoffIdx + 1;
     if (realizedAtCut > 0 && total > 0 && daysElapsed > 0) {
       const rate = realizedAtCut / daysElapsed; // units per day
@@ -563,6 +659,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
     const cumPlannedCut = series[cutoffIdx]?.pctPlanned ?? 0;
     const realizedPctCut = total > 0 ? (realizedAtCut / total) * 100 : 0;
+    const totalProductionPctCut = total > 0 ? ((realizedAtCut + immediateAtCut) / total) * 100 : 0;
 
     return {
       data: series,
@@ -571,11 +668,13 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       indicators: {
         plannedPct: round2(cumPlannedCut),
         realPct: round2(realizedPctCut),
+        totalProductionPct: round2(totalProductionPctCut),
         deviation: round2(realizedPctCut - cumPlannedCut),
         remaining: round2(total - realizedAtCut),
+        impacted: impactedIds.size,
       },
     };
-  }, [rows, days, daySet, effectiveMetric]);
+  }, [rows, links, days, daySet, effectiveMetric]);
 
   const cutoffLabel = data.find((d) => d.day === cutoffIso)?.label ?? "";
   const unitLabel = effectiveMetric === "hours" ? "h" : "";
@@ -622,13 +721,23 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         </div>
       ) : (
         <>
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <CurveStat label="Planejado até corte" value={`${indicators.plannedPct.toFixed(1)}%`} />
-            <CurveStat label="Realizado" value={`${indicators.realPct.toFixed(1)}%`} tone="primary" />
+            <CurveStat label="Programado executado" value={`${indicators.realPct.toFixed(1)}%`} tone="primary" />
+            <CurveStat
+              label="Produção total c/ IMEDIATAS"
+              value={`${indicators.totalProductionPct.toFixed(1)}%`}
+              tone="success"
+            />
             <CurveStat
               label="Desvio"
               value={`${indicators.deviation >= 0 ? "+" : ""}${indicators.deviation.toFixed(1)} pp`}
               tone={indicators.deviation >= 0 ? "success" : "destructive"}
+            />
+            <CurveStat
+              label="Programadas impactadas"
+              value={indicators.impacted.toLocaleString("pt-BR")}
+              tone="destructive"
             />
             <CurveStat
               label="Restante"
@@ -652,7 +761,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                   <YAxis
                     yAxisId="right"
                     orientation="right"
-                    domain={[0, 100]}
+                    domain={[0, "auto"]}
                     tickFormatter={(v) => `${v}%`}
                     tick={{ fontSize: 11 }}
                     stroke="hsl(var(--muted-foreground))"
@@ -665,9 +774,28 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar yAxisId="left" dataKey="planned" name="Planejado (dia)" fill="#9CA3AF" barSize={14} />
-                  <Bar yAxisId="left" dataKey="exec" name="Executado (dia)" fill="#2563EB" barSize={14} />
-                  <Bar yAxisId="left" dataKey="remaining" name="Restante (dia)" fill="#16A34A" barSize={14} />
+                  <Bar yAxisId="left" dataKey="planned" name="Planejado (dia)" fill="#9CA3AF" barSize={12} />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="programmedExec"
+                    name="Programado executado (dia)"
+                    fill="#2563EB"
+                    barSize={12}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="immediateExec"
+                    name="IMEDIATAS executadas (dia)"
+                    fill="#F59E0B"
+                    barSize={12}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="impacted"
+                    name="Programadas impactadas (dia)"
+                    fill="#DC2626"
+                    barSize={12}
+                  />
                   <Line
                     yAxisId="right"
                     type="monotone"
@@ -681,9 +809,20 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                     yAxisId="right"
                     type="monotone"
                     dataKey="pctReal"
-                    name="Realizado acumulado %"
+                    name="Programado executado acumulado %"
                     stroke="#2563EB"
                     strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                    connectNulls={false}
+                  />
+                  <Line
+                    yAxisId="right"
+                    type="monotone"
+                    dataKey="pctTotal"
+                    name="Produção total com IMEDIATAS %"
+                    stroke="#16A34A"
+                    strokeWidth={2.5}
+                    strokeDasharray="3 2"
                     dot={{ r: 3 }}
                     connectNulls={false}
                   />
