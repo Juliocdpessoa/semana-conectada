@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Timer,
@@ -1428,10 +1428,12 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
 
 /* ---------- New Request Modal ---------- */
 function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
+  const draftStorageKey = "nexo:overtime-request-draft";
   const call = useServerFn(createOvertimeRequest);
   const [saving, setSaving] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const draftLoaded = useRef(false);
   const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
   const [form, setForm] = useState({
     activity_id: null as string | null,
@@ -1446,6 +1448,39 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   });
   const [customEntryTime, setCustomEntryTime] = useState(false);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    try {
+      const savedDraft = sessionStorage.getItem(draftStorageKey);
+      if (savedDraft) {
+        const parsed = JSON.parse(savedDraft) as {
+          selectedEmployeeIds?: unknown;
+          form?: Partial<typeof form>;
+        };
+        if (Array.isArray(parsed.selectedEmployeeIds)) {
+          setSelectedEmployeeIds(parsed.selectedEmployeeIds.filter((id): id is string => typeof id === "string"));
+        }
+        if (parsed.form && typeof parsed.form === "object") {
+          setForm((current) => ({ ...current, ...parsed.form }));
+        }
+      }
+    } catch {
+      sessionStorage.removeItem(draftStorageKey);
+    } finally {
+      draftLoaded.current = true;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!draftLoaded.current) return;
+    sessionStorage.setItem(
+      draftStorageKey,
+      JSON.stringify({
+        selectedEmployeeIds,
+        form,
+      }),
+    );
+  }, [selectedEmployeeIds, form]);
   const [dateYear, dateMonth, dateDay] = form.overtime_date.split("-");
   const monthOptions = [
     ["01", "Jan"],
@@ -1569,6 +1604,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       });
       if (!res.ok) return toast.error(res.error);
       toast.success(`${res.count} solicitação(ões) enviada(s).`);
+      sessionStorage.removeItem(draftStorageKey);
       onCreated();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível enviar as solicitações.");
