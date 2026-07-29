@@ -541,33 +541,28 @@ function PlanejamentoPage() {
 }
 
 function downloadImmediateTemplate() {
-  const header = [...IMMEDIATE_COLUMNS];
-  const example: Record<string, any> = {
-    Ordem: "2027999999",
-    Nº: 1,
-    Nota: "14999999",
-    Op: 10,
-    Subop: "",
-    "TxtDesc.Oper.": "Descrição da atividade imediata",
-    Gerência: "Oficinas",
-    "Área op": "",
-    Localização: "",
-    Local: "ROTINA",
-    CenTrab: "MECANICO",
-    "Gr pl": "COM",
-    Trab: 4,
-    "Dur n": 4,
-    "Data início": new Date().toISOString().slice(0, 10),
-    "Hora início": "08:00",
-    "Data fim": new Date().toISOString().slice(0, 10),
-    "Hora fim": "12:00",
-    "Tipo de Nota": "ZF",
-    Confirmação: "",
-  };
-  const ws = XLSX.utils.json_to_sheet([example], { header });
+  // O modelo de imediatas usa exatamente as mesmas colunas e sequência da programação semanal.
+  const acompanhamento = XLSX.utils.aoa_to_sheet([[...WEEKLY_TEMPLATE_COLUMNS]]);
+  acompanhamento["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
+    wch:
+      name === "TxtDesc.Oper."
+        ? 42
+        : name === "Justificativa" || name === "Observações"
+          ? 34
+          : Math.max(11, name.length + 2),
+  }));
+
+  const dadosRows = [["Status", "Justificativa"]];
+  const total = Math.max(TEMPLATE_STATUSES.length, TEMPLATE_JUSTIFICATIONS.length);
+  for (let i = 0; i < total; i++) dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
+  const dados = XLSX.utils.aoa_to_sheet(dadosRows);
+  dados["!cols"] = [{ wch: 22 }, { wch: 74 }];
+
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Imediatas");
-  XLSX.writeFile(wb, "modelo-atividades-imediatas.xlsx");
+  XLSX.utils.book_append_sheet(wb, acompanhamento, "Acompanhamento");
+  XLSX.utils.book_append_sheet(wb, dados, "Dados");
+  XLSX.writeFile(wb, "Modelo programação - imediatas.xlsx");
+  toast.success("Modelo de imediatas baixado.");
 }
 
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
