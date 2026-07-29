@@ -87,11 +87,12 @@ export const updateActivity = createServerFn({ method: "POST" })
     return { ok: true as const, updated };
   });
 
-const bulkSchema = z.object({  immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
+const bulkSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
   status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
+  immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
 });
 
 export const bulkUpdateActivities = createServerFn({ method: "POST" })
@@ -102,7 +103,8 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
-        const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
+
+    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
     const linkedIds = Array.from(new Set(data.immediateActivityIds));
     if (requiresImmediateLink && linkedIds.length === 0) {
       return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
@@ -136,9 +138,8 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
         return { ok: false as const, error: "Uma ou mais imediatas selecionadas não pertencem à semana atual." };
       }
     }
-  };
-    }
-        const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
+
+    const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
     const reportFields = {
       status: data.status,
       justification: data.justification,
@@ -164,7 +165,6 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     const updateError = results.find(Boolean);
     if (updateError) return { ok: false as const, error: updateError.message };
     return { ok: true as const, count: selectedActivities?.length ?? 0 };
-  };
   });
 
 const immediateSchema = z.object({
