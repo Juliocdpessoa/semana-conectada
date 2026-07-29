@@ -164,9 +164,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     const updateError = results.find(Boolean);
     if (updateError) return { ok: false as const, error: updateError.message };
     return { ok: true as const, count: selectedActivities?.length ?? 0 };
-  });
-r.message };
-    return { ok: true as const, count: updated?.length ?? 0 };
+  };
   });
 
 const immediateSchema = z.object({
