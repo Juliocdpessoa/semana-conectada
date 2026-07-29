@@ -71,15 +71,22 @@ function PainelPage() {
   const rows = activities.data ?? [];
 
   const kpis = useMemo(() => {
-    const total = rows.length;
-    const executado = rows.filter((r) => r.status === "EXECUTADO").length;
-    const naoExec = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
-    const semApont = rows.filter((r) => !r.status || r.status === "Sem apontamento").length;
-    const imediatas = rows.filter((r) => r.is_immediate).length;
+    const programmed = rows.filter((r) => !r.is_immediate);
+    const immediates = rows.filter((r) => r.is_immediate);
+    const total = programmed.length;
+    const executado = programmed.filter((r) => r.status === "EXECUTADO").length;
+    const naoExec = programmed.filter((r) => r.status === "NÃO EXECUTADO").length;
+    const semApont = programmed.filter((r) => !r.status || r.status === "Sem apontamento").length;
+    const imediatas = immediates.length;
+    const imediatasExecutadas = immediates.filter((r) => r.status === "EXECUTADO").length;
+    const impactadas = programmed.filter((r) => {
+      const linked = r.planning_data?.__linked_immediate_ids;
+      return Array.isArray(linked) && linked.length > 0;
+    }).length;
     const apontadas = executado + naoExec;
     const aderencia = total > 0 ? Math.round((executado / total) * 100) : 0;
     const progresso = total > 0 ? Math.round((apontadas / total) * 100) : 0;
-    return { total, executado, naoExec, semApont, imediatas, aderencia, progresso };
+    return { total, executado, naoExec, semApont, imediatas, imediatasExecutadas, impactadas, aderencia, progresso };
   }, [rows]);
 
   const byArea = useMemo(
@@ -464,7 +471,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
   const days = useMemo(() => daysBetween(startDate, endDate), [startDate, endDate]);
   const daySet = useMemo(() => new Set(days), [days]);
-  const totalHours = useMemo(() => rows.reduce((a, r) => a + hoursOf(r.planning_data), 0), [rows]);
+  const totalHours = useMemo(
+    () => rows.filter((r) => !r.is_immediate).reduce((a, r) => a + hoursOf(r.planning_data), 0),
+    [rows],
+  );
   const hoursDisabled = totalHours <= 0;
   const effectiveMetric = hoursDisabled && metric === "hours" ? "count" : metric;
 
@@ -474,6 +484,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
     const dPlanned = new Map<string, number>();
     const dExec = new Map<string, number>();
     const dPlannedExec = new Map<string, number>();
+    const dImmediateExec = new Map<string, number>();
     let total = 0;
 
     for (const r of rows) {
@@ -482,6 +493,15 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
       const reportedIso = reportedIsoDay(r.reported_at);
       const reportedInWeek = reportedIso && daySet.has(reportedIso) ? reportedIso : null;
+
+      if (r.is_immediate) {
+        if (r.status === "EXECUTADO") {
+          const immediateDay =
+            reportedInWeek ?? (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
+          if (immediateDay) dImmediateExec.set(immediateDay, (dImmediateExec.get(immediateDay) ?? 0) + unit);
+        }
+        continue;
+      }
 
       // Planned day
       let plannedIso: string | null = r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
@@ -522,6 +542,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       const exec = dExec.get(day) ?? 0;
       const plannedExec = dPlannedExec.get(day) ?? 0;
       const remaining = Math.max(planned - plannedExec, 0);
+      const immediateExec = dImmediateExec.get(day) ?? 0;
       cumP += planned;
       cumE += exec;
       const pctP = total > 0 ? (cumP / total) * 100 : 0;
@@ -538,6 +559,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         planned: round2(planned),
         exec: round2(exec),
         remaining: round2(remaining),
+        immediateExec: round2(immediateExec),
         pctPlanned: round2(pctP),
         pctReal: idx <= cutoffIdx ? round2(pctR) : null,
         _cumE: cumE,
@@ -563,6 +585,12 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
     const cumPlannedCut = series[cutoffIdx]?.pctPlanned ?? 0;
     const realizedPctCut = total > 0 ? (realizedAtCut / total) * 100 : 0;
+    const impacted = rows.filter((r) => {
+      if (r.is_immediate) return false;
+      const linked = r.planning_data?.__linked_immediate_ids;
+      return Array.isArray(linked) && linked.length > 0;
+    }).length;
+    const immediateExecuted = Array.from(dImmediateExec.values()).reduce((sum, value) => sum + value, 0);
 
     return {
       data: series,
@@ -573,6 +601,8 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         realPct: round2(realizedPctCut),
         deviation: round2(realizedPctCut - cumPlannedCut),
         remaining: round2(total - realizedAtCut),
+        impacted,
+        immediateExecuted: round2(immediateExecuted),
       },
     };
   }, [rows, days, daySet, effectiveMetric]);
@@ -583,7 +613,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
   return (
     <Panel
       title="Curva de Avanço"
-      description="Progresso semanal estilo Primavera P6 · barras diárias e curva acumulada"
+      description="Planejamento original congelado · imediatas exibidas separadamente sem alterar a curva planejada"
       actions={
         <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5 text-[11px]">
           <button
@@ -622,7 +652,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         </div>
       ) : (
         <>
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <CurveStat label="Planejado até corte" value={`${indicators.plannedPct.toFixed(1)}%`} />
             <CurveStat label="Realizado" value={`${indicators.realPct.toFixed(1)}%`} tone="primary" />
             <CurveStat
@@ -633,6 +663,16 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
             <CurveStat
               label="Restante"
               value={`${indicators.remaining.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`}
+            />
+            <CurveStat
+              label="Impactadas por imediatas"
+              value={indicators.impacted.toLocaleString("pt-BR")}
+              tone="destructive"
+            />
+            <CurveStat
+              label="Imediatas executadas"
+              value={`${indicators.immediateExecuted.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`}
+              tone="warning"
             />
           </div>
 
@@ -668,6 +708,13 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                   <Bar yAxisId="left" dataKey="planned" name="Planejado (dia)" fill="#9CA3AF" barSize={14} />
                   <Bar yAxisId="left" dataKey="exec" name="Executado (dia)" fill="#2563EB" barSize={14} />
                   <Bar yAxisId="left" dataKey="remaining" name="Restante (dia)" fill="#16A34A" barSize={14} />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="immediateExec"
+                    name="Imediatas executadas (dia)"
+                    fill="#F59E0B"
+                    barSize={14}
+                  />
                   <Line
                     yAxisId="right"
                     type="monotone"
@@ -724,13 +771,14 @@ function CurveStat({
 }: {
   label: string;
   value: string;
-  tone?: "default" | "success" | "destructive" | "primary";
+  tone?: "default" | "success" | "destructive" | "primary" | "warning";
 }) {
   const toneCls = {
     default: "text-foreground",
     success: "text-success",
     destructive: "text-destructive",
     primary: "text-primary",
+    warning: "text-warning-foreground",
   }[tone];
   return (
     <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
