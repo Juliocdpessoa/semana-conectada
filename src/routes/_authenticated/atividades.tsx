@@ -778,7 +778,9 @@ function ImmediatePicker({
       size="lg"
       footer={
         <>
-          <button type="button" onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button type="button" onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
           <button
             type="button"
             onClick={() => {
@@ -803,9 +805,16 @@ function ImmediatePicker({
         />
       </div>
       {immediates.isLoading ? (
-        <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+        <div className="space-y-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-16" />
+          ))}
+        </div>
       ) : options.length === 0 ? (
-        <EmptyState title="Nenhuma imediata encontrada" description="Cadastre ou importe as imediatas desta semana no Planejamento." />
+        <EmptyState
+          title="Nenhuma imediata encontrada"
+          description="Cadastre ou importe as imediatas desta semana no Planejamento."
+        />
       ) : (
         <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
           {options.map((row) => {
@@ -823,12 +832,17 @@ function ImmediatePicker({
                     <span className="font-mono text-[10px] text-muted-foreground">
                       Op {fmtPlan(row.planning_data, "Op") ?? "—"} · Sub {fmtPlan(row.planning_data, "Subop") ?? "—"}
                     </span>
-                    {sameDay && <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold text-warning-foreground">Mesma data</span>}
+                    {sameDay && (
+                      <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold text-warning-foreground">
+                        Mesma data
+                      </span>
+                    )}
                     <StatusPill status={row.status} />
                   </div>
                   <div className="mt-1 text-[12px] leading-snug text-foreground">{row.description}</div>
                   <div className="mt-1 text-[10px] text-muted-foreground">
-                    {formatDate(row.scheduled_date)}{row.area ? {row.area ? ` · ${row.area}` : ""} : ""}
+                    {formatDate(row.scheduled_date)}
+                    {row.area ? ` · ${row.area}` : ""}
                   </div>
                 </div>
               </label>
