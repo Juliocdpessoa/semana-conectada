@@ -87,7 +87,7 @@ export const updateActivity = createServerFn({ method: "POST" })
     return { ok: true as const, updated };
   });
 
-const bulkSchema = z.object({
+const bulkSchema = z.object({  immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
   ids: z.array(z.string().uuid()).min(1).max(500),
   status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
@@ -102,27 +102,70 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
-    if (data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -")) {
-      return {
-        ok: false as const,
-        error: "O vínculo com imediatas deve ser realizado no apontamento individual.",
-      };
+        const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
+    const linkedIds = Array.from(new Set(data.immediateActivityIds));
+    if (requiresImmediateLink && linkedIds.length === 0) {
+      return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
     }
-    const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
-    const { data: updated, error } = await supabase
+
+    const { data: selectedActivities, error: selectedError } = await supabase
       .from("activities")
-      .update({
-        status: data.status,
-        justification: data.justification,
-        observation: data.observation,
-        reported_by_user_id: userId,
-        reported_by_name: prof?.full_name ?? "",
-        reported_by_email: prof?.email ?? "",
-        reported_at: new Date().toISOString(),
-      })
-      .in("id", data.ids)
-      .select("id");
-    if (error) return { ok: false as const, error: error.message };
+      .select("id, week_id, is_immediate, planning_data")
+      .in("id", data.ids);
+    if (selectedError) return { ok: false as const, error: selectedError.message };
+    if ((selectedActivities?.length ?? 0) !== data.ids.length) {
+      return { ok: false as const, error: "Uma ou mais atividades selecionadas não foram encontradas." };
+    }
+    const selectedWeeks = new Set((selectedActivities ?? []).map((activity) => activity.week_id));
+    if (selectedWeeks.size !== 1) {
+      return { ok: false as const, error: "As atividades do lote devem pertencer à mesma semana." };
+    }
+    if (requiresImmediateLink && selectedActivities?.some((activity) => activity.is_immediate)) {
+      return { ok: false as const, error: "Selecione somente atividades programadas para vincular às imediatas." };
+    }
+    if (requiresImmediateLink) {
+      const weekId = selectedActivities![0].week_id;
+      const { data: validImmediates, error: immediateError } = await supabase
+        .from("activities")
+        .select("id")
+        .eq("week_id", weekId)
+        .eq("is_immediate", true)
+        .in("id", linkedIds);
+      if (immediateError) return { ok: false as const, error: immediateError.message };
+      if ((validImmediates?.length ?? 0) !== linkedIds.length) {
+        return { ok: false as const, error: "Uma ou mais imediatas selecionadas não pertencem à semana atual." };
+      }
+    }
+  };
+    }
+        const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
+    const reportFields = {
+      status: data.status,
+      justification: data.justification,
+      observation: data.observation,
+      reported_by_user_id: userId,
+      reported_by_name: prof?.full_name ?? "",
+      reported_by_email: prof?.email ?? "",
+      reported_at: new Date().toISOString(),
+    };
+
+    const results = await Promise.all(
+      (selectedActivities ?? []).map(async (activity) => {
+        const nextPlanningData = { ...((activity.planning_data ?? {}) as Record<string, unknown>) };
+        if (requiresImmediateLink) nextPlanningData.__linked_immediate_ids = linkedIds;
+        else delete nextPlanningData.__linked_immediate_ids;
+        const { error } = await supabase
+          .from("activities")
+          .update({ ...reportFields, planning_data: nextPlanningData })
+          .eq("id", activity.id);
+        return error;
+      }),
+    );
+    const updateError = results.find(Boolean);
+    if (updateError) return { ok: false as const, error: updateError.message };
+    return { ok: true as const, count: selectedActivities?.length ?? 0 };
+  });
+r.message };
     return { ok: true as const, count: updated?.length ?? 0 };
   });
 

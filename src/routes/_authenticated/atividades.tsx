@@ -955,3 +955,154 @@ function BulkModal({
     </Modal>
   );
 }
+function BulkModal(
+function BulkModal({
+  count,
+  ids,
+  weekId,
+  onClose,
+  onSaved,
+}: {
+  count: number;
+  ids: string[];
+  weekId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [status, setStatus] = useState("EXECUTADO");
+  const [justification, setJustification] = useState("");
+  const [observation, setObservation] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [immediatePickerOpen, setImmediatePickerOpen] = useState(false);
+  const [selectedImmediateIds, setSelectedImmediateIds] = useState<Set<string>>(new Set());
+  const call = useServerFn(bulkUpdateActivities);
+  const needsJust = REQUIRES_JUSTIFICATION.has(status);
+  const needsImmediateLink = status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
+
+  async function save() {
+    if (needsJust && !justification.trim()) {
+      toast.error("Justificativa é obrigatória para este status.");
+      return;
+    }
+    if (needsImmediateLink && selectedImmediateIds.size === 0) {
+      toast.error("Selecione ao menos uma atividade imediata atendida.");
+      setImmediatePickerOpen(true);
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await call({
+        data: {
+          ids,
+          status,
+          justification: justification.trim() || null,
+          observation: observation.trim() || null,
+          immediateActivityIds: needsImmediateLink ? Array.from(selectedImmediateIds) : [],
+        },
+      });
+      if (!res.ok) return toast.error(res.error ?? "Erro ao salvar lote.");
+      toast.success(`${res.count} atividade(s) atualizada(s).`);
+      onSaved();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title={`Apontar ${count} atividade(s) em lote`}
+      description="O mesmo status, justificativa e vínculo serão aplicados a todas."
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="btn-ghost">
+            Cancelar
+          </button>
+          <button onClick={save} disabled={saving} className="btn-primary">
+            {saving ? "Salvando…" : `Aplicar a ${count}`}
+          </button>
+        </>
+      }
+    >
+      <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning-foreground">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <div>
+          <b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como
+          responsável em todas.
+        </div>
+      </div>
+      <div className="mt-4 space-y-3">
+        <Field label="Status" required>
+          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
+            {STATUSES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Justificativa" required={needsJust}>
+          <select
+            value={justification}
+            onChange={(e) => {
+              const value = e.target.value;
+              setJustification(value);
+              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
+            }}
+            className="input-base"
+          >
+            <option value="">— Selecione —</option>
+            {JUSTIFICATIONS.map((j) => (
+              <option key={j} value={j}>
+                {j}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {needsImmediateLink && (
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold text-warning-foreground">Imediatas atendidas</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {selectedImmediateIds.size > 0
+                    ? `${selectedImmediateIds.size} atividade(s) vinculada(s) às ${count} programadas`
+                    : "Selecione a imediata que causou a parada das atividades."}
+                </div>
+              </div>
+              <button type="button" onClick={() => setImmediatePickerOpen(true)} className="btn-ghost text-xs">
+                <Zap className="h-3.5 w-3.5" /> {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
+              </button>
+            </div>
+          </div>
+        )}
+        <Field label="Observação (opcional)">
+          <textarea
+            value={observation}
+            onChange={(e) => setObservation(e.target.value)}
+            rows={2}
+            maxLength={2000}
+            className="input-base"
+          />
+        </Field>
+      </div>
+      {immediatePickerOpen && (
+        <ImmediatePicker
+          weekId={weekId}
+          scheduledDate={null}
+          selected={selectedImmediateIds}
+          onClose={() => setImmediatePickerOpen(false)}
+          onConfirm={(selectedIds) => {
+            setSelectedImmediateIds(selectedIds);
+            setImmediatePickerOpen(false);
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+ids={Array.from(selected)}
+
+ids={Array.from(selected)}
+
+          weekId={activeWeek.data!.id}
