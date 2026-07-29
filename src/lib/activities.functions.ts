@@ -8,6 +8,7 @@ const updateSchema = z.object({
   status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
+  immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
 });
 
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
@@ -20,6 +21,40 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
+    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
+
+    const { data: currentActivity, error: currentError } = await supabase
+      .from("activities")
+      .select("id, week_id, is_immediate, planning_data")
+      .eq("id", data.activityId)
+      .maybeSingle();
+    if (currentError) return { ok: false as const, error: currentError.message };
+    if (!currentActivity) return { ok: false as const, error: "Atividade não encontrada." };
+    if (requiresImmediateLink && currentActivity.is_immediate) {
+      return { ok: false as const, error: "Uma atividade imediata não pode ser vinculada a ela mesma." };
+    }
+
+    const linkedIds = Array.from(new Set(data.immediateActivityIds));
+    if (requiresImmediateLink && linkedIds.length === 0) {
+      return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
+    }
+    if (requiresImmediateLink) {
+      const { data: validImmediates, error: immediateError } = await supabase
+        .from("activities")
+        .select("id")
+        .eq("week_id", currentActivity.week_id)
+        .eq("is_immediate", true)
+        .in("id", linkedIds);
+      if (immediateError) return { ok: false as const, error: immediateError.message };
+      if ((validImmediates?.length ?? 0) !== linkedIds.length) {
+        return { ok: false as const, error: "Uma ou mais imediatas selecionadas não pertencem à semana atual." };
+      }
+    }
+
+    const nextPlanningData = { ...((currentActivity.planning_data ?? {}) as Record<string, unknown>) };
+    if (requiresImmediateLink) nextPlanningData.__linked_immediate_ids = linkedIds;
+    else delete nextPlanningData.__linked_immediate_ids;
+
     // Fetch profile for stamping name/email server-side
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
     // Optimistic concurrency: only update if version matches
@@ -29,6 +64,7 @@ export const updateActivity = createServerFn({ method: "POST" })
         status: data.status,
         justification: data.justification,
         observation: data.observation,
+        planning_data: nextPlanningData,
         reported_by_user_id: userId,
         reported_by_name: prof?.full_name ?? "",
         reported_by_email: prof?.email ?? "",
@@ -65,6 +101,12 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
+    }
+    if (data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -")) {
+      return {
+        ok: false as const,
+        error: "O vínculo com imediatas deve ser realizado no apontamento individual.",
+      };
     }
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
     const { data: updated, error } = await supabase
