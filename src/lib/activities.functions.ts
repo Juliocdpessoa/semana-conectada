@@ -57,6 +57,7 @@ export const updateActivity = createServerFn({ method: "POST" })
 
     // Fetch profile for stamping name/email server-side
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
+    const reportedAt = new Date().toISOString();
     // Optimistic concurrency: only update if version matches
     const { data: updated, error } = await supabase
       .from("activities")
@@ -68,7 +69,7 @@ export const updateActivity = createServerFn({ method: "POST" })
         reported_by_user_id: userId,
         reported_by_name: prof?.full_name ?? "",
         reported_by_email: prof?.email ?? "",
-        reported_at: new Date().toISOString(),
+        reported_at: reportedAt,
       })
       .eq("id", data.activityId)
       .eq("version", data.expectedVersion)
@@ -83,6 +84,22 @@ export const updateActivity = createServerFn({ method: "POST" })
         .eq("id", data.activityId)
         .maybeSingle();
       return { ok: false as const, conflict: true, current };
+    }
+    if (requiresImmediateLink) {
+      const { error: immediateUpdateError } = await supabase
+        .from("activities")
+        .update({
+          status: "EXECUTADO",
+          justification: null,
+          reported_by_user_id: userId,
+          reported_by_name: prof?.full_name ?? "",
+          reported_by_email: prof?.email ?? "",
+          reported_at: reportedAt,
+        })
+        .eq("week_id", currentActivity.week_id)
+        .eq("is_immediate", true)
+        .in("id", linkedIds);
+      if (immediateUpdateError) return { ok: false as const, error: immediateUpdateError.message };
     }
     return { ok: true as const, updated };
   });
@@ -140,6 +157,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     }
 
     const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
+    const reportedAt = new Date().toISOString();
     const reportFields = {
       status: data.status,
       justification: data.justification,
@@ -147,7 +165,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       reported_by_user_id: userId,
       reported_by_name: prof?.full_name ?? "",
       reported_by_email: prof?.email ?? "",
-      reported_at: new Date().toISOString(),
+      reported_at: reportedAt,
     };
 
     const results = await Promise.all(
@@ -164,6 +182,23 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     );
     const updateError = results.find(Boolean);
     if (updateError) return { ok: false as const, error: updateError.message };
+
+    if (requiresImmediateLink) {
+      const { error: immediateUpdateError } = await supabase
+        .from("activities")
+        .update({
+          status: "EXECUTADO",
+          justification: null,
+          reported_by_user_id: userId,
+          reported_by_name: prof?.full_name ?? "",
+          reported_by_email: prof?.email ?? "",
+          reported_at: reportedAt,
+        })
+        .eq("week_id", selectedActivities![0].week_id)
+        .eq("is_immediate", true)
+        .in("id", linkedIds);
+      if (immediateUpdateError) return { ok: false as const, error: immediateUpdateError.message };
+    }
     return { ok: true as const, count: selectedActivities?.length ?? 0 };
   });
 
