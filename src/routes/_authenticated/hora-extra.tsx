@@ -126,6 +126,7 @@ function OvertimePage() {
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
+  const canExportOvertime = isMeasurementControl || s.role === "admin";
 
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     isMeasurementControl ? "export" : canRequest ? "list" : "queue",
@@ -210,7 +211,7 @@ function OvertimePage() {
       </div>
 
       <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
-        {isMeasurementControl && (
+        {canExportOvertime && (
           <TabBtn active={tab === "export"} onClick={() => setTab("export")}>
             Exportação diária
           </TabBtn>
@@ -242,7 +243,7 @@ function OvertimePage() {
         )}
       </div>
 
-      {tab === "export" && isMeasurementControl && <ApprovedDailyExport rows={rows} />}
+      {tab === "export" && canExportOvertime && <ApprovedDailyExport rows={rows} />}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
