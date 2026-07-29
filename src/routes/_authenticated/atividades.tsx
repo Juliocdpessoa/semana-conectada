@@ -66,6 +66,7 @@ const JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
+const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 
 function AtividadesPage() {
   const _ctx = Route.useRouteContext() as { session: SessionInfo };
@@ -551,6 +552,11 @@ function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null
   return String(v);
 }
 
+function getLinkedImmediateIds(pd: Record<string, unknown> | null): string[] {
+  const value = pd?.__linked_immediate_ids;
+  return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+}
+
 function ApontarModal({
   activity,
   onClose,
@@ -564,12 +570,22 @@ function ApontarModal({
   const [justification, setJustification] = useState(activity.justification ?? "");
   const [observation, setObservation] = useState(activity.observation ?? "");
   const [saving, setSaving] = useState(false);
+  const [immediatePickerOpen, setImmediatePickerOpen] = useState(false);
+  const [selectedImmediateIds, setSelectedImmediateIds] = useState<Set<string>>(
+    () => new Set(getLinkedImmediateIds(activity.planning_data)),
+  );
   const call = useServerFn(updateActivity);
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
+  const needsImmediateLink = status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
     if (needsJust && !justification.trim()) {
       toast.error("Justificativa é obrigatória para este status.");
+      return;
+    }
+    if (needsImmediateLink && selectedImmediateIds.size === 0) {
+      toast.error("Selecione ao menos uma atividade imediata atendida.");
+      setImmediatePickerOpen(true);
       return;
     }
     setSaving(true);
@@ -581,6 +597,7 @@ function ApontarModal({
           status,
           justification: justification.trim() || null,
           observation: observation.trim() || null,
+          immediateActivityIds: needsImmediateLink ? Array.from(selectedImmediateIds) : [],
         },
       });
       if (!res.ok) {
@@ -634,7 +651,15 @@ function ApontarModal({
         </Field>
 
         <Field label="Justificativa" required={needsJust}>
-          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
+          <select
+            value={justification}
+            onChange={(e) => {
+              const value = e.target.value;
+              setJustification(value);
+              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
+            }}
+            className="input-base"
+          >
             <option value="">— Selecione —</option>
             {JUSTIFICATIONS.map((j) => (
               <option key={j} value={j}>
@@ -643,6 +668,24 @@ function ApontarModal({
             ))}
           </select>
         </Field>
+
+        {needsImmediateLink && (
+          <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-[11px] font-semibold text-warning-foreground">Imediatas atendidas</div>
+                <div className="text-[11px] text-muted-foreground">
+                  {selectedImmediateIds.size > 0
+                    ? `${selectedImmediateIds.size} atividade(s) vinculada(s)`
+                    : "Selecione a atividade imediata que causou o desvio."}
+                </div>
+              </div>
+              <button type="button" onClick={() => setImmediatePickerOpen(true)} className="btn-ghost text-xs">
+                <Zap className="h-3.5 w-3.5" /> {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
+              </button>
+            </div>
+          </div>
+        )}
 
         <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
           <textarea
@@ -654,6 +697,145 @@ function ApontarModal({
           />
         </Field>
       </div>
+      {immediatePickerOpen && (
+        <ImmediatePicker
+          weekId={activity.week_id}
+          scheduledDate={activity.scheduled_date}
+          selected={selectedImmediateIds}
+          onClose={() => setImmediatePickerOpen(false)}
+          onConfirm={(ids) => {
+            setSelectedImmediateIds(ids);
+            setImmediatePickerOpen(false);
+          }}
+        />
+      )}
+    </Modal>
+  );
+}
+
+function ImmediatePicker({
+  weekId,
+  scheduledDate,
+  selected,
+  onClose,
+  onConfirm,
+}: {
+  weekId: string;
+  scheduledDate: string | null;
+  selected: Set<string>;
+  onClose: () => void;
+  onConfirm: (ids: Set<string>) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const [draft, setDraft] = useState<Set<string>>(() => new Set(selected));
+  const immediates = useQuery({
+    queryKey: ["immediate-link-options", weekId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("activities")
+        .select("id,order_number,note_number,description,scheduled_date,status,area,specialty,planning_data")
+        .eq("week_id", weekId)
+        .eq("is_immediate", true)
+        .order("scheduled_date", { ascending: true })
+        .order("order_number", { ascending: true });
+      if (error) throw error;
+      return (data ?? []) as ActivityRow[];
+    },
+  });
+
+  const options = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return (immediates.data ?? [])
+      .filter((row) => {
+        if (!q) return true;
+        return (
+          row.order_number?.toLowerCase().includes(q) ||
+          row.description.toLowerCase().includes(q) ||
+          fmtPlan(row.planning_data, "Op")?.toLowerCase().includes(q) ||
+          fmtPlan(row.planning_data, "Subop")?.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        const aSame = a.scheduled_date === scheduledDate ? 0 : 1;
+        const bSame = b.scheduled_date === scheduledDate ? 0 : 1;
+        return aSame - bSame || (a.scheduled_date ?? "").localeCompare(b.scheduled_date ?? "");
+      });
+  }, [immediates.data, scheduledDate, search]);
+
+  function toggle(id: string) {
+    setDraft((current) => {
+      const next = new Set(current);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  return (
+    <Modal
+      title="Selecionar atividades imediatas"
+      description="Vincule as imediatas atendidas à tarefa programada não executada. As da mesma data aparecem primeiro."
+      onClose={onClose}
+      size="lg"
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost">Cancelar</button>
+          <button
+            type="button"
+            onClick={() => {
+              if (draft.size === 0) return toast.error("Selecione ao menos uma imediata.");
+              onConfirm(draft);
+            }}
+            className="btn-primary"
+          >
+            Vincular {draft.size || ""}
+          </button>
+        </>
+      }
+    >
+      <div className="relative mb-3">
+        <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Buscar por ordem, operação, suboperação ou descrição…"
+          className="input-base pl-8"
+          autoFocus
+        />
+      </div>
+      {immediates.isLoading ? (
+        <div className="space-y-2">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-16" />)}</div>
+      ) : options.length === 0 ? (
+        <EmptyState title="Nenhuma imediata encontrada" description="Cadastre ou importe as imediatas desta semana no Planejamento." />
+      ) : (
+        <div className="max-h-[55vh] space-y-2 overflow-y-auto pr-1">
+          {options.map((row) => {
+            const checked = draft.has(row.id);
+            const sameDay = row.scheduled_date === scheduledDate;
+            return (
+              <label
+                key={row.id}
+                className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition ${checked ? "border-warning bg-warning/10" : "border-border hover:bg-muted/60"}`}
+              >
+                <input type="checkbox" checked={checked} onChange={() => toggle(row.id)} className="mt-1" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-mono text-[11px] font-semibold">{row.order_number || "—"}</span>
+                    <span className="font-mono text-[10px] text-muted-foreground">
+                      Op {fmtPlan(row.planning_data, "Op") ?? "—"} · Sub {fmtPlan(row.planning_data, "Subop") ?? "—"}
+                    </span>
+                    {sameDay && <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold text-warning-foreground">Mesma data</span>}
+                    <StatusPill status={row.status} />
+                  </div>
+                  <div className="mt-1 text-[12px] leading-snug text-foreground">{row.description}</div>
+                  <div className="mt-1 text-[10px] text-muted-foreground">
+                    {formatDate(row.scheduled_date)}{row.area ? {row.area ? ` · ${row.area}` : ""} : ""}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
     </Modal>
   );
 }
@@ -739,7 +921,7 @@ function BulkModal({
         <Field label="Justificativa" required={needsJust}>
           <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
             <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.map((j) => (
+            {JUSTIFICATIONS.filter((j) => j !== IMMEDIATE_JUSTIFICATION).map((j) => (
               <option key={j} value={j}>
                 {j}
               </option>
