@@ -525,6 +525,7 @@ function AtividadesPage() {
         <BulkModal
           count={selected.size}
           ids={Array.from(selected)}
+          weekId={activeWeek.data!.id}
           onClose={() => setBulkOpen(false)}
           onSaved={() => {
             setBulkOpen(false);
@@ -866,99 +867,6 @@ function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
 function BulkModal({
   count,
   ids,
-  onClose,
-  onSaved,
-}: {
-  count: number;
-  ids: string[];
-  onClose: () => void;
-  onSaved: () => void;
-}) {
-  const [status, setStatus] = useState("EXECUTADO");
-  const [justification, setJustification] = useState("");
-  const [observation, setObservation] = useState("");
-  const [saving, setSaving] = useState(false);
-  const call = useServerFn(bulkUpdateActivities);
-  const needsJust = REQUIRES_JUSTIFICATION.has(status);
-
-  async function save() {
-    if (needsJust && !justification.trim()) {
-      toast.error("Justificativa é obrigatória para este status.");
-      return;
-    }
-    setSaving(true);
-    try {
-      const res = await call({
-        data: { ids, status, justification: justification.trim() || null, observation: observation.trim() || null },
-      });
-      if (!res.ok) return toast.error(res.error ?? "Erro ao salvar lote.");
-      toast.success(`${res.count} atividade(s) atualizada(s).`);
-      onSaved();
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  return (
-    <Modal
-      title={`Apontar ${count} atividade(s) em lote`}
-      description="O mesmo status e justificativa serão aplicados a todas."
-      onClose={onClose}
-      footer={
-        <>
-          <button onClick={onClose} className="btn-ghost">
-            Cancelar
-          </button>
-          <button onClick={save} disabled={saving} className="btn-primary">
-            {saving ? "Salvando…" : `Aplicar a ${count}`}
-          </button>
-        </>
-      }
-    >
-      <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning-foreground">
-        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-        <div>
-          <b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como
-          responsável em todas.
-        </div>
-      </div>
-      <div className="mt-4 space-y-3">
-        <Field label="Status" required>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Justificativa" required={needsJust}>
-          <select value={justification} onChange={(e) => setJustification(e.target.value)} className="input-base">
-            <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.filter((j) => j !== IMMEDIATE_JUSTIFICATION).map((j) => (
-              <option key={j} value={j}>
-                {j}
-              </option>
-            ))}
-          </select>
-        </Field>
-        <Field label="Observação (opcional)">
-          <textarea
-            value={observation}
-            onChange={(e) => setObservation(e.target.value)}
-            rows={2}
-            maxLength={2000}
-            className="input-base"
-          />
-        </Field>
-      </div>
-    </Modal>
-  );
-}
-function BulkModal(
-function BulkModal({
-  count,
-  ids,
   weekId,
   onClose,
   onSaved,
@@ -1101,8 +1009,3 @@ function BulkModal({
     </Modal>
   );
 }
-ids={Array.from(selected)}
-
-ids={Array.from(selected)}
-
-          weekId={activeWeek.data!.id}
