@@ -451,13 +451,17 @@ function WeeklyActivityExport() {
 
 /* ---------- Approved daily export ---------- */
 function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
+  const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
   const availableDates = useMemo(
-    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [rows],
+    () => [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [exportableRows],
   );
   const [selectedDate, setSelectedDate] = useState("");
   const effectiveDate = selectedDate || availableDates[0] || "";
-  const dailyRows = useMemo(() => rows.filter((row) => row.overtime_date === effectiveDate), [rows, effectiveDate]);
+  const dailyRows = useMemo(
+    () => exportableRows.filter((row) => row.overtime_date === effectiveDate),
+    [exportableRows, effectiveDate],
+  );
 
   function exportDailyExcel() {
     if (!effectiveDate || dailyRows.length === 0)
@@ -517,7 +521,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
   return (
     <Panel
       title="Exportação diária de horas extras"
-      description="Consulte e exporte todos os status das solicitações de cada dia."
+      description="Consulte e exporte pendentes, aprovadas e reprovadas. Solicitações canceladas não são incluídas."
       padded={false}
     >
       <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-end sm:justify-between">
