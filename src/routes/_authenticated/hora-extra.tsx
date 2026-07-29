@@ -451,21 +451,17 @@ function WeeklyActivityExport() {
 
 /* ---------- Approved daily export ---------- */
 function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
-  const approvedRows = useMemo(() => rows.filter((row) => row.status === "approved"), [rows]);
   const availableDates = useMemo(
-    () => [...new Set(approvedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [approvedRows],
+    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [rows],
   );
   const [selectedDate, setSelectedDate] = useState("");
   const effectiveDate = selectedDate || availableDates[0] || "";
-  const dailyRows = useMemo(
-    () => approvedRows.filter((row) => row.overtime_date === effectiveDate),
-    [approvedRows, effectiveDate],
-  );
+  const dailyRows = useMemo(() => rows.filter((row) => row.overtime_date === effectiveDate), [rows, effectiveDate]);
 
   function exportDailyExcel() {
     if (!effectiveDate || dailyRows.length === 0)
-      return toast.error("Não há horas extras aprovadas para exportar nesta data.");
+      return toast.error("Não há solicitações de hora extra para exportar nesta data.");
     const headers = [
       "ID",
       "Matrícula",
@@ -475,6 +471,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       "Horário de entrada",
       "Horário de saída",
       "Lanche",
+      "Status",
       "Solicitante",
       "Ordem",
       "Serviço",
@@ -489,6 +486,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       row.entry_time || "",
       row.departure_time,
       row.needs_snack ? "Sim" : "Não",
+      formatOvertimeStatus(row.status),
       row.requester_name || row.requester_email,
       row.order_number || "",
       row.service_description,
@@ -504,21 +502,22 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       { wch: 18 },
       { wch: 18 },
       { wch: 10 },
+      { wch: 14 },
       { wch: 28 },
       { wch: 16 },
       { wch: 48 },
       { wch: 48 },
     ];
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras aprovadas");
-    XLSX.writeFile(workbook, "horas-extras-aprovadas-" + effectiveDate + ".xlsx");
+    XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
+    XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
     toast.success(dailyRows.length + " registro(s) exportado(s).");
   }
 
   return (
     <Panel
-      title="Horas extras aprovadas"
-      description="Consulte e exporte as horas extras aprovadas de cada dia."
+      title="Exportação diária de horas extras"
+      description="Consulte e exporte todos os status das solicitações de cada dia."
       padded={false}
     >
       <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-end sm:justify-between">
@@ -550,7 +549,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
 
       {dailyRows.length === 0 ? (
         <div className="p-6">
-          <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma hora extra aprovada nesta data" />
+          <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma solicitação de hora extra nesta data" />
         </div>
       ) : (
         <>
@@ -2062,6 +2061,14 @@ function formatDate(iso: string) {
   if (!iso) return "";
   const [y, m, d] = iso.slice(0, 10).split("-");
   return `${d}/${m}/${y}`;
+}
+function formatOvertimeStatus(status: OvertimeRow["status"]) {
+  return {
+    pending: "Pendente",
+    approved: "Aprovado",
+    rejected: "Reprovado",
+    cancelled: "Cancelado",
+  }[status];
 }
 function formatDateTime(iso: string) {
   const d = new Date(iso);
