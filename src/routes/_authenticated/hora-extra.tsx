@@ -268,6 +268,7 @@ function OvertimePage() {
               if (!res.ok) return toast.error(res.error);
               toast.success("Solicitação cancelada.");
               qc.invalidateQueries({ queryKey: ["overtime-requests"] });
+              qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a solicitação.");
             }
@@ -276,7 +277,13 @@ function OvertimePage() {
       )}
 
       {tab === "queue" && isManager && (
-        <ApprovalQueue rows={rows} onDecided={() => qc.invalidateQueries({ queryKey: ["overtime-requests"] })} />
+        <ApprovalQueue
+          rows={rows}
+          onDecided={() => {
+            qc.invalidateQueries({ queryKey: ["overtime-requests"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+          }}
+        />
       )}
 
       {tab === "employees" && isManager && <EmployeeManagement />}
@@ -287,6 +294,7 @@ function OvertimePage() {
           onCreated={() => {
             setShowNew(false);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
           }}
         />
       )}
