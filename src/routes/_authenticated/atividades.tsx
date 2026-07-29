@@ -75,6 +75,7 @@ function AtividadesPage() {
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("");
+  const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
@@ -120,6 +121,8 @@ function AtividadesPage() {
       if (statusFilter && r.status !== statusFilter) return false;
       if (areaFilter && r.area !== areaFilter) return false;
       if (dateFilter && r.scheduled_date !== dateFilter) return false;
+      if (originFilter === "immediate" && !r.is_immediate) return false;
+      if (originFilter === "programmed" && r.is_immediate) return false;
       if (!q) return true;
       return (
         r.order_number?.toLowerCase().includes(q) ||
@@ -132,7 +135,7 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, dateFilter]);
+  }, [activities.data, search, statusFilter, areaFilter, dateFilter, originFilter]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -153,13 +156,14 @@ function AtividadesPage() {
     [activities.data],
   );
 
-  const activeFilters = [search, statusFilter, areaFilter, dateFilter].filter(Boolean).length;
+  const activeFilters = [search, statusFilter, areaFilter, dateFilter, originFilter].filter(Boolean).length;
 
   function clearFilters() {
     setSearch("");
     setStatusFilter("");
     setAreaFilter("");
     setDateFilter("");
+    setOriginFilter("");
     setPage(0);
   }
 
@@ -278,6 +282,19 @@ function AtividadesPage() {
               {a}
             </option>
           ))}
+        </select>
+        <select
+          value={originFilter}
+          onChange={(e) => {
+            setOriginFilter(e.target.value as "" | "programmed" | "immediate");
+            setPage(0);
+          }}
+          className="input-base w-auto py-2 text-xs"
+          aria-label="Filtrar por origem da atividade"
+        >
+          <option value="">Todas as atividades</option>
+          <option value="programmed">Somente programadas</option>
+          <option value="immediate">Somente imediatas</option>
         </select>
         <label className="input-base flex w-auto min-w-[150px] items-center gap-2 py-2 text-xs">
           <span className="whitespace-nowrap text-muted-foreground">Data:</span>
