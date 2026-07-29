@@ -19,6 +19,41 @@ async function loadRoleAndProfile(supabase: any, userId: string) {
   };
 }
 
+const exportListSchema = z.object({});
+
+export const listOvertimeForExport = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => exportListSchema.parse(data))
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved") {
+      return { ok: false as const, error: "Usuário não aprovado." };
+    }
+    if (!(info.isAdmin || info.isManager || info.isMeasurementControl)) {
+      return { ok: false as const, error: "Usuário sem permissão para exportar horas extras." };
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const rows: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await db
+        .from("overtime_requests")
+        .select("*")
+        .neq("status", "cancelled")
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (error) return { ok: false as const, error: error.message };
+      if (!data?.length) break;
+      rows.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return { ok: true as const, rows };
+  });
+
 function isValidDate(value: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
   if (!match) return false;
