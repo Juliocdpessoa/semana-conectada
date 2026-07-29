@@ -467,26 +467,28 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
     if (!effectiveDate || dailyRows.length === 0)
       return toast.error("Não há horas extras aprovadas para exportar nesta data.");
     const headers = [
-      "Data",
-      "Chapa",
       "ID",
+      "Matrícula",
       "Nome",
       "Função",
+      "Data",
       "Horário de entrada",
       "Horário de saída",
+      "Lanche",
       "Solicitante",
       "Ordem",
       "Serviço",
       "Justificativa",
     ];
     const values = dailyRows.map((row) => [
-      formatDate(row.overtime_date),
-      row.employee_registration || "",
       row.employee_external_id || "",
+      row.employee_registration || "",
       row.employee_name,
       row.employee_role,
+      formatDate(row.overtime_date),
       row.entry_time || "",
       row.departure_time,
+      row.needs_snack ? "Sim" : "Não",
       row.requester_name || row.requester_email,
       row.order_number || "",
       row.service_description,
@@ -494,13 +496,14 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
     ]);
     const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
     sheet["!cols"] = [
-      { wch: 12 },
       { wch: 14 },
       { wch: 14 },
       { wch: 32 },
       { wch: 24 },
+      { wch: 12 },
       { wch: 18 },
       { wch: 18 },
+      { wch: 10 },
       { wch: 28 },
       { wch: 16 },
       { wch: 48 },
