@@ -29,6 +29,7 @@ import {
   cancelOvertimeRequest,
   upsertEmployees,
   setEmployeeActive,
+  listOvertimeForExport,
 } from "@/lib/overtime.functions";
 
 type OvertimeRow = {
@@ -127,6 +128,16 @@ function OvertimePage() {
   const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
   const canExportOvertime = isMeasurementControl || s.role === "admin" || s.role === "manager";
+  const loadOvertimeForExport = useServerFn(listOvertimeForExport);
+  const exportRequests = useQuery({
+    queryKey: ["overtime-export-rows"],
+    enabled: canExportOvertime,
+    queryFn: async () => {
+      const result = await loadOvertimeForExport({ data: {} });
+      if (!result.ok) throw new Error(result.error);
+      return result.rows as OvertimeRow[];
+    },
+  });
 
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     isMeasurementControl ? "export" : canRequest ? "list" : "queue",
@@ -243,7 +254,7 @@ function OvertimePage() {
         )}
       </div>
 
-      {tab === "export" && canExportOvertime && <ApprovedDailyExport rows={rows} />}
+      {tab === "export" && canExportOvertime && <ApprovedDailyExport rows={exportRequests.data ?? []} />}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
