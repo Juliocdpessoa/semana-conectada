@@ -355,8 +355,7 @@ function AtividadesPage() {
                       />
                     </th>
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
-                    <th className="px-2 py-2 text-left font-semibold">Operação</th>
-                    <th className="px-2 py-2 text-left font-semibold">Suboperação</th>
+                    <th className="px-2 py-2 text-left font-semibold">Operação / Suboperação</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
@@ -376,10 +375,8 @@ function AtividadesPage() {
                         <div className="text-muted-foreground">{r.note_number}</div>
                       </td>
                       <td className="px-2 py-2 align-top font-mono text-[11px]">
-                        {fmtPlan(r.planning_data, "Op") ?? <span className="text-muted-foreground">—</span>}
-                      </td>
-                      <td className="px-2 py-2 align-top font-mono text-[11px]">
-                        {fmtPlan(r.planning_data, "Subop") ?? <span className="text-muted-foreground">—</span>}
+                        <div className="text-foreground">{fmtPlan(r.planning_data, "Op") ?? "—"}</div>
+                        <div className="text-muted-foreground">{fmtPlan(r.planning_data, "Subop") ?? "—"}</div>
                       </td>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-start gap-1.5">
