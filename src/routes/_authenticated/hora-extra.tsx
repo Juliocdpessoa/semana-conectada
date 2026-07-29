@@ -916,7 +916,7 @@ function RequestsTable({
                 </div>
               )}
             </dl>
-            {r.groupMembers && r.groupMembers.length > 1 && (
+            {groupedTeamView && r.groupMembers && r.groupMembers.length > 0 && (
               <div className="mt-3 overflow-hidden rounded-md border border-border">
                 <div className="border-b border-border bg-muted/50 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                   Equipe desta solicitação
@@ -1045,7 +1045,7 @@ function RequestsTable({
                     </div>
                   </td>
                 </tr>
-                {r.groupMembers && r.groupMembers.length > 1 && (
+                {groupedTeamView && r.groupMembers && r.groupMembers.length > 0 && (
                   <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
                     <td
                       colSpan={groupedTeamView ? (showRequester ? 11 : 10) : showRequester ? 14 : 13}
