@@ -126,7 +126,7 @@ function OvertimePage() {
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
-  const canExportOvertime = isMeasurementControl || s.role === "admin";
+  const canExportOvertime = isMeasurementControl || s.role === "admin" || s.role === "manager";
 
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     isMeasurementControl ? "export" : canRequest ? "list" : "queue",
