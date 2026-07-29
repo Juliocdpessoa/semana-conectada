@@ -103,6 +103,7 @@ function PainelPage() {
   const byDay = useMemo(() => {
     const map = new Map<string, { total: number; exec: number; nao: number }>();
     for (const r of rows) {
+      if (r.is_immediate) continue;
       const k = r.scheduled_date || "—";
       const g = map.get(k) ?? { total: 0, exec: 0, nao: 0 };
       g.total++;
@@ -192,7 +193,10 @@ function PainelPage() {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
-        <Panel title="Execução por dia" description="Barras empilhadas executado/não executado">
+        <Panel
+          title="Execução por dia"
+          description="Somente tarefas programadas · barras empilhadas executado/não executado"
+        >
           <div className="space-y-3">
             {byDay.length === 0 ? (
               <Empty />
