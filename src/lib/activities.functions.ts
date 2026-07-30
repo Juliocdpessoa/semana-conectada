@@ -65,7 +65,7 @@ export const updateActivity = createServerFn({ method: "POST" })
         status: data.status,
         justification: data.justification,
         observation: data.observation,
-        planning_data: nextPlanningData,
+        planning_data: nextPlanningData as never,
         reported_by_user_id: userId,
         reported_by_name: prof?.full_name ?? "",
         reported_by_email: prof?.email ?? "",
@@ -175,7 +175,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
         else delete nextPlanningData.__linked_immediate_ids;
         const { error } = await supabase
           .from("activities")
-          .update({ ...reportFields, planning_data: nextPlanningData })
+          .update({ ...reportFields, planning_data: nextPlanningData as never })
           .eq("id", activity.id);
         return error;
       }),
