@@ -68,6 +68,34 @@ const JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 
+function normalizeKey(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pt-BR");
+}
+
+function isNumericOnly(value: string): boolean {
+  return /^[\d\s.,]+$/.test(value.trim());
+}
+
+/** Área/gerência textual (CAT, DEC, TUT…). Ignora números de área operacional. */
+function areaLabel(r: { area: string | null; planning_data: Record<string, unknown> | null }): string | null {
+  const candidates = [fmtPlan(r.planning_data, "Gerência"), r.area];
+  for (const c of candidates) {
+    const v = c?.replace(/\s+/g, " ").trim();
+    if (v && !isNumericOnly(v)) return v;
+  }
+  return null;
+}
+
+/** Centro de trabalho (CenTrab / CENTRO_DE_TRABALHO). */
+function workCenterLabel(r: { planning_data: Record<string, unknown> | null }): string | null {
+  const v =
+    fmtPlan(r.planning_data, "CenTrab") ??
+    fmtPlan(r.planning_data, "CENTRO_DE_TRABALHO") ??
+    fmtPlan(r.planning_data, "Centro de trabalho");
+  const clean = v?.replace(/\s+/g, " ").trim();
+  return clean ? clean : null;
+}
+
 function AtividadesPage() {
   const _ctx = Route.useRouteContext() as { session: SessionInfo };
   void _ctx;
@@ -75,9 +103,11 @@ function AtividadesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
+  const [workCenterFilter, setWorkCenterFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [page, setPage] = useState(0);
