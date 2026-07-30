@@ -120,7 +120,8 @@ function AtividadesPage() {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
-      if (areaFilter && r.area !== areaFilter) return false;
+      if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
+      if (workCenterFilter && normalizeKey(workCenterLabel(r)) !== normalizeKey(workCenterFilter)) return false;
       if (dateFilter && r.scheduled_date !== dateFilter) return false;
       if (originFilter === "immediate" && !r.is_immediate) return false;
       if (originFilter === "programmed" && r.is_immediate) return false;
@@ -136,28 +137,51 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, dateFilter, originFilter]);
+  }, [activities.data, search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
+  // Todos os indicadores usam o conjunto já filtrado (busca, status, área, centro, tipo e data)
   const kpis = useMemo(() => {
-    const rows = activities.data ?? [];
+    const rows = filtered;
     const total = rows.length;
     const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
     const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
     const noReport = rows.filter((r) => r.status === "Sem apontamento").length;
     const immediates = rows.filter((r) => r.is_immediate).length;
-    const percent = total ? Math.round((concluded / total) * 100) : 0;
+    const percent = total > 0 ? Math.round((concluded / total) * 100) : 0;
     return { total, concluded, impeded, noReport, immediates, percent };
+  }, [filtered]);
+
+  const areas = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of activities.data ?? []) {
+      const label = areaLabel(r);
+      if (!label) continue;
+      const key = normalizeKey(label);
+      if (!key || isNumericOnly(label)) continue;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [activities.data]);
 
-  const areas = useMemo(
-    () => Array.from(new Set((activities.data ?? []).map((r) => r.area).filter(Boolean))) as string[],
-    [activities.data],
-  );
+  const workCenters = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of activities.data ?? []) {
+      const label = workCenterLabel(r);
+      if (!label) continue;
+      const key = normalizeKey(label);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [activities.data]);
 
-  const activeFilters = [search, statusFilter, areaFilter, dateFilter, originFilter].filter(Boolean).length;
+  const activeFilters = [search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter].filter(
+    Boolean,
+  ).length;
+
 
   function clearFilters() {
     setSearch("");
