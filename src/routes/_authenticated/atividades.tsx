@@ -217,6 +217,7 @@ function AtividadesPage() {
     setSearch("");
     setStatusFilter("");
     setAreaFilter("");
+    setWorkCenterFilter("");
     setDateFilter("");
     setOriginFilter("");
     setPage(0);
