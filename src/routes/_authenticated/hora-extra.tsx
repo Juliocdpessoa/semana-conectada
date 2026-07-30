@@ -143,6 +143,7 @@ function OvertimePage() {
     isMeasurementControl ? "export" : canRequest ? "list" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
+  const [summaryDate, setSummaryDate] = useState("");
 
   const qc = useQueryClient();
   const requests = useQuery({
@@ -172,14 +173,18 @@ function OvertimePage() {
   });
 
   const rows = requests.data ?? [];
+  const summaryRows = useMemo(
+    () => (summaryDate ? rows.filter((row) => row.overtime_date === summaryDate) : rows),
+    [rows, summaryDate],
+  );
   const kpis = useMemo(() => {
-    const total = rows.length;
-    const pending = rows.filter((row) => row.status === "pending").length;
-    const approved = rows.filter((row) => row.status === "approved").length;
-    const rejected = rows.filter((row) => row.status === "rejected").length;
-    const snacks = rows.filter((row) => row.needs_snack && row.status === "approved").length;
+    const total = summaryRows.length;
+    const pending = summaryRows.filter((row) => row.status === "pending").length;
+    const approved = summaryRows.filter((row) => row.status === "approved").length;
+    const rejected = summaryRows.filter((row) => row.status === "rejected").length;
+    const snacks = summaryRows.filter((row) => row.needs_snack && row.status === "approved").length;
     return { total, pending, approved, rejected, snacks };
-  }, [rows]);
+  }, [summaryRows]);
 
   return (
     <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
@@ -279,6 +284,8 @@ function OvertimePage() {
       {tab === "queue" && isManager && (
         <ApprovalQueue
           rows={rows}
+          selectedDate={summaryDate}
+          onSelectedDateChange={setSummaryDate}
           onDecided={() => {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
@@ -709,10 +716,19 @@ function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: Ove
 }
 
 /* ---------- Approval Queue ---------- */
-function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: () => void }) {
+function ApprovalQueue({
+  rows,
+  selectedDate,
+  onSelectedDateChange,
+  onDecided,
+}: {
+  rows: OvertimeRow[];
+  selectedDate: string;
+  onSelectedDateChange: (date: string) => void;
+  onDecided: () => void;
+}) {
   const [status, setStatus] = useState<"all" | OvertimeRow["status"]>("pending");
   const [q, setQ] = useState("");
-  const [selectedDate, setSelectedDate] = useState("");
   const [decideRow, setDecideRow] = useState<{ row: OvertimeRow; decision: "approved" | "rejected" } | null>(null);
   const groupedRows = useMemo(() => {
     const groups = new Map<string, OvertimeRow[]>();
@@ -796,7 +812,7 @@ function ApprovalQueue({ rows, onDecided }: { rows: OvertimeRow[]; onDecided: ()
           <Field label="Data da hora extra">
             <select
               value={selectedDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
+              onChange={(event) => onSelectedDateChange(event.target.value)}
               className="input-base block min-w-0 w-full max-w-full text-[12px]"
             >
               <option value="">Todas as datas</option>
