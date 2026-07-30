@@ -1113,7 +1113,7 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 const EMPLOYEE_TEMPLATE_HEADERS = ["Chapa", "ID", "Data de Admissão", "Nome", "Função"] as const;
 
 function downloadEmployeeTemplate() {
-  const worksheet = XLSX.utils.aoa_to_sheet([EMPLOYEE_TEMPLATE_HEADERS]);
+  const worksheet = XLSX.utils.aoa_to_sheet([[...EMPLOYEE_TEMPLATE_HEADERS]]);
   worksheet["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 38 }, { wch: 28 }];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores");

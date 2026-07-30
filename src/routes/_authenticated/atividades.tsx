@@ -68,6 +68,34 @@ const JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 
+function normalizeKey(value: string | null | undefined): string {
+  return (value ?? "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pt-BR");
+}
+
+function isNumericOnly(value: string): boolean {
+  return /^[\d\s.,]+$/.test(value.trim());
+}
+
+/** Área/gerência textual (CAT, DEC, TUT…). Ignora números de área operacional. */
+function areaLabel(r: { area: string | null; planning_data: Record<string, unknown> | null }): string | null {
+  const candidates = [fmtPlan(r.planning_data, "Gerência"), r.area];
+  for (const c of candidates) {
+    const v = c?.replace(/\s+/g, " ").trim();
+    if (v && !isNumericOnly(v)) return v;
+  }
+  return null;
+}
+
+/** Centro de trabalho (CenTrab / CENTRO_DE_TRABALHO). */
+function workCenterLabel(r: { planning_data: Record<string, unknown> | null }): string | null {
+  const v =
+    fmtPlan(r.planning_data, "CenTrab") ??
+    fmtPlan(r.planning_data, "CENTRO_DE_TRABALHO") ??
+    fmtPlan(r.planning_data, "Centro de trabalho");
+  const clean = v?.replace(/\s+/g, " ").trim();
+  return clean ? clean : null;
+}
+
 function AtividadesPage() {
   const _ctx = Route.useRouteContext() as { session: SessionInfo };
   void _ctx;
@@ -75,9 +103,11 @@ function AtividadesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
+  const [workCenterFilter, setWorkCenterFilter] = useState<string>("");
   const [dateFilter, setDateFilter] = useState<string>("");
   const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [page, setPage] = useState(0);
@@ -120,7 +150,8 @@ function AtividadesPage() {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
-      if (areaFilter && r.area !== areaFilter) return false;
+      if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
+      if (workCenterFilter && normalizeKey(workCenterLabel(r)) !== normalizeKey(workCenterFilter)) return false;
       if (dateFilter && r.scheduled_date !== dateFilter) return false;
       if (originFilter === "immediate" && !r.is_immediate) return false;
       if (originFilter === "programmed" && r.is_immediate) return false;
@@ -136,33 +167,57 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, dateFilter, originFilter]);
+  }, [activities.data, search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
 
+  // Todos os indicadores usam o conjunto já filtrado (busca, status, área, centro, tipo e data)
   const kpis = useMemo(() => {
-    const rows = activities.data ?? [];
+    const rows = filtered;
     const total = rows.length;
     const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
     const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
     const noReport = rows.filter((r) => r.status === "Sem apontamento").length;
     const immediates = rows.filter((r) => r.is_immediate).length;
-    const percent = total ? Math.round((concluded / total) * 100) : 0;
+    const percent = total > 0 ? Math.round((concluded / total) * 100) : 0;
     return { total, concluded, impeded, noReport, immediates, percent };
+  }, [filtered]);
+
+  const areas = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of activities.data ?? []) {
+      const label = areaLabel(r);
+      if (!label) continue;
+      const key = normalizeKey(label);
+      if (!key || isNumericOnly(label)) continue;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [activities.data]);
 
-  const areas = useMemo(
-    () => Array.from(new Set((activities.data ?? []).map((r) => r.area).filter(Boolean))) as string[],
-    [activities.data],
-  );
+  const workCenters = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of activities.data ?? []) {
+      const label = workCenterLabel(r);
+      if (!label) continue;
+      const key = normalizeKey(label);
+      if (!key) continue;
+      if (!map.has(key)) map.set(key, label);
+    }
+    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }, [activities.data]);
 
-  const activeFilters = [search, statusFilter, areaFilter, dateFilter, originFilter].filter(Boolean).length;
+  const activeFilters = [search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter].filter(
+    Boolean,
+  ).length;
+
 
   function clearFilters() {
     setSearch("");
     setStatusFilter("");
     setAreaFilter("");
+    setWorkCenterFilter("");
     setDateFilter("");
     setOriginFilter("");
     setPage(0);
@@ -281,6 +336,22 @@ function AtividadesPage() {
           {areas.map((a) => (
             <option key={a} value={a}>
               {a}
+            </option>
+          ))}
+        </select>
+        <select
+          value={workCenterFilter}
+          onChange={(e) => {
+            setWorkCenterFilter(e.target.value);
+            setPage(0);
+          }}
+          className="input-base w-full py-2 text-xs sm:w-auto"
+          aria-label="Filtrar por centro de trabalho"
+        >
+          <option value="">Todos os centros de trabalho</option>
+          {workCenters.map((c) => (
+            <option key={c} value={c}>
+              {c}
             </option>
           ))}
         </select>
