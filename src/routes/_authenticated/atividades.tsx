@@ -340,6 +340,22 @@ function AtividadesPage() {
           ))}
         </select>
         <select
+          value={workCenterFilter}
+          onChange={(e) => {
+            setWorkCenterFilter(e.target.value);
+            setPage(0);
+          }}
+          className="input-base w-full py-2 text-xs sm:w-auto"
+          aria-label="Filtrar por centro de trabalho"
+        >
+          <option value="">Todos os centros de trabalho</option>
+          {workCenters.map((c) => (
+            <option key={c} value={c}>
+              {c}
+            </option>
+          ))}
+        </select>
+        <select
           value={originFilter}
           onChange={(e) => {
             setOriginFilter(e.target.value as "" | "programmed" | "immediate");
