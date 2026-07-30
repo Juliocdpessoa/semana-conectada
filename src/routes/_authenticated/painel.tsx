@@ -455,20 +455,25 @@ function reportedIsoDay(reportedAt: string | null): string | null {
   return isoDay(d);
 }
 
+/** HH da tarefa = valor direto da coluna TRAB (uma única vez por tarefa, sem multiplicar por nada). */
 function hoursOf(pd: Record<string, unknown> | null): number {
   if (!pd) return 0;
-  const raw = (pd as Record<string, unknown>)["Dur n"] ?? (pd as Record<string, unknown>)["Trab"];
-  const normalized =
-    typeof raw === "string"
-      ? raw
-          .trim()
-          .replace(/\s*h(?:oras?)?$/i, "")
-          .replace(/\./g, "")
-          .replace(",", ".")
-      : raw;
-  const n = typeof normalized === "number" ? normalized : typeof normalized === "string" ? Number(normalized) : NaN;
+  const src = pd as Record<string, unknown>;
+  const raw = src["Trab"] ?? src["TRAB"] ?? src["trab"];
+  if (raw === null || raw === undefined || raw === "") return 0;
+  let n: number;
+  if (typeof raw === "number") {
+    n = raw;
+  } else if (typeof raw === "string") {
+    let s = raw.trim().replace(/\s*h(?:oras?)?$/i, "");
+    if (s.includes(",")) s = s.replace(/\./g, "").replace(",", ".");
+    n = Number(s);
+  } else {
+    n = NaN;
+  }
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
+
 
 function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDate: string; endDate: string }) {
   const [metric, setMetric] = useState<"count" | "hours">("count");
