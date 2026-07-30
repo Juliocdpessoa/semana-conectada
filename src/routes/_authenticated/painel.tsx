@@ -690,7 +690,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
           {hoursDisabled && metric === "hours" && (
             <p className="mb-2 text-[11px] text-muted-foreground">
-              Modo "Horas planejadas" indisponível: nenhum registro possui horas válidas (Dur n/Trab).
+              Modo "Horas planejadas" indisponível: nenhum registro possui HH válido na coluna TRAB.
             </p>
           )}
 
