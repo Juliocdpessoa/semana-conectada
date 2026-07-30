@@ -497,8 +497,11 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
     let total = 0;
 
     for (const r of rows) {
+      // Em HH a curva considera apenas tarefas programadas (imediatas ficam fora)
+      if (effectiveMetric === "hours" && r.is_immediate) continue;
       const unit = unitOf(r);
       if (unit <= 0) continue;
+
 
       const reportedIso = reportedIsoDay(r.reported_at);
       const reportedInWeek = reportedIso && daySet.has(reportedIso) ? reportedIso : null;
