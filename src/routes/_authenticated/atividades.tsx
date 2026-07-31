@@ -172,7 +172,7 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter]);
+  }, [activities.data, search, statusFilter, areaFilter, workCenterKeys, dateFilter, originFilter]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
