@@ -327,7 +327,17 @@ function AtividadesPage() {
         <select
           value={areaFilter}
           onChange={(e) => {
-            setAreaFilter(e.target.value);
+            const next = e.target.value;
+            setAreaFilter(next);
+            setWorkCenterFilters((prev) => {
+              if (!next) return prev;
+              const allowed = new Set(
+                (activities.data ?? [])
+                  .filter((r) => normalizeKey(areaLabel(r)) === normalizeKey(next))
+                  .map((r) => normalizeKey(workCenterLabel(r))),
+              );
+              return prev.filter((c) => allowed.has(normalizeKey(c)));
+            });
             setPage(0);
           }}
           className="input-base w-auto py-2 text-xs"
@@ -339,22 +349,15 @@ function AtividadesPage() {
             </option>
           ))}
         </select>
-        <select
-          value={workCenterFilter}
-          onChange={(e) => {
-            setWorkCenterFilter(e.target.value);
+        <WorkCenterMultiSelect
+          options={workCenters}
+          selected={workCenterFilters}
+          onChange={(next) => {
+            setWorkCenterFilters(next);
             setPage(0);
           }}
-          className="input-base w-full py-2 text-xs sm:w-auto"
-          aria-label="Filtrar por centro de trabalho"
-        >
-          <option value="">Todos os centros de trabalho</option>
-          {workCenters.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        />
+
         <select
           value={originFilter}
           onChange={(e) => {
