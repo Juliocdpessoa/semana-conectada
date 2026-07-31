@@ -103,7 +103,7 @@ function AtividadesPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
-  const [workCenterFilter, setWorkCenterFilter] = useState<string>("");
+  const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<string>("");
   const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
