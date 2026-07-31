@@ -145,6 +145,11 @@ function AtividadesPage() {
     },
   });
 
+  const workCenterKeys = useMemo(
+    () => new Set(workCenterFilters.map((c) => normalizeKey(c))),
+    [workCenterFilters],
+  );
+
   const filtered = useMemo(() => {
     const rows = activities.data ?? [];
     const q = search.trim().toLowerCase();
