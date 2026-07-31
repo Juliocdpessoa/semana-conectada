@@ -201,9 +201,12 @@ function AtividadesPage() {
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [activities.data]);
 
+  // Centros de trabalho dependentes da área selecionada
   const workCenters = useMemo(() => {
     const map = new Map<string, string>();
+    const areaKey = normalizeKey(areaFilter);
     for (const r of activities.data ?? []) {
+      if (areaKey && normalizeKey(areaLabel(r)) !== areaKey) continue;
       const label = workCenterLabel(r);
       if (!label) continue;
       const key = normalizeKey(label);
@@ -211,18 +214,22 @@ function AtividadesPage() {
       if (!map.has(key)) map.set(key, label);
     }
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [activities.data]);
+  }, [activities.data, areaFilter]);
 
-  const activeFilters = [search, statusFilter, areaFilter, workCenterFilter, dateFilter, originFilter].filter(
-    Boolean,
-  ).length;
-
+  const activeFilters = [
+    search,
+    statusFilter,
+    areaFilter,
+    workCenterFilters.length > 0 ? "1" : "",
+    dateFilter,
+    originFilter,
+  ].filter(Boolean).length;
 
   function clearFilters() {
     setSearch("");
     setStatusFilter("");
     setAreaFilter("");
-    setWorkCenterFilter("");
+    setWorkCenterFilters([]);
     setDateFilter("");
     setOriginFilter("");
     setPage(0);
