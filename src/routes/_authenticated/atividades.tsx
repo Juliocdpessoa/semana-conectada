@@ -151,7 +151,7 @@ function AtividadesPage() {
     return rows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
       if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
-      if (workCenterFilter && normalizeKey(workCenterLabel(r)) !== normalizeKey(workCenterFilter)) return false;
+      if (workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(r)))) return false;
       if (dateFilter && r.scheduled_date !== dateFilter) return false;
       if (originFilter === "immediate" && !r.is_immediate) return false;
       if (originFilter === "programmed" && r.is_immediate) return false;
