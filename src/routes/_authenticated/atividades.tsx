@@ -96,6 +96,114 @@ function workCenterLabel(r: { planning_data: Record<string, unknown> | null }): 
   return clean ? clean : null;
 }
 
+/** Seleção múltipla de centros de trabalho (mobile-friendly, acessível). */
+function WorkCenterMultiSelect({
+  options,
+  selected,
+  onChange,
+}: {
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+
+  const visible = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+  }, [options, query]);
+
+  const label =
+    selected.length === 0
+      ? "Todos os centros de trabalho"
+      : selected.length === 1
+        ? selected[0]
+        : `${selected.length} centros selecionados`;
+
+  function toggle(option: string) {
+    const key = normalizeKey(option);
+    const exists = selected.some((s) => normalizeKey(s) === key);
+    onChange(exists ? selected.filter((s) => normalizeKey(s) !== key) : [...selected, option]);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label="Filtrar por centro de trabalho"
+          className="input-base flex w-full items-center justify-between gap-2 py-2 text-left text-xs sm:w-auto sm:min-w-[190px]"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
+        align="start"
+        className="w-[min(20rem,calc(100vw-2rem))] p-0"
+        onOpenAutoFocus={(e) => e.preventDefault()}
+      >
+        {options.length > 8 && (
+          <div className="border-b p-2">
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Buscar centro..."
+              className="input-base w-full py-1.5 text-xs"
+            />
+          </div>
+        )}
+        <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
+          {visible.length === 0 && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">Nenhum centro encontrado.</p>
+          )}
+          {visible.map((o) => {
+            const checked = selected.some((s) => normalizeKey(s) === normalizeKey(o));
+            return (
+              <label
+                key={o}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-2 text-xs hover:bg-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(o)}
+                  className="h-4 w-4 shrink-0 accent-primary"
+                />
+                <span className="truncate">{o}</span>
+              </label>
+            );
+          })}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t p-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              className="btn-ghost py-1 text-[11px]"
+              onClick={() => {
+                const merged = [...selected];
+                for (const o of visible) {
+                  if (!merged.some((s) => normalizeKey(s) === normalizeKey(o))) merged.push(o);
+                }
+                onChange(merged);
+              }}
+            >
+              Selecionar todos os visíveis
+            </button>
+            <button type="button" className="btn-ghost py-1 text-[11px]" onClick={() => onChange([])}>
+              Limpar
+            </button>
+          </div>
+          <button type="button" className="btn-primary py-1 text-[11px]" onClick={() => setOpen(false)}>
+            Aplicar
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 function AtividadesPage() {
   const _ctx = Route.useRouteContext() as { session: SessionInfo };
   void _ctx;
