@@ -627,6 +627,19 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
             </select>
           </Field>
         </div>
+        <div className="w-full min-w-0 sm:max-w-[200px]">
+          <Field label="Transporte">
+            <select
+              value={transportFilter}
+              onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            >
+              <option value="all">Todos</option>
+              <option value="yes">Com transporte</option>
+              <option value="no">Sem transporte</option>
+            </select>
+          </Field>
+        </div>
         <button
           type="button"
           onClick={exportDailyExcel}
