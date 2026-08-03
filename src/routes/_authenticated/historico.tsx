@@ -8,7 +8,7 @@ import { History } from "lucide-react";
 export const Route = createFileRoute("/_authenticated/historico")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "planning" && s.role !== "admin") throw redirect({ to: "/atividades" });
+    if (!s.roles.some((role) => role === "planning" || role === "admin")) throw redirect({ to: "/atividades" });
   },
   component: HistoricoPage,
 });
@@ -16,7 +16,8 @@ export const Route = createFileRoute("/_authenticated/historico")({
 function HistoricoPage() {
   const weeks = useQuery({
     queryKey: ["all-weeks"],
-    queryFn: async () => (await supabase.from("weeks").select("*").order("start_date", { ascending: false })).data ?? [],
+    queryFn: async () =>
+      (await supabase.from("weeks").select("*").order("start_date", { ascending: false })).data ?? [],
   });
   const history = useQuery({
     queryKey: ["history"],
@@ -43,7 +44,8 @@ function HistoricoPage() {
           ...h,
           order_number: a.order_number ?? null,
           operacao: pd["Operação"] ?? pd["Operacao"] ?? pd["OPERAÇÃO"] ?? null,
-          sub_operacao: pd["Sub operação"] ?? pd["Sub Operação"] ?? pd["Subop"] ?? pd["SUB OPERAÇÃO"] ?? pd["Sub operacao"] ?? null,
+          sub_operacao:
+            pd["Sub operação"] ?? pd["Sub Operação"] ?? pd["Subop"] ?? pd["SUB OPERAÇÃO"] ?? pd["Sub operacao"] ?? null,
         };
       });
     },
@@ -51,7 +53,11 @@ function HistoricoPage() {
 
   return (
     <main className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6">
-      <PageHeader eyebrow="Histórico" title="Semanas e auditoria" description="Registro de semanas importadas e últimas alterações de apontamento." />
+      <PageHeader
+        eyebrow="Histórico"
+        title="Semanas e auditoria"
+        description="Registro de semanas importadas e últimas alterações de apontamento."
+      />
 
       <div className="grid min-w-0 gap-4">
         <Panel title="Semanas" description={`${weeks.data?.length ?? 0} registros`} padded={false}>
@@ -81,7 +87,9 @@ function HistoricoPage() {
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState title="Nenhuma semana registrada" /></div>
+            <div className="p-4">
+              <EmptyState title="Nenhuma semana registrada" />
+            </div>
           )}
         </Panel>
 
@@ -104,7 +112,9 @@ function HistoricoPage() {
                 <tbody className="divide-y divide-border/60">
                   {history.data.map((h: any) => (
                     <tr key={h.id} className="row-zebra align-top">
-                      <td className="px-3 py-2 tabular text-[11px]">{new Date(h.changed_at).toLocaleString("pt-BR")}</td>
+                      <td className="px-3 py-2 tabular text-[11px]">
+                        {new Date(h.changed_at).toLocaleString("pt-BR")}
+                      </td>
                       <td className="px-3 py-2 font-mono text-[11px]">{h.order_number ?? "—"}</td>
                       <td className="px-3 py-2 text-[11px]">{h.operacao ?? "—"}</td>
                       <td className="px-3 py-2 text-[11px]">{h.sub_operacao ?? "—"}</td>
@@ -113,13 +123,19 @@ function HistoricoPage() {
                         <div className="text-muted-foreground">{h.changed_by_email}</div>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
+                        <span className="status-pill border-border bg-muted text-muted-foreground">
+                          {h.change_source}
+                        </span>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">{JSON.stringify(h.previous_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-muted-foreground">
+                          {JSON.stringify(h.previous_values, null, 0)}
+                        </pre>
                       </td>
                       <td className="px-3 py-2 text-[11px]">
-                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">{JSON.stringify(h.new_values, null, 0)}</pre>
+                        <pre className="max-w-[14rem] sm:max-w-[24rem] whitespace-pre-wrap break-all font-mono text-[10px] text-foreground">
+                          {JSON.stringify(h.new_values, null, 0)}
+                        </pre>
                       </td>
                     </tr>
                   ))}
@@ -127,7 +143,13 @@ function HistoricoPage() {
               </table>
             </div>
           ) : (
-            <div className="p-4"><EmptyState icon={<History className="h-4 w-4" />} title="Nenhuma alteração registrada" description="Assim que apontamentos forem feitos, o histórico aparecerá aqui." /></div>
+            <div className="p-4">
+              <EmptyState
+                icon={<History className="h-4 w-4" />}
+                title="Nenhuma alteração registrada"
+                description="Assim que apontamentos forem feitos, o histórico aparecerá aqui."
+              />
+            </div>
           )}
         </Panel>
       </div>
