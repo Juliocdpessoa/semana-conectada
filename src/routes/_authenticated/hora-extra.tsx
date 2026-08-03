@@ -533,10 +533,17 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
     [exportableRows],
   );
   const [selectedDate, setSelectedDate] = useState("");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">("all");
   const effectiveDate = selectedDate || availableDates[0] || "";
   const dailyRows = useMemo(
-    () => exportableRows.filter((row) => row.overtime_date === effectiveDate),
-    [exportableRows, effectiveDate],
+    () =>
+      exportableRows.filter(
+        (row) =>
+          row.overtime_date === effectiveDate &&
+          (transportFilter === "all" ||
+            (transportFilter === "yes" ? row.needs_transport : !row.needs_transport)),
+      ),
+    [exportableRows, effectiveDate, transportFilter],
   );
 
   function exportDailyExcel() {
