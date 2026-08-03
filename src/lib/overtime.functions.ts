@@ -61,7 +61,7 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
     if (info.approvalStatus !== "approved") {
       return { ok: false as const, error: "Usuário não aprovado." };
     }
-    if (!(info.isAdmin || info.isManager || info.isMeasurementControl)) {
+    if (!(info.isAdmin || info.isManager || info.isMeasurementControl || info.isLogistics)) {
       return { ok: false as const, error: "Usuário sem permissão para exportar horas extras." };
     }
 
