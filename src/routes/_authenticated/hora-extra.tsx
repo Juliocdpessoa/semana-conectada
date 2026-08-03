@@ -707,10 +707,8 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                     "Solicitante",
                     "Ordem",
                     "Serviço",
+                    "Transporte",
                     "Justificativa",
-                  ].map((header) => (
-                    <th key={header} className="px-3 py-2 text-left font-semibold">
-                      {header}
                     </th>
                   ))}
                 </tr>
