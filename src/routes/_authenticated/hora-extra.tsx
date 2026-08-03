@@ -216,7 +216,7 @@ function OvertimePage() {
         title="Hora Extra"
         description={
           isLogistics
-            ? "Transportes de colaboradores em horas extras aprovadas."
+            ? "Transportes de colaboradores em horas extras."
             : "Solicitação e aprovação de horas extras da equipe."
         }
         actions={
@@ -342,7 +342,6 @@ function OvertimePage() {
       )}
 
       {tab === "employees" && isManager && <EmployeeManagement />}
-
 
       {showNew && canRequest && (
         <NewRequestModal
@@ -540,8 +539,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       exportableRows.filter(
         (row) =>
           row.overtime_date === effectiveDate &&
-          (transportFilter === "all" ||
-            (transportFilter === "yes" ? row.needs_transport : !row.needs_transport)),
+          (transportFilter === "all" || (transportFilter === "yes" ? row.needs_transport : !row.needs_transport)),
       ),
     [exportableRows, effectiveDate, transportFilter],
   );
@@ -761,10 +759,7 @@ function TransportView({
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(defaultOnlyTransport ? "yes" : "all");
   const effectiveDate = selectedDate || availableDates[0] || "";
 
-  const dateRows = useMemo(
-    () => rows.filter((row) => row.overtime_date === effectiveDate),
-    [rows, effectiveDate],
-  );
+  const dateRows = useMemo(() => rows.filter((row) => row.overtime_date === effectiveDate), [rows, effectiveDate]);
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return dateRows.filter((row) => {
@@ -795,6 +790,7 @@ function TransportView({
       "Serviço",
       "Solicitante",
       "Precisa de transporte",
+      "Status",
     ];
     const values = filtered.map((row) => [
       formatDate(row.overtime_date),
@@ -808,6 +804,7 @@ function TransportView({
       row.service_description,
       row.requester_name || row.requester_email,
       row.needs_transport ? "Sim" : "Não",
+      formatOvertimeStatus(row.status),
     ]);
     const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
     sheet["!cols"] = [
@@ -822,6 +819,7 @@ function TransportView({
       { wch: 48 },
       { wch: 28 },
       { wch: 20 },
+      { wch: 16 },
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
@@ -831,8 +829,8 @@ function TransportView({
 
   return (
     <Panel
-      title="Transportes de horas extras aprovadas"
-      description="Uma linha por colaborador. Apenas solicitações aprovadas."
+      title="Transportes de horas extras"
+      description="Uma linha por colaborador. Todos os status, exceto cancelados."
       padded={false}
     >
       <div className="grid gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
@@ -880,8 +878,8 @@ function TransportView({
       </div>
 
       <div className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
-        {effectiveDate ? formatDate(effectiveDate) : "—"} · <b className="text-foreground">{totalDay}</b> colaborador(es)
-        aprovado(s) · <b className="text-foreground">{transportDay}</b> precisam de transporte
+        {effectiveDate ? formatDate(effectiveDate) : "—"} · <b className="text-foreground">{totalDay}</b>{" "}
+        colaborador(es) registrado(s) · <b className="text-foreground">{transportDay}</b> precisam de transporte
       </div>
 
       {loading ? (
@@ -919,6 +917,9 @@ function TransportView({
                 <div className="mt-1">
                   <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
                 </div>
+                <div className="mt-1">
+                  <b>Status:</b> {formatOvertimeStatus(row.status)}
+                </div>
               </article>
             ))}
           </div>
@@ -938,6 +939,7 @@ function TransportView({
                     "Serviço",
                     "Solicitante",
                     "Transporte",
+                    "Status",
                   ].map((header) => (
                     <th key={header} className="px-3 py-2 text-left font-semibold">
                       {header}
@@ -959,6 +961,7 @@ function TransportView({
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
                     <td className="px-3 py-2 font-medium">{row.needs_transport ? "Sim" : "Não"}</td>
+                    <td className="px-3 py-2">{formatOvertimeStatus(row.status)}</td>
                   </tr>
                 ))}
               </tbody>
