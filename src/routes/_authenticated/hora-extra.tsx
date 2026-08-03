@@ -134,8 +134,11 @@ function OvertimePage() {
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
+  const isLogistics = s.role === "logistics";
   const canExportOvertime = isMeasurementControl || s.role === "admin" || s.role === "manager";
+  const canSeeTransport = isLogistics || isManager;
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
+  const loadTransportRows = useServerFn(listApprovedTransportRows);
   const exportRequests = useQuery({
     queryKey: ["overtime-export-rows"],
     enabled: canExportOvertime,
@@ -145,9 +148,18 @@ function OvertimePage() {
       return result.rows as OvertimeRow[];
     },
   });
+  const transportRequests = useQuery({
+    queryKey: ["overtime-transport-rows"],
+    enabled: canSeeTransport,
+    queryFn: async () => {
+      const result = await loadTransportRows({ data: {} });
+      if (!result.ok) throw new Error(result.error);
+      return result.rows as OvertimeRow[];
+    },
+  });
 
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
-    isMeasurementControl ? "export" : canRequest ? "list" : "queue",
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export" | "transport">(
+    isLogistics ? "transport" : isMeasurementControl ? "export" : canRequest ? "list" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
@@ -155,6 +167,7 @@ function OvertimePage() {
   const qc = useQueryClient();
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
+    enabled: !isLogistics,
     queryFn: async () => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
