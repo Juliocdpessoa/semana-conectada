@@ -1252,6 +1252,9 @@ function RequestsTable({
                         </div>
                         <div className="break-words font-semibold">{member.employee_name}</div>
                         <div className="mt-0.5 break-words text-muted-foreground">{member.employee_role}</div>
+                        <div className="mt-0.5 text-muted-foreground">
+                          Transporte: {member.needs_transport ? "Sim" : "Não"}
+                        </div>
                       </div>
                     </div>
                   ))}
