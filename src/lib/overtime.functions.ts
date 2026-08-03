@@ -13,11 +13,43 @@ async function loadRoleAndProfile(supabase: any, userId: string) {
     isManager: roles.includes("manager"),
     isLeader: roles.includes("leader"),
     isMeasurementControl: roles.includes("measurement_control"),
+    isLogistics: roles.includes("logistics"),
     fullName: profRes.data?.full_name ?? "",
     email: profRes.data?.email ?? "",
     approvalStatus: profRes.data?.approval_status ?? "pending",
   };
 }
+
+export const listApprovedTransportRows = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({}).parse(data))
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    if (!(info.isAdmin || info.isManager || info.isLogistics)) {
+      return { ok: false as const, error: "Usuário sem permissão para visualizar transportes." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const rows: any[] = [];
+    const pageSize = 1000;
+    for (let from = 0; ; from += pageSize) {
+      const { data, error } = await db
+        .from("overtime_requests")
+        .select("*")
+        .eq("status", "approved")
+        .order("overtime_date", { ascending: false })
+        .order("employee_name", { ascending: true })
+        .range(from, from + pageSize - 1);
+      if (error) return { ok: false as const, error: error.message };
+      if (!data?.length) break;
+      rows.push(...data);
+      if (data.length < pageSize) break;
+    }
+    return { ok: true as const, rows };
+  });
+
 
 const exportListSchema = z.object({});
 
@@ -67,6 +99,8 @@ function isValidDate(value: string) {
 const createSchema = z
   .object({
     employee_ids: z.array(z.string().uuid()).min(1, "Selecione ao menos um colaborador").max(100),
+    transport_employee_ids: z.array(z.string().uuid()).max(100).optional(),
+
     activity_id: z.string().uuid().nullable().optional(),
     week_id: z.string().uuid().nullable().optional(),
     order_number: z.string().trim().max(64).nullable().optional(),
@@ -138,7 +172,9 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     }
 
     const batchId = crypto.randomUUID();
+    const transportSet = new Set(data.transport_employee_ids ?? []);
     const rows = employees.map((employee: any) => ({
+      needs_transport: transportSet.has(employee.id),
       batch_id: batchId,
       requester_user_id: userId,
       requester_name: info.fullName,

@@ -9,7 +9,7 @@ export type SessionInfo = {
   userId: string;
   email: string;
   fullName: string;
-  role: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "viewer" | null;
+  role: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer" | null;
   approvalStatus: "pending" | "approved" | "blocked";
 };
 
@@ -21,7 +21,15 @@ async function loadSession(): Promise<SessionInfo | null> {
     supabase.from("user_roles").select("role").eq("user_id", data.user.id),
   ]);
   const rolesRows = roles.data ?? [];
-  const priority: SessionInfo["role"][] = ["admin", "manager", "planning", "leader", "measurement_control", "viewer"];
+  const priority: SessionInfo["role"][] = [
+    "admin",
+    "manager",
+    "planning",
+    "leader",
+    "measurement_control",
+    "logistics",
+    "viewer",
+  ];
   const role = priority.find((r) => rolesRows.some((row) => row.role === r)) ?? null;
   return {
     userId: data.user.id,
@@ -65,22 +73,25 @@ function AuthedLayout() {
   const isAdmin = s.role === "admin";
   const isManager = s.role === "manager" || s.role === "admin";
   const isMeasurementControl = s.role === "measurement_control";
-  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin" || isMeasurementControl;
+  const isLogistics = s.role === "logistics";
+  const overtimeOnly = isMeasurementControl || isLogistics;
+  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin" || overtimeOnly;
 
   useEffect(() => {
-    if (isMeasurementControl && pathname !== "/hora-extra") {
+    if (overtimeOnly && pathname !== "/hora-extra") {
       router.navigate({ to: "/hora-extra", replace: true });
     }
-  }, [isMeasurementControl, pathname, router]);
+  }, [overtimeOnly, pathname, router]);
 
   const nav = [
-    { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !isMeasurementControl },
-    { to: "/painel", label: "Painel", icon: BarChart3, show: !isMeasurementControl },
+    { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
+    { to: "/painel", label: "Painel", icon: BarChart3, show: !overtimeOnly },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
+
   void isManager;
 
   async function signOut() {
@@ -93,7 +104,7 @@ function AuthedLayout() {
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-primary-foreground shadow-sm">
         <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-2 sm:px-6">
           {/* Marca */}
-          <Link to={isMeasurementControl ? "/hora-extra" : "/atividades"} className="flex items-center gap-2.5">
+          <Link to={overtimeOnly ? "/hora-extra" : "/atividades"} className="flex items-center gap-2.5">
             <BrandLogo className="h-8 w-auto brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]" />
             <div className="hidden leading-tight sm:block">
               <div className="text-[13px] font-semibold">NEXO</div>
@@ -209,6 +220,8 @@ function roleLabel(role: SessionInfo["role"]) {
       return "Líder";
     case "measurement_control":
       return "Medição e Controle";
+    case "logistics":
+      return "Logística";
     case "viewer":
       return "Consulta";
     default:

@@ -277,6 +277,7 @@ export type Database = {
           justification: string
           manager_comment: string | null
           needs_snack: boolean
+          needs_transport: boolean
           order_number: string | null
           overtime_date: string
           request_number: number
@@ -308,6 +309,7 @@ export type Database = {
           justification: string
           manager_comment?: string | null
           needs_snack?: boolean
+          needs_transport?: boolean
           order_number?: string | null
           overtime_date: string
           request_number?: number
@@ -339,6 +341,7 @@ export type Database = {
           justification?: string
           manager_comment?: string | null
           needs_snack?: boolean
+          needs_transport?: boolean
           order_number?: string | null
           overtime_date?: string
           request_number?: number
@@ -583,6 +586,7 @@ export type Database = {
         | "viewer"
         | "manager"
         | "measurement_control"
+        | "logistics"
       approval_status: "pending" | "approved" | "blocked"
       change_source: "individual" | "bulk" | "import" | "sync"
       sync_status: "synced" | "pending" | "error"
@@ -720,6 +724,7 @@ export const Constants = {
         "viewer",
         "manager",
         "measurement_control",
+        "logistics",
       ],
       approval_status: ["pending", "approved", "blocked"],
       change_source: ["individual", "bulk", "import", "sync"],

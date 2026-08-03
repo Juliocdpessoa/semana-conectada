@@ -16,6 +16,7 @@ import {
   Upload,
   Download,
   UserCheck,
+  Bus,
   UserX,
 } from "lucide-react";
 import * as XLSX from "xlsx";
@@ -30,6 +31,7 @@ import {
   upsertEmployees,
   setEmployeeActive,
   listOvertimeForExport,
+  listApprovedTransportRows,
 } from "@/lib/overtime.functions";
 
 type OvertimeRow = {
@@ -51,6 +53,7 @@ type OvertimeRow = {
   entry_time: string | null;
   departure_time: string;
   needs_snack: boolean;
+  needs_transport: boolean;
   justification: string;
   status: "pending" | "approved" | "rejected" | "cancelled";
   manager_comment: string | null;
@@ -114,7 +117,13 @@ function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "leader" && s.role !== "manager" && s.role !== "admin" && s.role !== "measurement_control") {
+    if (
+      s.role !== "leader" &&
+      s.role !== "manager" &&
+      s.role !== "admin" &&
+      s.role !== "measurement_control" &&
+      s.role !== "logistics"
+    ) {
       throw redirect({ to: "/atividades" });
     }
   },
@@ -127,8 +136,11 @@ function OvertimePage() {
   const isManager = s.role === "manager" || s.role === "admin";
   const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
   const isMeasurementControl = s.role === "measurement_control";
+  const isLogistics = s.role === "logistics";
   const canExportOvertime = isMeasurementControl || s.role === "admin" || s.role === "manager";
+  const canSeeTransport = isLogistics || isManager;
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
+  const loadTransportRows = useServerFn(listApprovedTransportRows);
   const exportRequests = useQuery({
     queryKey: ["overtime-export-rows"],
     enabled: canExportOvertime,
@@ -138,9 +150,18 @@ function OvertimePage() {
       return result.rows as OvertimeRow[];
     },
   });
+  const transportRequests = useQuery({
+    queryKey: ["overtime-transport-rows"],
+    enabled: canSeeTransport,
+    queryFn: async () => {
+      const result = await loadTransportRows({ data: {} });
+      if (!result.ok) throw new Error(result.error);
+      return result.rows as OvertimeRow[];
+    },
+  });
 
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
-    isMeasurementControl ? "export" : canRequest ? "list" : "queue",
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export" | "transport">(
+    isLogistics ? "transport" : isMeasurementControl ? "export" : canRequest ? "list" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
@@ -148,6 +169,7 @@ function OvertimePage() {
   const qc = useQueryClient();
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
+    enabled: !isLogistics,
     queryFn: async () => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
@@ -183,7 +205,8 @@ function OvertimePage() {
     const approved = summaryRows.filter((row) => row.status === "approved").length;
     const rejected = summaryRows.filter((row) => row.status === "rejected").length;
     const snacks = summaryRows.filter((row) => row.needs_snack && row.status === "approved").length;
-    return { total, pending, approved, rejected, snacks };
+    const transports = summaryRows.filter((row) => row.needs_transport && row.status === "approved").length;
+    return { total, pending, approved, rejected, snacks, transports };
   }, [summaryRows]);
 
   return (
@@ -191,7 +214,11 @@ function OvertimePage() {
       <PageHeader
         eyebrow="Operação"
         title="Hora Extra"
-        description="Solicitação e aprovação de horas extras da equipe."
+        description={
+          isLogistics
+            ? "Transportes de colaboradores em horas extras aprovadas."
+            : "Solicitação e aprovação de horas extras da equipe."
+        }
         actions={
           canRequest && (
             <button onClick={() => setShowNew(true)} className="btn-primary text-[12px]">
@@ -201,30 +228,36 @@ function OvertimePage() {
         }
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-        <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
-        <KpiCard
-          label="Aprovadas"
-          value={kpis.approved}
-          tone="success"
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-        />
-        <KpiCard
-          label="Reprovadas"
-          value={kpis.rejected}
-          tone="destructive"
-          icon={<XCircle className="h-3.5 w-3.5" />}
-        />
-        <div className="col-span-2 sm:col-span-1">
+      {!isLogistics && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+          <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Aprovadas"
+            value={kpis.approved}
+            tone="success"
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          />
+          <KpiCard
+            label="Reprovadas"
+            value={kpis.rejected}
+            tone="destructive"
+            icon={<XCircle className="h-3.5 w-3.5" />}
+          />
           <KpiCard
             label="Lanches aprovados"
             value={kpis.snacks}
             tone="primary"
             icon={<Utensils className="h-3.5 w-3.5" />}
           />
+          <KpiCard
+            label="Transportes aprovados"
+            value={kpis.transports}
+            tone="primary"
+            icon={<Bus className="h-3.5 w-3.5" />}
+          />
         </div>
-      </div>
+      )}
 
       <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
         {canExportOvertime && (
@@ -237,9 +270,14 @@ function OvertimePage() {
             Exportação semanal
           </TabBtn>
         )}
+        {canSeeTransport && (
+          <TabBtn active={tab === "transport"} onClick={() => setTab("transport")}>
+            Transportes
+          </TabBtn>
+        )}
         {canRequest && (
           <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
-            {isManager ? "Minhas solicitações" : "Minhas solicitações"}
+            Minhas solicitações
           </TabBtn>
         )}
         {isManager && (
@@ -263,6 +301,14 @@ function OvertimePage() {
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
+      {tab === "transport" && canSeeTransport && (
+        <TransportView
+          rows={transportRequests.data ?? []}
+          loading={transportRequests.isLoading}
+          defaultOnlyTransport={isLogistics}
+        />
+      )}
+
       {tab === "list" && canRequest && (
         <MyRequests
           rows={rows.filter((r) => r.requester_user_id === s.userId)}
@@ -274,6 +320,7 @@ function OvertimePage() {
               toast.success("Solicitação cancelada.");
               qc.invalidateQueries({ queryKey: ["overtime-requests"] });
               qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+              qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a solicitação.");
             }
@@ -289,11 +336,13 @@ function OvertimePage() {
           onDecided={() => {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
       )}
 
       {tab === "employees" && isManager && <EmployeeManagement />}
+
 
       {showNew && canRequest && (
         <NewRequestModal
@@ -302,6 +351,7 @@ function OvertimePage() {
             setShowNew(false);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
       )}
@@ -483,10 +533,17 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
     [exportableRows],
   );
   const [selectedDate, setSelectedDate] = useState("");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">("all");
   const effectiveDate = selectedDate || availableDates[0] || "";
   const dailyRows = useMemo(
-    () => exportableRows.filter((row) => row.overtime_date === effectiveDate),
-    [exportableRows, effectiveDate],
+    () =>
+      exportableRows.filter(
+        (row) =>
+          row.overtime_date === effectiveDate &&
+          (transportFilter === "all" ||
+            (transportFilter === "yes" ? row.needs_transport : !row.needs_transport)),
+      ),
+    [exportableRows, effectiveDate, transportFilter],
   );
 
   function exportDailyExcel() {
@@ -501,6 +558,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       "Horário de entrada",
       "Horário de saída",
       "Lanche",
+      "Precisa de transporte",
       "Status",
       "Solicitante",
       "Ordem",
@@ -516,6 +574,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       row.entry_time || "",
       row.departure_time,
       row.needs_snack ? "Sim" : "Não",
+      row.needs_transport ? "Sim" : "Não",
       formatOvertimeStatus(row.status),
       row.requester_name || row.requester_email,
       row.order_number || "",
@@ -532,6 +591,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
       { wch: 18 },
       { wch: 18 },
       { wch: 10 },
+      { wch: 20 },
       { wch: 14 },
       { wch: 28 },
       { wch: 16 },
@@ -564,6 +624,19 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                   {formatDate(date)}
                 </option>
               ))}
+            </select>
+          </Field>
+        </div>
+        <div className="w-full min-w-0 sm:max-w-[200px]">
+          <Field label="Transporte">
+            <select
+              value={transportFilter}
+              onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            >
+              <option value="all">Todos</option>
+              <option value="yes">Com transporte</option>
+              <option value="no">Sem transporte</option>
             </select>
           </Field>
         </div>
@@ -611,6 +684,9 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                   <b>Serviço:</b> {row.service_description}
                 </div>
                 <div className="mt-1 break-words">
+                  <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
+                </div>
+                <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
                 </div>
               </article>
@@ -631,6 +707,7 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                     "Solicitante",
                     "Ordem",
                     "Serviço",
+                    "Transporte",
                     "Justificativa",
                   ].map((header) => (
                     <th key={header} className="px-3 py-2 text-left font-semibold">
@@ -652,7 +729,236 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
+                    <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.justification}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
+
+/* ---------- Transport view (logistics) ---------- */
+function TransportView({
+  rows,
+  loading,
+  defaultOnlyTransport,
+}: {
+  rows: OvertimeRow[];
+  loading: boolean;
+  defaultOnlyTransport: boolean;
+}) {
+  const availableDates = useMemo(
+    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [rows],
+  );
+  const [selectedDate, setSelectedDate] = useState("");
+  const [search, setSearch] = useState("");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(defaultOnlyTransport ? "yes" : "all");
+  const effectiveDate = selectedDate || availableDates[0] || "";
+
+  const dateRows = useMemo(
+    () => rows.filter((row) => row.overtime_date === effectiveDate),
+    [rows, effectiveDate],
+  );
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return dateRows.filter((row) => {
+      if (transportFilter === "yes" && !row.needs_transport) return false;
+      if (transportFilter === "no" && row.needs_transport) return false;
+      if (!term) return true;
+      return [row.employee_name, row.employee_registration, row.employee_external_id ?? "", row.order_number ?? ""]
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term);
+    });
+  }, [dateRows, search, transportFilter]);
+
+  const totalDay = dateRows.length;
+  const transportDay = dateRows.filter((row) => row.needs_transport).length;
+
+  function exportExcel() {
+    if (filtered.length === 0) return toast.error("Não há colaboradores para exportar com os filtros atuais.");
+    const headers = [
+      "Data",
+      "Chapa",
+      "ID",
+      "Nome",
+      "Função",
+      "Horário de entrada",
+      "Horário de saída",
+      "Ordem",
+      "Serviço",
+      "Solicitante",
+      "Precisa de transporte",
+    ];
+    const values = filtered.map((row) => [
+      formatDate(row.overtime_date),
+      row.employee_registration || "",
+      row.employee_external_id || "",
+      row.employee_name,
+      row.employee_role,
+      row.entry_time || "",
+      row.departure_time,
+      row.order_number || "",
+      row.service_description,
+      row.requester_name || row.requester_email,
+      row.needs_transport ? "Sim" : "Não",
+    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = [
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 32 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 48 },
+      { wch: 28 },
+      { wch: 20 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
+    XLSX.writeFile(workbook, "transportes-" + effectiveDate + ".xlsx");
+    toast.success(filtered.length + " colaborador(es) exportado(s).");
+  }
+
+  return (
+    <Panel
+      title="Transportes de horas extras aprovadas"
+      description="Uma linha por colaborador. Apenas solicitações aprovadas."
+      padded={false}
+    >
+      <div className="grid gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+        <Field label="Data da hora extra">
+          <select
+            value={effectiveDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          >
+            {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
+            {availableDates.map((date) => (
+              <option key={date} value={date}>
+                {formatDate(date)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Buscar">
+          <input
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            placeholder="Nome, chapa, ID ou ordem…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </Field>
+        <Field label="Transporte">
+          <select
+            value={transportFilter}
+            onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          >
+            <option value="all">Todos</option>
+            <option value="yes">Sim</option>
+            <option value="no">Não</option>
+          </select>
+        </Field>
+        <button
+          type="button"
+          onClick={exportExcel}
+          disabled={filtered.length === 0}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" /> Exportar Excel
+        </button>
+      </div>
+
+      <div className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+        {effectiveDate ? formatDate(effectiveDate) : "—"} · <b className="text-foreground">{totalDay}</b> colaborador(es)
+        aprovado(s) · <b className="text-foreground">{transportDay}</b> precisam de transporte
+      </div>
+
+      {loading ? (
+        <div className="p-6 text-[12px] text-muted-foreground">Carregando…</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-6">
+          <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhum colaborador com os filtros atuais" />
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 p-3 md:hidden">
+            {filtered.map((row) => (
+              <article key={row.id} className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px]">
+                <div className="font-semibold">{row.employee_name}</div>
+                <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
+                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} · {row.employee_role}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <b>Entrada:</b> {row.entry_time || "—"}
+                  </div>
+                  <div>
+                    <b>Saída:</b> {row.departure_time}
+                  </div>
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Ordem:</b> {row.order_number || "—"}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Serviço:</b> {row.service_description}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Solicitante:</b> {row.requester_name || row.requester_email}
+                </div>
+                <div className="mt-1">
+                  <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[1300px] w-full text-[12px]">
+              <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  {[
+                    "Data",
+                    "Chapa",
+                    "ID",
+                    "Nome",
+                    "Função",
+                    "Entrada",
+                    "Saída",
+                    "Ordem",
+                    "Serviço",
+                    "Solicitante",
+                    "Transporte",
+                  ].map((header) => (
+                    <th key={header} className="px-3 py-2 text-left font-semibold">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {filtered.map((row) => (
+                  <tr key={row.id} className="row-zebra align-top">
+                    <td className="whitespace-nowrap px-3 py-2">{formatDate(row.overtime_date)}</td>
+                    <td className="px-3 py-2">{row.employee_registration || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_external_id || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_name}</td>
+                    <td className="px-3 py-2">{row.employee_role}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
+                    <td className="px-3 py-2">{row.order_number || "—"}</td>
+                    <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
+                    <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="px-3 py-2 font-medium">{row.needs_transport ? "Sim" : "Não"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -908,6 +1214,12 @@ function RequestsTable({
                   {r.entry_time || "—"} · {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
                 </dd>
               </div>
+              {!groupedTeamView && (
+                <div>
+                  <dt className="text-[10px] uppercase text-muted-foreground">Transporte</dt>
+                  <dd>{r.needs_transport ? "Sim" : "Não"}</dd>
+                </div>
+              )}
               <div className="col-span-2">
                 <dt className="text-[10px] uppercase text-muted-foreground">Serviço</dt>
                 <dd className="break-words">{r.service_description}</dd>
@@ -946,6 +1258,9 @@ function RequestsTable({
                         </div>
                         <div className="break-words font-semibold">{member.employee_name}</div>
                         <div className="mt-0.5 break-words text-muted-foreground">{member.employee_role}</div>
+                        <div className="mt-0.5 text-muted-foreground">
+                          Transporte: {member.needs_transport ? "Sim" : "Não"}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -1068,20 +1383,22 @@ function RequestsTable({
                       className="px-3 pb-3 pt-0"
                     >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
-                        <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(200px,1fr)_minmax(110px,0.5fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           <span>Matrícula</span>
                           <span>Colaborador</span>
                           <span>Função</span>
+                          <span>Transporte</span>
                         </div>
                         <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
                           {r.groupMembers.map((member) => (
                             <div
                               key={member.id}
-                              className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 px-3 py-2.5 text-[12px]"
+                              className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(200px,1fr)_minmax(110px,0.5fr)] gap-3 px-3 py-2.5 text-[12px]"
                             >
                               <span className="tabular">{member.employee_registration || "—"}</span>
                               <span className="font-medium">{member.employee_name}</span>
                               <span>{member.employee_role}</span>
+                              <span>{member.needs_transport ? "Sim" : "Não"}</span>
                             </div>
                           ))}
                         </div>
@@ -1532,6 +1849,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [saving, setSaving] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+  const [transportEmployeeIds, setTransportEmployeeIds] = useState<string[]>([]);
   const draftLoaded = useRef(false);
   const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
   const [form, setForm] = useState({
@@ -1554,10 +1872,14 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft) as {
           selectedEmployeeIds?: unknown;
+          transportEmployeeIds?: unknown;
           form?: Partial<typeof form>;
         };
         if (Array.isArray(parsed.selectedEmployeeIds)) {
           setSelectedEmployeeIds(parsed.selectedEmployeeIds.filter((id): id is string => typeof id === "string"));
+        }
+        if (Array.isArray(parsed.transportEmployeeIds)) {
+          setTransportEmployeeIds(parsed.transportEmployeeIds.filter((id): id is string => typeof id === "string"));
         }
         if (parsed.form && typeof parsed.form === "object") {
           setForm((current) => ({ ...current, ...parsed.form }));
@@ -1576,10 +1898,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       draftStorageKey,
       JSON.stringify({
         selectedEmployeeIds,
+        transportEmployeeIds,
         form,
       }),
     );
-  }, [selectedEmployeeIds, form]);
+  }, [selectedEmployeeIds, transportEmployeeIds, form]);
   const [dateYear, dateMonth, dateDay] = form.overtime_date.split("-");
   const monthOptions = [
     ["01", "Jan"],
@@ -1669,6 +1992,12 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setSelectedEmployeeIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+    setTransportEmployeeIds((current) => current.filter((item) => item !== id));
+  }
+  function toggleTransport(id: string) {
+    setTransportEmployeeIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
   }
   function pickActivity(a: { id: string; week_id: string; order_number: string | null; description: string }) {
     setForm((f) => ({
@@ -1690,6 +2019,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await call({
         data: {
           employee_ids: selectedEmployeeIds,
+          transport_employee_ids: transportEmployeeIds.filter((id) => selectedEmployeeIds.includes(id)),
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
@@ -1775,13 +2105,24 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
                     {employee.badge} · {employee.job_title}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => toggleEmployee(employee.id)}
-                  className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive"
-                >
-                  Remover
-                </button>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={transportEmployeeIds.includes(employee.id)}
+                      onChange={() => toggleTransport(employee.id)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Transporte
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => toggleEmployee(employee.id)}
+                    className="text-[11px] text-muted-foreground hover:text-destructive"
+                  >
+                    Remover
+                  </button>
+                </span>
               </div>
             ))}
           </div>
