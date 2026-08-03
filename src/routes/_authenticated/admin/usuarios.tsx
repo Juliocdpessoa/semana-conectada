@@ -7,6 +7,7 @@ import { toast } from "sonner";
 import type { SessionInfo } from "../route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
 import { Users } from "lucide-react";
+import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {
@@ -16,13 +17,84 @@ export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   component: AdminUsers,
 });
 
+type AppRole = "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
+
 type Row = {
   id: string;
   email: string;
   full_name: string;
   approval_status: "pending" | "approved" | "blocked";
-  roles: string[];
+  roles: AppRole[];
 };
+
+const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
+  { value: "leader", label: "Líder" },
+  { value: "manager", label: "Gerente" },
+  { value: "planning", label: "Planejamento" },
+  { value: "measurement_control", label: "Medição e Controle" },
+  { value: "logistics", label: "Logística" },
+  { value: "viewer", label: "Consulta" },
+  { value: "admin", label: "Administrador" },
+];
+
+function RoleEditor({ user, onSave }: { user: Row; onSave: (roles: AppRole[]) => Promise<boolean> }) {
+  const initial = user.roles.length > 0 ? user.roles : ["leader"];
+  const [selected, setSelected] = useState<AppRole[]>(initial);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setSelected(user.roles.length > 0 ? user.roles : ["leader"]);
+  }, [user.roles]);
+
+  const savedKey = [...initial].sort().join("|");
+  const selectedKey = [...selected].sort().join("|");
+  const changed = savedKey !== selectedKey;
+
+  function toggle(role: AppRole) {
+    setSelected((current) =>
+      current.includes(role)
+        ? current.length === 1
+          ? current
+          : current.filter((item) => item !== role)
+        : [...current, role],
+    );
+  }
+
+  async function save() {
+    setSaving(true);
+    await onSave(selected);
+    setSaving(false);
+  }
+
+  return (
+    <div className="min-w-[280px]">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        {ROLE_OPTIONS.map((option) => {
+          const checked = selected.includes(option.value);
+          return (
+            <label key={option.value} className="flex min-h-7 cursor-pointer items-center gap-2 text-[11px]">
+              <input
+                type="checkbox"
+                checked={checked}
+                onChange={() => toggle(option.value)}
+                className="h-4 w-4 shrink-0 accent-primary"
+              />
+              <span>{option.label}</span>
+            </label>
+          );
+        })}
+      </div>
+      <button
+        type="button"
+        onClick={save}
+        disabled={!changed || saving}
+        className="btn-primary mt-2 min-h-8 px-3 py-1 text-[11px] disabled:cursor-not-allowed disabled:opacity-45"
+      >
+        {saving ? "Salvando…" : "Salvar perfis"}
+      </button>
+    </div>
+  );
+}
 
 function AdminUsers() {
   const qc = useQueryClient();
@@ -50,15 +122,15 @@ function AdminUsers() {
     },
   });
 
-  async function updateUser(
-    id: string,
-    status: Row["approval_status"],
-    role?: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer",
-  ) {
-    const res = await call({ data: { targetUserId: id, approvalStatus: status, role } });
-    if (!res.ok) return toast.error(res.error);
-    toast.success("Usuário atualizado.");
-    qc.invalidateQueries({ queryKey: ["admin-users"] });
+  async function updateUser(id: string, status: Row["approval_status"], roles?: AppRole[]) {
+    const res = await call({ data: { targetUserId: id, approvalStatus: status, roles } });
+    if (!res.ok) {
+      toast.error(res.error);
+      return false;
+    }
+    toast.success(roles ? "Perfis atualizados." : "Usuário atualizado.");
+    await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    return true;
   }
 
   const total = users.data?.length ?? 0;
@@ -114,19 +186,7 @@ function AdminUsers() {
                       </span>
                     </td>
                     <td className="px-3 py-2 text-[12px]">
-                      <select
-                        defaultValue={u.roles[0] ?? "leader"}
-                        onChange={(e) => updateUser(u.id, u.approval_status, e.target.value as any)}
-                        className="input-base w-auto py-1 text-[12px]"
-                      >
-                        <option value="leader">Líder</option>
-                        <option value="manager">Gerente</option>
-                        <option value="planning">Planejamento</option>
-                        <option value="measurement_control">Medição e Controle</option>
-                        <option value="logistics">Logística</option>
-                        <option value="viewer">Consulta</option>
-                        <option value="admin">Administrador</option>
-                      </select>
+                      <RoleEditor user={u} onSave={(roles) => updateUser(u.id, u.approval_status, roles)} />
                     </td>
                     <td className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1.5">
