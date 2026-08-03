@@ -117,13 +117,7 @@ function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (
-      s.role !== "leader" &&
-      s.role !== "manager" &&
-      s.role !== "admin" &&
-      s.role !== "measurement_control" &&
-      s.role !== "logistics"
-    ) {
+    if (!s.roles.some((role) => ["leader", "manager", "admin", "measurement_control", "logistics"].includes(role))) {
       throw redirect({ to: "/atividades" });
     }
   },
@@ -133,11 +127,14 @@ export const Route = createFileRoute("/_authenticated/hora-extra")({
 function OvertimePage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const s = session;
-  const isManager = s.role === "manager" || s.role === "admin";
-  const canRequest = s.role === "leader" || s.role === "admin" || s.role === "measurement_control";
-  const isMeasurementControl = s.role === "measurement_control";
-  const isLogistics = s.role === "logistics";
-  const canExportOvertime = isMeasurementControl || s.role === "admin" || s.role === "manager";
+  const roleSet = new Set(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []);
+  const isAdmin = roleSet.has("admin");
+  const isManager = roleSet.has("manager") || isAdmin;
+  const canRequest = roleSet.has("leader") || isAdmin || roleSet.has("measurement_control");
+  const isMeasurementControl = roleSet.has("measurement_control");
+  const isLogistics = roleSet.has("logistics");
+  const logisticsOnly = isLogistics && roleSet.size === 1;
+  const canExportOvertime = isMeasurementControl || isAdmin || roleSet.has("manager");
   const canSeeTransport = isLogistics || isManager;
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const loadTransportRows = useServerFn(listApprovedTransportRows);
@@ -161,7 +158,7 @@ function OvertimePage() {
   });
 
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export" | "transport">(
-    isLogistics ? "transport" : isMeasurementControl ? "export" : canRequest ? "list" : "queue",
+    logisticsOnly ? "transport" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
@@ -169,7 +166,7 @@ function OvertimePage() {
   const qc = useQueryClient();
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
-    enabled: !isLogistics,
+    enabled: !logisticsOnly,
     queryFn: async () => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
@@ -215,7 +212,7 @@ function OvertimePage() {
         eyebrow="Operação"
         title="Hora Extra"
         description={
-          isLogistics
+          logisticsOnly
             ? "Transportes de colaboradores em horas extras."
             : "Solicitação e aprovação de horas extras da equipe."
         }
@@ -228,7 +225,7 @@ function OvertimePage() {
         }
       />
 
-      {!isLogistics && (
+      {!logisticsOnly && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
           <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
@@ -305,7 +302,7 @@ function OvertimePage() {
         <TransportView
           rows={transportRequests.data ?? []}
           loading={transportRequests.isLoading}
-          defaultOnlyTransport={isLogistics}
+          defaultOnlyTransport={logisticsOnly}
         />
       )}
 
