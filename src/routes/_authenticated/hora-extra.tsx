@@ -184,12 +184,14 @@ function OvertimePage() {
     [rows, summaryDate],
   );
   const kpis = useMemo(() => {
-    const total = summaryRows.length;
-    const pending = summaryRows.filter((row) => row.status === "pending").length;
-    const approved = summaryRows.filter((row) => row.status === "approved").length;
-    const rejected = summaryRows.filter((row) => row.status === "rejected").length;
-    const snacks = summaryRows.filter((row) => row.needs_snack && row.status === "approved").length;
-    const transports = summaryRows.filter((row) => row.needs_transport && row.status === "approved").length;
+    // Canceladas permanecem no histórico, mas não representam efetivo ativo no resumo.
+    const operationalRows = summaryRows.filter((row) => row.status !== "cancelled");
+    const total = operationalRows.length;
+    const pending = operationalRows.filter((row) => row.status === "pending").length;
+    const approved = operationalRows.filter((row) => row.status === "approved").length;
+    const rejected = operationalRows.filter((row) => row.status === "rejected").length;
+    const snacks = operationalRows.filter((row) => row.needs_snack && row.status === "approved").length;
+    const transports = operationalRows.filter((row) => row.needs_transport && row.status === "approved").length;
     return { total, pending, approved, rejected, snacks, transports };
   }, [summaryRows]);
 
