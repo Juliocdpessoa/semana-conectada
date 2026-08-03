@@ -1872,10 +1872,14 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft) as {
           selectedEmployeeIds?: unknown;
+          transportEmployeeIds?: unknown;
           form?: Partial<typeof form>;
         };
         if (Array.isArray(parsed.selectedEmployeeIds)) {
           setSelectedEmployeeIds(parsed.selectedEmployeeIds.filter((id): id is string => typeof id === "string"));
+        }
+        if (Array.isArray(parsed.transportEmployeeIds)) {
+          setTransportEmployeeIds(parsed.transportEmployeeIds.filter((id): id is string => typeof id === "string"));
         }
         if (parsed.form && typeof parsed.form === "object") {
           setForm((current) => ({ ...current, ...parsed.form }));
@@ -1894,10 +1898,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       draftStorageKey,
       JSON.stringify({
         selectedEmployeeIds,
+        transportEmployeeIds,
         form,
       }),
     );
-  }, [selectedEmployeeIds, form]);
+  }, [selectedEmployeeIds, transportEmployeeIds, form]);
   const [dateYear, dateMonth, dateDay] = form.overtime_date.split("-");
   const monthOptions = [
     ["01", "Jan"],
