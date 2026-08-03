@@ -351,6 +351,7 @@ function OvertimePage() {
             setShowNew(false);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
       )}
