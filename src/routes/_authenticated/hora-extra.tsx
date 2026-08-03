@@ -1214,6 +1214,12 @@ function RequestsTable({
                   {r.entry_time || "—"} · {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
                 </dd>
               </div>
+              {!groupedTeamView && (
+                <div>
+                  <dt className="text-[10px] uppercase text-muted-foreground">Transporte</dt>
+                  <dd>{r.needs_transport ? "Sim" : "Não"}</dd>
+                </div>
+              )}
               <div className="col-span-2">
                 <dt className="text-[10px] uppercase text-muted-foreground">Serviço</dt>
                 <dd className="break-words">{r.service_description}</dd>
