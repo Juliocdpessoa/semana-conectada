@@ -31,7 +31,6 @@ import {
   upsertEmployees,
   setEmployeeActive,
   listOvertimeForExport,
-  listApprovedTransportRows,
 } from "@/lib/overtime.functions";
 
 type OvertimeRow = {
@@ -134,10 +133,8 @@ function OvertimePage() {
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
   const logisticsOnly = isLogistics && roleSet.size === 1;
-  const canExportOvertime = isMeasurementControl || isAdmin || roleSet.has("manager");
-  const canSeeTransport = isLogistics || isManager;
+  const canExportOvertime = isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
-  const loadTransportRows = useServerFn(listApprovedTransportRows);
   const exportRequests = useQuery({
     queryKey: ["overtime-export-rows"],
     enabled: canExportOvertime,
@@ -147,18 +144,8 @@ function OvertimePage() {
       return result.rows as OvertimeRow[];
     },
   });
-  const transportRequests = useQuery({
-    queryKey: ["overtime-transport-rows"],
-    enabled: canSeeTransport,
-    queryFn: async () => {
-      const result = await loadTransportRows({ data: {} });
-      if (!result.ok) throw new Error(result.error);
-      return result.rows as OvertimeRow[];
-    },
-  });
-
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export" | "transport">(
-    logisticsOnly ? "transport" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
+    logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
@@ -267,11 +254,6 @@ function OvertimePage() {
             Exportação semanal
           </TabBtn>
         )}
-        {canSeeTransport && (
-          <TabBtn active={tab === "transport"} onClick={() => setTab("transport")}>
-            Transportes
-          </TabBtn>
-        )}
         {canRequest && (
           <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
             Minhas solicitações
@@ -294,17 +276,11 @@ function OvertimePage() {
         )}
       </div>
 
-      {tab === "export" && canExportOvertime && <ApprovedDailyExport rows={exportRequests.data ?? []} />}
+      {tab === "export" && canExportOvertime && (
+        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={logisticsOnly} />
+      )}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
-
-      {tab === "transport" && canSeeTransport && (
-        <TransportView
-          rows={transportRequests.data ?? []}
-          loading={transportRequests.isLoading}
-          defaultOnlyTransport={logisticsOnly}
-        />
-      )}
 
       {tab === "list" && canRequest && (
         <MyRequests
@@ -522,23 +498,27 @@ function WeeklyActivityExport() {
 }
 
 /* ---------- Approved daily export ---------- */
-function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
+function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRow[]; transportOnly?: boolean }) {
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
   const availableDates = useMemo(
     () => [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
     [exportableRows],
   );
   const [selectedDate, setSelectedDate] = useState("");
-  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">("all");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
   const effectiveDate = selectedDate || availableDates[0] || "";
   const dailyRows = useMemo(
     () =>
       exportableRows.filter(
         (row) =>
           row.overtime_date === effectiveDate &&
-          (transportFilter === "all" || (transportFilter === "yes" ? row.needs_transport : !row.needs_transport)),
+          (transportOnly || transportFilter === "yes"
+            ? row.needs_transport
+            : transportFilter === "no"
+              ? !row.needs_transport
+              : true),
       ),
-    [exportableRows, effectiveDate, transportFilter],
+    [exportableRows, effectiveDate, transportFilter, transportOnly],
   );
 
   function exportDailyExcel() {
@@ -629,9 +609,9 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
               onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             >
-              <option value="all">Todos</option>
+              {!transportOnly && <option value="all">Todos</option>}
               <option value="yes">Com transporte</option>
-              <option value="no">Sem transporte</option>
+              {!transportOnly && <option value="no">Sem transporte</option>}
             </select>
           </Field>
         </div>
