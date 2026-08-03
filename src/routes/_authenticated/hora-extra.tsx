@@ -1992,6 +1992,12 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setSelectedEmployeeIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+    setTransportEmployeeIds((current) => current.filter((item) => item !== id));
+  }
+  function toggleTransport(id: string) {
+    setTransportEmployeeIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
   }
   function pickActivity(a: { id: string; week_id: string; order_number: string | null; description: string }) {
     setForm((f) => ({
