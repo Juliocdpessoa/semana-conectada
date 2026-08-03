@@ -713,6 +713,234 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
   );
 }
 
+/* ---------- Transport view (logistics) ---------- */
+function TransportView({
+  rows,
+  loading,
+  defaultOnlyTransport,
+}: {
+  rows: OvertimeRow[];
+  loading: boolean;
+  defaultOnlyTransport: boolean;
+}) {
+  const availableDates = useMemo(
+    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
+    [rows],
+  );
+  const [selectedDate, setSelectedDate] = useState("");
+  const [search, setSearch] = useState("");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(defaultOnlyTransport ? "yes" : "all");
+  const effectiveDate = selectedDate || availableDates[0] || "";
+
+  const dateRows = useMemo(
+    () => rows.filter((row) => row.overtime_date === effectiveDate),
+    [rows, effectiveDate],
+  );
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return dateRows.filter((row) => {
+      if (transportFilter === "yes" && !row.needs_transport) return false;
+      if (transportFilter === "no" && row.needs_transport) return false;
+      if (!term) return true;
+      return [row.employee_name, row.employee_registration, row.employee_external_id ?? "", row.order_number ?? ""]
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term);
+    });
+  }, [dateRows, search, transportFilter]);
+
+  const totalDay = dateRows.length;
+  const transportDay = dateRows.filter((row) => row.needs_transport).length;
+
+  function exportExcel() {
+    if (filtered.length === 0) return toast.error("Não há colaboradores para exportar com os filtros atuais.");
+    const headers = [
+      "Data",
+      "Chapa",
+      "ID",
+      "Nome",
+      "Função",
+      "Horário de entrada",
+      "Horário de saída",
+      "Ordem",
+      "Serviço",
+      "Solicitante",
+      "Precisa de transporte",
+    ];
+    const values = filtered.map((row) => [
+      formatDate(row.overtime_date),
+      row.employee_registration || "",
+      row.employee_external_id || "",
+      row.employee_name,
+      row.employee_role,
+      row.entry_time || "",
+      row.departure_time,
+      row.order_number || "",
+      row.service_description,
+      row.requester_name || row.requester_email,
+      row.needs_transport ? "Sim" : "Não",
+    ]);
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = [
+      { wch: 12 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 32 },
+      { wch: 24 },
+      { wch: 18 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 48 },
+      { wch: 28 },
+      { wch: 20 },
+    ];
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
+    XLSX.writeFile(workbook, "transportes-" + effectiveDate + ".xlsx");
+    toast.success(filtered.length + " colaborador(es) exportado(s).");
+  }
+
+  return (
+    <Panel
+      title="Transportes de horas extras aprovadas"
+      description="Uma linha por colaborador. Apenas solicitações aprovadas."
+      padded={false}
+    >
+      <div className="grid gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
+        <Field label="Data da hora extra">
+          <select
+            value={effectiveDate}
+            onChange={(event) => setSelectedDate(event.target.value)}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          >
+            {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
+            {availableDates.map((date) => (
+              <option key={date} value={date}>
+                {formatDate(date)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Buscar">
+          <input
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            placeholder="Nome, chapa, ID ou ordem…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </Field>
+        <Field label="Transporte">
+          <select
+            value={transportFilter}
+            onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          >
+            <option value="all">Todos</option>
+            <option value="yes">Sim</option>
+            <option value="no">Não</option>
+          </select>
+        </Field>
+        <button
+          type="button"
+          onClick={exportExcel}
+          disabled={filtered.length === 0}
+          className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50"
+        >
+          <Download className="h-4 w-4" /> Exportar Excel
+        </button>
+      </div>
+
+      <div className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
+        {effectiveDate ? formatDate(effectiveDate) : "—"} · <b className="text-foreground">{totalDay}</b> colaborador(es)
+        aprovado(s) · <b className="text-foreground">{transportDay}</b> precisam de transporte
+      </div>
+
+      {loading ? (
+        <div className="p-6 text-[12px] text-muted-foreground">Carregando…</div>
+      ) : filtered.length === 0 ? (
+        <div className="p-6">
+          <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhum colaborador com os filtros atuais" />
+        </div>
+      ) : (
+        <>
+          <div className="grid gap-3 p-3 md:hidden">
+            {filtered.map((row) => (
+              <article key={row.id} className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px]">
+                <div className="font-semibold">{row.employee_name}</div>
+                <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
+                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} · {row.employee_role}
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <div>
+                    <b>Entrada:</b> {row.entry_time || "—"}
+                  </div>
+                  <div>
+                    <b>Saída:</b> {row.departure_time}
+                  </div>
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Ordem:</b> {row.order_number || "—"}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Serviço:</b> {row.service_description}
+                </div>
+                <div className="mt-1 break-words">
+                  <b>Solicitante:</b> {row.requester_name || row.requester_email}
+                </div>
+                <div className="mt-1">
+                  <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
+                </div>
+              </article>
+            ))}
+          </div>
+          <div className="hidden overflow-x-auto md:block">
+            <table className="min-w-[1300px] w-full text-[12px]">
+              <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
+                <tr>
+                  {[
+                    "Data",
+                    "Chapa",
+                    "ID",
+                    "Nome",
+                    "Função",
+                    "Entrada",
+                    "Saída",
+                    "Ordem",
+                    "Serviço",
+                    "Solicitante",
+                    "Transporte",
+                  ].map((header) => (
+                    <th key={header} className="px-3 py-2 text-left font-semibold">
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {filtered.map((row) => (
+                  <tr key={row.id} className="row-zebra align-top">
+                    <td className="whitespace-nowrap px-3 py-2">{formatDate(row.overtime_date)}</td>
+                    <td className="px-3 py-2">{row.employee_registration || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_external_id || "—"}</td>
+                    <td className="px-3 py-2">{row.employee_name}</td>
+                    <td className="px-3 py-2">{row.employee_role}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
+                    <td className="px-3 py-2">{row.order_number || "—"}</td>
+                    <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
+                    <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="px-3 py-2 font-medium">{row.needs_transport ? "Sim" : "Não"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
+
 /* ---------- My Requests ---------- */
 function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: OvertimeRow) => void }) {
   const [selectedDate, setSelectedDate] = useState("");
