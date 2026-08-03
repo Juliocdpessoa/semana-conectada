@@ -684,6 +684,9 @@ function ApprovedDailyExport({ rows }: { rows: OvertimeRow[] }) {
                   <b>Serviço:</b> {row.service_description}
                 </div>
                 <div className="mt-1 break-words">
+                  <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
+                </div>
+                <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
                 </div>
               </article>
