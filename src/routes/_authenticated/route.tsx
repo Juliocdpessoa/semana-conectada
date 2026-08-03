@@ -5,11 +5,14 @@ import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Time
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
+export type AppRole = "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
+
 export type SessionInfo = {
   userId: string;
   email: string;
   fullName: string;
-  role: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer" | null;
+  role: AppRole | null;
+  roles: AppRole[];
   approvalStatus: "pending" | "approved" | "blocked";
 };
 
@@ -30,12 +33,16 @@ async function loadSession(): Promise<SessionInfo | null> {
     "logistics",
     "viewer",
   ];
-  const role = priority.find((r) => rolesRows.some((row) => row.role === r)) ?? null;
+  const allRoles = rolesRows
+    .map((row) => row.role)
+    .filter((role): role is AppRole => priority.includes(role as AppRole));
+  const role = priority.find((r) => allRoles.includes(r!)) ?? null;
   return {
     userId: data.user.id,
     email: profile.data?.email ?? data.user.email ?? "",
     fullName: profile.data?.full_name ?? "",
     role,
+    roles: allRoles,
     approvalStatus: (profile.data?.approval_status as SessionInfo["approvalStatus"]) ?? "pending",
   };
 }
@@ -69,13 +76,17 @@ function AuthedLayout() {
   }, [pathname]);
 
   const s = session as SessionInfo;
-  const isPlanning = s.role === "planning" || s.role === "admin";
-  const isAdmin = s.role === "admin";
-  const isManager = s.role === "manager" || s.role === "admin";
-  const isMeasurementControl = s.role === "measurement_control";
-  const isLogistics = s.role === "logistics";
-  const overtimeOnly = isMeasurementControl || isLogistics;
-  const canOvertime = s.role === "leader" || s.role === "manager" || s.role === "admin" || overtimeOnly;
+  const roleSet = new Set(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []);
+  const isPlanning = roleSet.has("planning") || roleSet.has("admin");
+  const isAdmin = roleSet.has("admin");
+  const isManager = roleSet.has("manager") || isAdmin;
+  const isMeasurementControl = roleSet.has("measurement_control");
+  const isLogistics = roleSet.has("logistics");
+  const hasGeneralAccess = ["admin", "manager", "planning", "leader", "viewer"].some((role) =>
+    roleSet.has(role as AppRole),
+  );
+  const overtimeOnly = (isMeasurementControl || isLogistics) && !hasGeneralAccess;
+  const canOvertime = roleSet.has("leader") || roleSet.has("manager") || isAdmin || isMeasurementControl || isLogistics;
 
   useEffect(() => {
     if (overtimeOnly && pathname !== "/hora-extra") {
@@ -127,7 +138,9 @@ function AuthedLayout() {
           <div className="ml-auto flex items-center gap-2">
             <div className="hidden text-right md:block">
               <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
-              <div className="text-[10px] leading-tight text-primary-foreground/70">{roleLabel(s.role)}</div>
+              <div className="text-[10px] leading-tight text-primary-foreground/70">
+                {(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []).map(roleLabel).join(" + ")}
+              </div>
             </div>
             <button
               onClick={signOut}
