@@ -38,7 +38,7 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
       const { data, error } = await db
         .from("overtime_requests")
         .select("*")
-        .eq("status", "approved")
+        .neq("status", "cancelled")
         .order("overtime_date", { ascending: false })
         .order("employee_name", { ascending: true })
         .range(from, from + pageSize - 1);
@@ -49,7 +49,6 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
     }
     return { ok: true as const, rows };
   });
-
 
 const exportListSchema = z.object({});
 
