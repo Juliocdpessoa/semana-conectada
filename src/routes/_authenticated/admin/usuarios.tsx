@@ -12,7 +12,7 @@ import { useEffect, useState } from "react";
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "admin") throw redirect({ to: "/atividades" });
+    if (!s.roles.includes("admin")) throw redirect({ to: "/atividades" });
   },
   component: AdminUsers,
 });
