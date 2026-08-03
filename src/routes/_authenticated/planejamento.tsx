@@ -14,7 +14,7 @@ import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit
 export const Route = createFileRoute("/_authenticated/planejamento")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "planning" && s.role !== "admin") throw redirect({ to: "/atividades" });
+    if (!s.roles.some((role) => role === "planning" || role === "admin")) throw redirect({ to: "/atividades" });
   },
   component: PlanejamentoPage,
 });
