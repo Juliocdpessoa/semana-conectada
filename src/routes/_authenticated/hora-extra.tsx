@@ -2019,6 +2019,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await call({
         data: {
           employee_ids: selectedEmployeeIds,
+          transport_employee_ids: transportEmployeeIds.filter((id) => selectedEmployeeIds.includes(id)),
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
