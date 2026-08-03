@@ -2105,13 +2105,24 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
                     {employee.badge} · {employee.job_title}
                   </span>
                 </span>
-                <button
-                  type="button"
-                  onClick={() => toggleEmployee(employee.id)}
-                  className="shrink-0 text-[11px] text-muted-foreground hover:text-destructive"
-                >
-                  Remover
-                </button>
+                <span className="flex shrink-0 flex-col items-end gap-1">
+                  <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={transportEmployeeIds.includes(employee.id)}
+                      onChange={() => toggleTransport(employee.id)}
+                      className="h-4 w-4 accent-primary"
+                    />
+                    Transporte
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => toggleEmployee(employee.id)}
+                    className="text-[11px] text-muted-foreground hover:text-destructive"
+                  >
+                    Remover
+                  </button>
+                </span>
               </div>
             ))}
           </div>
