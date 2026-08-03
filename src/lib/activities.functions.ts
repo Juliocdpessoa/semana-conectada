@@ -286,7 +286,7 @@ const roleSchema = z.enum(["admin", "manager", "planning", "leader", "measuremen
 const approveSchema = z.object({
   targetUserId: z.string().uuid(),
   approvalStatus: z.enum(["approved", "blocked", "pending"]),
-  role: roleSchema.optional(),
+  roles: z.array(roleSchema).min(1, "Selecione pelo menos um perfil.").max(7).optional(),
 });
 
 export const setUserApproval = createServerFn({ method: "POST" })
@@ -308,12 +308,13 @@ export const setUserApproval = createServerFn({ method: "POST" })
       })
       .eq("id", data.targetUserId);
     if (pErr) return { ok: false as const, error: pErr.message };
-    if (data.role) {
-      // Replace role
-      await supabaseAdmin.from("user_roles").delete().eq("user_id", data.targetUserId);
+    if (data.roles) {
+      const uniqueRoles = [...new Set(data.roles)];
+      const { error: deleteError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.targetUserId);
+      if (deleteError) return { ok: false as const, error: deleteError.message };
       const { error: rErr } = await supabaseAdmin
         .from("user_roles")
-        .insert({ user_id: data.targetUserId, role: data.role });
+        .insert(uniqueRoles.map((role) => ({ user_id: data.targetUserId, role })));
       if (rErr) return { ok: false as const, error: rErr.message };
     }
     return { ok: true as const };
