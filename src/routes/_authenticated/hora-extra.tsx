@@ -115,7 +115,13 @@ function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (s.role !== "leader" && s.role !== "manager" && s.role !== "admin" && s.role !== "measurement_control") {
+    if (
+      s.role !== "leader" &&
+      s.role !== "manager" &&
+      s.role !== "admin" &&
+      s.role !== "measurement_control" &&
+      s.role !== "logistics"
+    ) {
       throw redirect({ to: "/atividades" });
     }
   },
