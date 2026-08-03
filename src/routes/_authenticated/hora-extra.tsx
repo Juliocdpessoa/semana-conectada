@@ -204,7 +204,8 @@ function OvertimePage() {
     const approved = summaryRows.filter((row) => row.status === "approved").length;
     const rejected = summaryRows.filter((row) => row.status === "rejected").length;
     const snacks = summaryRows.filter((row) => row.needs_snack && row.status === "approved").length;
-    return { total, pending, approved, rejected, snacks };
+    const transports = summaryRows.filter((row) => row.needs_transport && row.status === "approved").length;
+    return { total, pending, approved, rejected, snacks, transports };
   }, [summaryRows]);
 
   return (
@@ -212,7 +213,11 @@ function OvertimePage() {
       <PageHeader
         eyebrow="Operação"
         title="Hora Extra"
-        description="Solicitação e aprovação de horas extras da equipe."
+        description={
+          isLogistics
+            ? "Transportes de colaboradores em horas extras aprovadas."
+            : "Solicitação e aprovação de horas extras da equipe."
+        }
         actions={
           canRequest && (
             <button onClick={() => setShowNew(true)} className="btn-primary text-[12px]">
@@ -222,30 +227,36 @@ function OvertimePage() {
         }
       />
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-5">
-        <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-        <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
-        <KpiCard
-          label="Aprovadas"
-          value={kpis.approved}
-          tone="success"
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-        />
-        <KpiCard
-          label="Reprovadas"
-          value={kpis.rejected}
-          tone="destructive"
-          icon={<XCircle className="h-3.5 w-3.5" />}
-        />
-        <div className="col-span-2 sm:col-span-1">
+      {!isLogistics && (
+        <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+          <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+          <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Aprovadas"
+            value={kpis.approved}
+            tone="success"
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          />
+          <KpiCard
+            label="Reprovadas"
+            value={kpis.rejected}
+            tone="destructive"
+            icon={<XCircle className="h-3.5 w-3.5" />}
+          />
           <KpiCard
             label="Lanches aprovados"
             value={kpis.snacks}
             tone="primary"
             icon={<Utensils className="h-3.5 w-3.5" />}
           />
+          <KpiCard
+            label="Transportes aprovados"
+            value={kpis.transports}
+            tone="primary"
+            icon={<Bus className="h-3.5 w-3.5" />}
+          />
         </div>
-      </div>
+      )}
 
       <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
         {canExportOvertime && (
@@ -258,9 +269,14 @@ function OvertimePage() {
             Exportação semanal
           </TabBtn>
         )}
+        {canSeeTransport && (
+          <TabBtn active={tab === "transport"} onClick={() => setTab("transport")}>
+            Transportes
+          </TabBtn>
+        )}
         {canRequest && (
           <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
-            {isManager ? "Minhas solicitações" : "Minhas solicitações"}
+            Minhas solicitações
           </TabBtn>
         )}
         {isManager && (
@@ -284,6 +300,14 @@ function OvertimePage() {
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
+      {tab === "transport" && canSeeTransport && (
+        <TransportView
+          rows={transportRequests.data ?? []}
+          loading={transportRequests.isLoading}
+          defaultOnlyTransport={isLogistics}
+        />
+      )}
+
       {tab === "list" && canRequest && (
         <MyRequests
           rows={rows.filter((r) => r.requester_user_id === s.userId)}
@@ -295,6 +319,7 @@ function OvertimePage() {
               toast.success("Solicitação cancelada.");
               qc.invalidateQueries({ queryKey: ["overtime-requests"] });
               qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+              qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
             } catch (error) {
               toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a solicitação.");
             }
@@ -310,11 +335,13 @@ function OvertimePage() {
           onDecided={() => {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
       )}
 
       {tab === "employees" && isManager && <EmployeeManagement />}
+
 
       {showNew && canRequest && (
         <NewRequestModal
