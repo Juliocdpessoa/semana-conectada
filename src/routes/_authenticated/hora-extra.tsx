@@ -1377,20 +1377,22 @@ function RequestsTable({
                       className="px-3 pb-3 pt-0"
                     >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
-                        <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                        <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(200px,1fr)_minmax(110px,0.5fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           <span>Matrícula</span>
                           <span>Colaborador</span>
                           <span>Função</span>
+                          <span>Transporte</span>
                         </div>
                         <div className="max-h-[360px] divide-y divide-border overflow-y-auto">
                           {r.groupMembers.map((member) => (
                             <div
                               key={member.id}
-                              className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(220px,1fr)] gap-3 px-3 py-2.5 text-[12px]"
+                              className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(200px,1fr)_minmax(110px,0.5fr)] gap-3 px-3 py-2.5 text-[12px]"
                             >
                               <span className="tabular">{member.employee_registration || "—"}</span>
                               <span className="font-medium">{member.employee_name}</span>
                               <span>{member.employee_role}</span>
+                              <span>{member.needs_transport ? "Sim" : "Não"}</span>
                             </div>
                           ))}
                         </div>
