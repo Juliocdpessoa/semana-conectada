@@ -53,7 +53,7 @@ function AdminUsers() {
   async function updateUser(
     id: string,
     status: Row["approval_status"],
-    role?: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "viewer",
+    role?: "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer",
   ) {
     const res = await call({ data: { targetUserId: id, approvalStatus: status, role } });
     if (!res.ok) return toast.error(res.error);
@@ -123,6 +123,7 @@ function AdminUsers() {
                         <option value="manager">Gerente</option>
                         <option value="planning">Planejamento</option>
                         <option value="measurement_control">Medição e Controle</option>
+                        <option value="logistics">Logística</option>
                         <option value="viewer">Consulta</option>
                         <option value="admin">Administrador</option>
                       </select>

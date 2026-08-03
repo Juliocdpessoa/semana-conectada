@@ -51,6 +51,7 @@ type OvertimeRow = {
   entry_time: string | null;
   departure_time: string;
   needs_snack: boolean;
+  needs_transport: boolean;
   justification: string;
   status: "pending" | "approved" | "rejected" | "cancelled";
   manager_comment: string | null;
