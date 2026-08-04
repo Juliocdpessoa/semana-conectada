@@ -53,6 +53,12 @@ type OvertimeRow = {
   departure_time: string;
   needs_snack: boolean;
   needs_transport: boolean;
+  employee_address?: string | null;
+  employee_neighborhood?: string | null;
+  employee_city?: string | null;
+  employee_phone?: string | null;
+  employee_message_contact?: string | null;
+  employee_transport_line?: string | null;
   justification: string;
   status: "pending" | "approved" | "rejected" | "cancelled";
   manager_comment: string | null;
@@ -69,6 +75,12 @@ type EmployeeRow = {
   admission_date: string;
   full_name: string;
   job_title: string;
+  address: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  phone: string | null;
+  message_contact: string | null;
+  transport_line: string | null;
   is_active: boolean;
 };
 
@@ -531,6 +543,10 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       "Matrícula",
       "Nome",
       "Função",
+      "Endereço completo",
+      "Telefone",
+      "Contato (recado)",
+      "Linha",
       "Data",
       "Horário de entrada",
       "Horário de saída",
@@ -547,6 +563,10 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       row.employee_registration || "",
       row.employee_name,
       row.employee_role,
+      [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+      row.employee_phone || "",
+      row.employee_message_contact || "",
+      row.employee_transport_line || "",
       formatDate(row.overtime_date),
       row.entry_time || "",
       row.departure_time,
@@ -564,6 +584,10 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       { wch: 14 },
       { wch: 32 },
       { wch: 24 },
+      { wch: 50 },
+      { wch: 20 },
+      { wch: 24 },
+      { wch: 16 },
       { wch: 12 },
       { wch: 18 },
       { wch: 18 },
@@ -763,6 +787,10 @@ function TransportView({
       "ID",
       "Nome",
       "Função",
+      "Endereço completo",
+      "Telefone",
+      "Contato (recado)",
+      "Linha",
       "Horário de entrada",
       "Horário de saída",
       "Ordem",
@@ -777,6 +805,10 @@ function TransportView({
       row.employee_external_id || "",
       row.employee_name,
       row.employee_role,
+      [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+      row.employee_phone || "",
+      row.employee_message_contact || "",
+      row.employee_transport_line || "",
       row.entry_time || "",
       row.departure_time,
       row.order_number || "",
@@ -792,6 +824,10 @@ function TransportView({
       { wch: 14 },
       { wch: 32 },
       { wch: 24 },
+      { wch: 50 },
+      { wch: 20 },
+      { wch: 24 },
+      { wch: 16 },
       { wch: 18 },
       { wch: 18 },
       { wch: 16 },
@@ -1409,11 +1445,35 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 }
 
 /* ---------- Employee Management ---------- */
-const EMPLOYEE_TEMPLATE_HEADERS = ["Chapa", "ID", "Data de Admissão", "Nome", "Função"] as const;
+const EMPLOYEE_TEMPLATE_HEADERS = [
+  "Chapa",
+  "ID",
+  "Data de Admissão",
+  "Nome",
+  "Função",
+  "Endereço",
+  "Bairro",
+  "Cidade",
+  "Telefone",
+  "Contato (recado)",
+  "Linha",
+] as const;
 
 function downloadEmployeeTemplate() {
   const worksheet = XLSX.utils.aoa_to_sheet([[...EMPLOYEE_TEMPLATE_HEADERS]]);
-  worksheet["!cols"] = [{ wch: 16 }, { wch: 16 }, { wch: 20 }, { wch: 38 }, { wch: 28 }];
+  worksheet["!cols"] = [
+    { wch: 16 },
+    { wch: 16 },
+    { wch: 20 },
+    { wch: 38 },
+    { wch: 28 },
+    { wch: 42 },
+    { wch: 24 },
+    { wch: 22 },
+    { wch: 20 },
+    { wch: 24 },
+    { wch: 16 },
+  ];
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores");
   XLSX.writeFile(workbook, "modelo_importacao_colaboradores.xlsx");
@@ -1430,7 +1490,9 @@ function EmployeeManagement() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("employees")
-        .select("id,badge,employee_id,admission_date,full_name,job_title,is_active")
+        .select(
+          "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
+        )
         .order("full_name")
         .limit(2000);
       if (error) throw error;
@@ -1441,9 +1503,18 @@ function EmployeeManagement() {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     if (!term) return employees.data ?? [];
     return (employees.data ?? []).filter((employee) =>
-      [employee.full_name, employee.badge, employee.employee_id, employee.job_title].some((value) =>
-        value.toLocaleLowerCase("pt-BR").includes(term),
-      ),
+      [
+        employee.full_name,
+        employee.badge,
+        employee.employee_id,
+        employee.job_title,
+        employee.address ?? "",
+        employee.neighborhood ?? "",
+        employee.city ?? "",
+        employee.phone ?? "",
+        employee.message_contact ?? "",
+        employee.transport_line ?? "",
+      ].some((value) => value.toLocaleLowerCase("pt-BR").includes(term)),
     );
   }, [employees.data, search]);
 
@@ -1534,6 +1605,24 @@ function EmployeeManagement() {
                     <div className="truncate">{employee.job_title}</div>
                   </div>
                 </div>
+                <div className="mt-2 space-y-1 rounded bg-muted/30 p-2 text-[11px]">
+                  <div>
+                    <span className="text-muted-foreground">Telefone: </span>
+                    {employee.phone || "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Contato (recado): </span>
+                    {employee.message_contact || "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Endereço: </span>
+                    {[employee.address, employee.neighborhood, employee.city].filter(Boolean).join(" - ") || "—"}
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Linha: </span>
+                    {employee.transport_line || "—"}
+                  </div>
+                </div>
                 <button
                   disabled={changingId === employee.id}
                   onClick={() => changeStatus(employee)}
@@ -1546,7 +1635,7 @@ function EmployeeManagement() {
             ))}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[850px] text-left text-[12px]">
+            <table className="w-full min-w-[1320px] text-left text-[12px]">
               <thead className="border-b border-border bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">Chapa</th>
@@ -1554,6 +1643,9 @@ function EmployeeManagement() {
                   <th className="px-3 py-2">Admissão</th>
                   <th className="px-3 py-2">Nome</th>
                   <th className="px-3 py-2">Função</th>
+                  <th className="px-3 py-2">Telefone</th>
+                  <th className="px-3 py-2">Endereço</th>
+                  <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2 text-right">Ação</th>
                 </tr>
@@ -1566,6 +1658,11 @@ function EmployeeManagement() {
                     <td className="px-3 py-2">{formatDate(employee.admission_date)}</td>
                     <td className="px-3 py-2 font-medium">{employee.full_name}</td>
                     <td className="px-3 py-2">{employee.job_title}</td>
+                    <td className="px-3 py-2">{employee.phone || "—"}</td>
+                    <td className="max-w-[360px] px-3 py-2">
+                      {[employee.address, employee.neighborhood, employee.city].filter(Boolean).join(" - ") || "—"}
+                    </td>
+                    <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
                     <td className="px-3 py-2 text-right">
                       <button
@@ -1645,6 +1742,12 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       admission_date: string;
       full_name: string;
       job_title: string;
+      address: string | null;
+      neighborhood: string | null;
+      city: string | null;
+      phone: string | null;
+      message_contact: string | null;
+      transport_line: string | null;
     }> = [];
     const errors: string[] = [];
     raw.split(/\r?\n/).forEach((line, index) => {
@@ -1652,8 +1755,8 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       const columns = line.includes("\t") ? line.split("\t") : line.split(";");
       const values = columns.map((value) => value.trim());
       if (index === 0 && /chapa/i.test(values[0] ?? "")) return;
-      if (values.length < 5) {
-        errors.push(`Linha ${index + 1}: informe as 5 colunas.`);
+      if (values.length < EMPLOYEE_TEMPLATE_HEADERS.length) {
+        errors.push(`Linha ${index + 1}: informe as ${EMPLOYEE_TEMPLATE_HEADERS.length} colunas.`);
         return;
       }
       const date = normalizeEmployeeDate(values[2]);
@@ -1666,7 +1769,13 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         employee_id: values[1],
         admission_date: date,
         full_name: values[3],
-        job_title: values.slice(4).join(" "),
+        job_title: values[4],
+        address: values[5] || null,
+        neighborhood: values[6] || null,
+        city: values[7] || null,
+        phone: values[8] || null,
+        message_contact: values[9] || null,
+        transport_line: values[10] || null,
       });
     });
     return { records, errors };
@@ -1688,7 +1797,7 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
       const receivedHeaders = rows[0].slice(0, EMPLOYEE_TEMPLATE_HEADERS.length).map((value) => String(value).trim());
       const validHeaders = EMPLOYEE_TEMPLATE_HEADERS.every((header, index) => receivedHeaders[index] === header);
       if (!validHeaders) {
-        throw new Error("Cabeçalhos inválidos. Use exatamente: Chapa, ID, Data de Admissão, Nome, Função.");
+        throw new Error(`Cabeçalhos inválidos. Use exatamente: ${EMPLOYEE_TEMPLATE_HEADERS.join(", ")}.`);
       }
       const employeeRows = rows
         .slice(1)
@@ -1763,7 +1872,9 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         className="input-base mt-2 min-h-56 font-mono text-[12px]"
         value={raw}
         onChange={(e) => setRaw(e.target.value)}
-        placeholder={"Chapa\tID\tData de Admissão\tNome\tFunção\n1234\t9876\t15/01/2024\tMaria da Silva\tEletricista"}
+        placeholder={
+          "Chapa\tID\tData de Admissão\tNome\tFunção\tEndereço\tBairro\tCidade\tTelefone\tContato (recado)\tLinha\n1234\t9876\t15/01/2024\tMaria da Silva\tEletricista\tRua A, 100\tCentro\tSão Luís\t(98) 99999-9999\t(98) 98888-8888\tL-01"
+        }
       />
       <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
         <span className="rounded bg-success/10 px-2 py-1 text-success">{parsed.records.length} linha(s) válida(s)</span>
@@ -1922,7 +2033,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("employees")
-        .select("id,badge,employee_id,admission_date,full_name,job_title,is_active")
+        .select(
+          "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
+        )
         .eq("is_active", true)
         .order("full_name")
         .limit(2000);
@@ -1936,9 +2049,18 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     if (term.length < 2) return [];
     return (employees.data ?? [])
       .filter((employee) =>
-        [employee.full_name, employee.badge, employee.employee_id, employee.job_title].some((value) =>
-          value.toLocaleLowerCase("pt-BR").includes(term),
-        ),
+        [
+          employee.full_name,
+          employee.badge,
+          employee.employee_id,
+          employee.job_title,
+          employee.address ?? "",
+          employee.neighborhood ?? "",
+          employee.city ?? "",
+          employee.phone ?? "",
+          employee.message_contact ?? "",
+          employee.transport_line ?? "",
+        ].some((value) => value.toLocaleLowerCase("pt-BR").includes(term)),
       )
       .slice(0, 30);
   }, [employees.data, employeeSearch]);
