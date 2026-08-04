@@ -82,7 +82,31 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
       rows.push(...data);
       if (data.length < pageSize) break;
     }
-    return { ok: true as const, rows };
+    const registrations = [
+      ...new Set(rows.map((row) => String(row.employee_registration || "").trim()).filter(Boolean)),
+    ];
+    const employeeByBadge = new Map<string, any>();
+    for (let from = 0; from < registrations.length; from += 500) {
+      const { data: employees, error: employeeError } = await db
+        .from("employees")
+        .select("badge,address,neighborhood,city,phone,message_contact,transport_line")
+        .in("badge", registrations.slice(from, from + 500));
+      if (employeeError) return { ok: false as const, error: employeeError.message };
+      for (const employee of employees ?? []) employeeByBadge.set(String(employee.badge).trim(), employee);
+    }
+    const enrichedRows = rows.map((row) => {
+      const employee = employeeByBadge.get(String(row.employee_registration || "").trim());
+      return {
+        ...row,
+        employee_address: employee?.address ?? null,
+        employee_neighborhood: employee?.neighborhood ?? null,
+        employee_city: employee?.city ?? null,
+        employee_phone: employee?.phone ?? null,
+        employee_message_contact: employee?.message_contact ?? null,
+        employee_transport_line: employee?.transport_line ?? null,
+      };
+    });
+    return { ok: true as const, rows: enrichedRows };
   });
 
 function isValidDate(value: string) {
@@ -213,6 +237,12 @@ const employeeSchema = z
     admission_date: z.string().refine(isValidDate, "Data de admissão inválida"),
     full_name: z.string().trim().min(2).max(150),
     job_title: z.string().trim().min(1).max(120),
+    address: z.string().trim().max(300).nullable().optional(),
+    neighborhood: z.string().trim().max(150).nullable().optional(),
+    city: z.string().trim().max(150).nullable().optional(),
+    phone: z.string().trim().max(50).nullable().optional(),
+    message_contact: z.string().trim().max(100).nullable().optional(),
+    transport_line: z.string().trim().max(100).nullable().optional(),
   })
   .refine((employee) => Boolean(employee.badge || employee.employee_id), {
     message: "Informe a Chapa ou o ID do colaborador",
@@ -244,6 +274,12 @@ export const upsertEmployees = createServerFn({ method: "POST" })
       admission_date: employee.admission_date,
       full_name: employee.full_name,
       job_title: employee.job_title,
+      address: employee.address || null,
+      neighborhood: employee.neighborhood || null,
+      city: employee.city || null,
+      phone: employee.phone || null,
+      message_contact: employee.message_contact || null,
+      transport_line: employee.transport_line || null,
       is_active: true,
       updated_by_user_id: userId,
       updated_by_name: info.fullName,
