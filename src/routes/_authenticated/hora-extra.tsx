@@ -649,9 +649,32 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
           { wch: 48 },
           { wch: 48 },
         ];
+    if (transportOnly && sheet["!ref"]) {
+      const styledSheet = sheet as typeof sheet & Record<string, any>;
+      styledSheet["!autofilter"] = { ref: sheet["!ref"] };
+      styledSheet["!rows"] = [{ hpt: 24 }];
+      const headerRange = XLSX.utils.decode_range(sheet["!ref"]);
+      for (let column = headerRange.s.c; column <= headerRange.e.c; column += 1) {
+        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: column });
+        if (!styledSheet[cellAddress]) continue;
+        styledSheet[cellAddress].s = {
+          font: { bold: true, color: { rgb: "FFFFFF" } },
+          fill: { patternType: "solid", fgColor: { rgb: "1F4E78" } },
+          alignment: { horizontal: "center", vertical: "center", wrapText: true },
+          border: {
+            top: { style: "thin", color: { rgb: "D9E2F3" } },
+            bottom: { style: "thin", color: { rgb: "D9E2F3" } },
+            left: { style: "thin", color: { rgb: "D9E2F3" } },
+            right: { style: "thin", color: { rgb: "D9E2F3" } },
+          },
+        };
+      }
+    }
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
-    XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
+    const sheetName = transportOnly ? "Transportes" : "Horas extras";
+    const fileName = transportOnly ? "transportes-" : "horas-extras-";
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    XLSX.writeFile(workbook, fileName + effectiveDate + ".xlsx");
     toast.success(dailyRows.length + " registro(s) exportado(s).");
   }
 
