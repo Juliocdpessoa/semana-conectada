@@ -535,9 +535,12 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
     [exportableRows, effectiveDate, transportFilter, transportOnly],
   );
 
-  function exportDailyExcel() {
-    if (!effectiveDate || dailyRows.length === 0)
-      return toast.error("Não há solicitações de hora extra para exportar nesta data.");
+  async function exportDailyExcel() {
+    if (!effectiveDate || dailyRows.length === 0) {
+      toast.error("Não há solicitações de hora extra para exportar nesta data.");
+      return;
+    }
+
     const regularHeaders = [
       "ID",
       "Matrícula",
@@ -553,50 +556,84 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       "Serviço",
       "Justificativa",
     ];
-    const logisticsHeaders = [
-      "ID",
-      "Matrícula",
-      "Nome",
-      "Função",
-      "Endereço completo",
-      "Telefone",
-      "Contato (recado)",
-      "Linha",
-      "Data",
-      "Horário de entrada",
-      "Horário de saída",
-      "Lanche",
-      "Precisa de transporte",
-      "Status",
-      "Solicitante",
-      "Ordem",
-      "Serviço",
-      "Justificativa",
-    ];
-    const headers = transportOnly ? logisticsHeaders : regularHeaders;
-    const values = dailyRows.map((row) => {
-      const regularValues = [
-        row.employee_external_id || "",
-        row.employee_registration || "",
-        row.employee_name,
-        row.employee_role,
-        formatDate(row.overtime_date),
-        row.entry_time || "",
-        row.departure_time,
-        row.needs_snack ? "Sim" : "Não",
-        formatOvertimeStatus(row.status),
-        row.requester_name || row.requester_email,
-        row.order_number || "",
-        row.service_description,
-        row.justification,
+    const regularValues = dailyRows.map((row) => [
+      row.employee_external_id || "",
+      row.employee_registration || "",
+      row.employee_name,
+      row.employee_role,
+      formatDate(row.overtime_date),
+      row.entry_time || "",
+      row.departure_time,
+      row.needs_snack ? "Sim" : "Não",
+      formatOvertimeStatus(row.status),
+      row.requester_name || row.requester_email,
+      row.order_number || "",
+      row.service_description,
+      row.justification,
+    ]);
+
+    if (!transportOnly) {
+      const sheet = XLSX.utils.aoa_to_sheet([regularHeaders, ...regularValues]);
+      sheet["!cols"] = [
+        { wch: 14 },
+        { wch: 14 },
+        { wch: 32 },
+        { wch: 24 },
+        { wch: 12 },
+        { wch: 18 },
+        { wch: 18 },
+        { wch: 10 },
+        { wch: 14 },
+        { wch: 28 },
+        { wch: 16 },
+        { wch: 48 },
+        { wch: 48 },
       ];
-      if (!transportOnly) return regularValues;
-      return [
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
+      XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
+      toast.success(dailyRows.length + " registro(s) exportado(s).");
+      return;
+    }
+
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "NEXO";
+      workbook.created = new Date();
+      const worksheet = workbook.addWorksheet("Transportes", {
+        views: [{ state: "frozen", ySplit: 1 }],
+      });
+      const logisticsHeaders = [
+        "ID",
+        "Matrícula",
+        "Nome",
+        "Função",
+        "Endereço",
+        "Bairro",
+        "Cidade",
+        "Telefone",
+        "Contato (recado)",
+        "Linha",
+        "Data",
+        "Horário de entrada",
+        "Horário de saída",
+        "Lanche",
+        "Precisa de transporte",
+        "Status",
+        "Solicitante",
+        "Ordem",
+        "Serviço",
+        "Justificativa",
+      ];
+      const logisticsValues = dailyRows.map((row) => [
         row.employee_external_id || "",
         row.employee_registration || "",
         row.employee_name,
         row.employee_role,
-        [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+        row.employee_address || "",
+        row.employee_neighborhood || "",
+        row.employee_city || "",
         row.employee_phone || "",
         row.employee_message_contact || "",
         row.employee_transport_line || "",
@@ -610,72 +647,47 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
         row.order_number || "",
         row.service_description,
         row.justification,
-      ];
-    });
-    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
-    sheet["!cols"] = transportOnly
-      ? [
-          { wch: 14 },
-          { wch: 14 },
-          { wch: 32 },
-          { wch: 24 },
-          { wch: 50 },
-          { wch: 20 },
-          { wch: 24 },
-          { wch: 16 },
-          { wch: 12 },
-          { wch: 18 },
-          { wch: 18 },
-          { wch: 10 },
-          { wch: 20 },
-          { wch: 14 },
-          { wch: 28 },
-          { wch: 16 },
-          { wch: 48 },
-          { wch: 48 },
-        ]
-      : [
-          { wch: 14 },
-          { wch: 14 },
-          { wch: 32 },
-          { wch: 24 },
-          { wch: 12 },
-          { wch: 18 },
-          { wch: 18 },
-          { wch: 10 },
-          { wch: 14 },
-          { wch: 28 },
-          { wch: 16 },
-          { wch: 48 },
-          { wch: 48 },
-        ];
-    if (transportOnly && sheet["!ref"]) {
-      const styledSheet = sheet as typeof sheet & Record<string, any>;
-      styledSheet["!autofilter"] = { ref: sheet["!ref"] };
-      styledSheet["!rows"] = [{ hpt: 24 }];
-      const headerRange = XLSX.utils.decode_range(sheet["!ref"]);
-      for (let column = headerRange.s.c; column <= headerRange.e.c; column += 1) {
-        const cellAddress = XLSX.utils.encode_cell({ r: 0, c: column });
-        if (!styledSheet[cellAddress]) continue;
-        styledSheet[cellAddress].s = {
-          font: { bold: true, color: { rgb: "FFFFFF" } },
-          fill: { patternType: "solid", fgColor: { rgb: "1F4E78" } },
-          alignment: { horizontal: "center", vertical: "center", wrapText: true },
-          border: {
-            top: { style: "thin", color: { rgb: "D9E2F3" } },
-            bottom: { style: "thin", color: { rgb: "D9E2F3" } },
-            left: { style: "thin", color: { rgb: "D9E2F3" } },
-            right: { style: "thin", color: { rgb: "D9E2F3" } },
-          },
-        };
-      }
+      ]);
+      worksheet.addTable({
+        name: "TabelaTransportes",
+        ref: "A1",
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: "TableStyleMedium2",
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: false,
+        },
+        columns: logisticsHeaders.map((name) => ({ name, filterButton: true })),
+        rows: logisticsValues,
+      });
+      const widths = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28, 16, 48, 48];
+      widths.forEach((width, index) => {
+        worksheet.getColumn(index + 1).width = width;
+      });
+      worksheet.getRow(1).height = 26;
+      worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber > 1) row.alignment = { vertical: "top", wrapText: true };
+      });
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "transportes-" + effectiveDate + ".xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(dailyRows.length + " colaborador(es) exportado(s) em tabela.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar a tabela de transportes.");
     }
-    const workbook = XLSX.utils.book_new();
-    const sheetName = transportOnly ? "Transportes" : "Horas extras";
-    const fileName = transportOnly ? "transportes-" : "horas-extras-";
-    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
-    XLSX.writeFile(workbook, fileName + effectiveDate + ".xlsx");
-    toast.success(dailyRows.length + " registro(s) exportado(s).");
   }
 
   return (
