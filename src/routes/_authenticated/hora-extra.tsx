@@ -538,7 +538,22 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
   function exportDailyExcel() {
     if (!effectiveDate || dailyRows.length === 0)
       return toast.error("Não há solicitações de hora extra para exportar nesta data.");
-    const headers = [
+    const regularHeaders = [
+      "ID",
+      "Matrícula",
+      "Nome",
+      "Função",
+      "Data",
+      "Horário de entrada",
+      "Horário de saída",
+      "Lanche",
+      "Status",
+      "Solicitante",
+      "Ordem",
+      "Serviço",
+      "Justificativa",
+    ];
+    const logisticsHeaders = [
       "ID",
       "Matrícula",
       "Nome",
@@ -558,47 +573,82 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       "Serviço",
       "Justificativa",
     ];
-    const values = dailyRows.map((row) => [
-      row.employee_external_id || "",
-      row.employee_registration || "",
-      row.employee_name,
-      row.employee_role,
-      [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
-      row.employee_phone || "",
-      row.employee_message_contact || "",
-      row.employee_transport_line || "",
-      formatDate(row.overtime_date),
-      row.entry_time || "",
-      row.departure_time,
-      row.needs_snack ? "Sim" : "Não",
-      row.needs_transport ? "Sim" : "Não",
-      formatOvertimeStatus(row.status),
-      row.requester_name || row.requester_email,
-      row.order_number || "",
-      row.service_description,
-      row.justification,
-    ]);
+    const headers = transportOnly ? logisticsHeaders : regularHeaders;
+    const values = dailyRows.map((row) => {
+      const regularValues = [
+        row.employee_external_id || "",
+        row.employee_registration || "",
+        row.employee_name,
+        row.employee_role,
+        formatDate(row.overtime_date),
+        row.entry_time || "",
+        row.departure_time,
+        row.needs_snack ? "Sim" : "Não",
+        formatOvertimeStatus(row.status),
+        row.requester_name || row.requester_email,
+        row.order_number || "",
+        row.service_description,
+        row.justification,
+      ];
+      if (!transportOnly) return regularValues;
+      return [
+        row.employee_external_id || "",
+        row.employee_registration || "",
+        row.employee_name,
+        row.employee_role,
+        [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+        row.employee_phone || "",
+        row.employee_message_contact || "",
+        row.employee_transport_line || "",
+        formatDate(row.overtime_date),
+        row.entry_time || "",
+        row.departure_time,
+        row.needs_snack ? "Sim" : "Não",
+        row.needs_transport ? "Sim" : "Não",
+        formatOvertimeStatus(row.status),
+        row.requester_name || row.requester_email,
+        row.order_number || "",
+        row.service_description,
+        row.justification,
+      ];
+    });
     const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
-    sheet["!cols"] = [
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 32 },
-      { wch: 24 },
-      { wch: 50 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 12 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 10 },
-      { wch: 20 },
-      { wch: 14 },
-      { wch: 28 },
-      { wch: 16 },
-      { wch: 48 },
-      { wch: 48 },
-    ];
+    sheet["!cols"] = transportOnly
+      ? [
+          { wch: 14 },
+          { wch: 14 },
+          { wch: 32 },
+          { wch: 24 },
+          { wch: 50 },
+          { wch: 20 },
+          { wch: 24 },
+          { wch: 16 },
+          { wch: 12 },
+          { wch: 18 },
+          { wch: 18 },
+          { wch: 10 },
+          { wch: 20 },
+          { wch: 14 },
+          { wch: 28 },
+          { wch: 16 },
+          { wch: 48 },
+          { wch: 48 },
+        ]
+      : [
+          { wch: 14 },
+          { wch: 14 },
+          { wch: 32 },
+          { wch: 24 },
+          { wch: 12 },
+          { wch: 18 },
+          { wch: 18 },
+          { wch: 10 },
+          { wch: 14 },
+          { wch: 28 },
+          { wch: 16 },
+          { wch: 48 },
+          { wch: 48 },
+        ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
     XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
