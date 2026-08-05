@@ -1558,7 +1558,7 @@ function downloadEmployeeTemplate() {
   XLSX.writeFile(workbook, "modelo_importacao_colaboradores.xlsx");
 }
 
-function EmployeeManagement() {
+function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
   const [search, setSearch] = useState("");
@@ -1624,24 +1624,26 @@ function EmployeeManagement() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <button
-            type="button"
-            onClick={downloadEmployeeTemplate}
-            className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              <Download className="h-3.5 w-3.5" /> Baixar modelo
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowImport(true)}
-            className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
-          >
-            <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button
+              type="button"
+              onClick={downloadEmployeeTemplate}
+              className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Download className="h-3.5 w-3.5" /> Baixar modelo
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
+            >
+              <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
+            </button>
+          </div>
+        )}
       </div>
       {employees.isLoading ? (
         <div className="p-6 text-center text-[12px] text-muted-foreground">Carregando colaboradores…</div>
