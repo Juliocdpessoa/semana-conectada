@@ -283,7 +283,7 @@ function OvertimePage() {
             )}
           </TabBtn>
         )}
-        {isManager && (
+        {(isManager || isLogistics) && (
           <TabBtn active={tab === "employees"} onClick={() => setTab("employees")}>
             Colaboradores
           </TabBtn>
@@ -328,7 +328,7 @@ function OvertimePage() {
         />
       )}
 
-      {tab === "employees" && isManager && <EmployeeManagement />}
+      {tab === "employees" && (isManager || isLogistics) && <EmployeeManagement readOnly={!isManager} />}
 
       {showNew && canRequest && (
         <NewRequestModal
