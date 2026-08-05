@@ -1730,7 +1730,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   <th className="px-3 py-2">Endereço</th>
                   <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Ação</th>
+                  {!readOnly && <th className="px-3 py-2 text-right">Ação</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
