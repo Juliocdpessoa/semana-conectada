@@ -283,7 +283,7 @@ function OvertimePage() {
             )}
           </TabBtn>
         )}
-        {isManager && (
+        {(isManager || isLogistics) && (
           <TabBtn active={tab === "employees"} onClick={() => setTab("employees")}>
             Colaboradores
           </TabBtn>
@@ -328,7 +328,7 @@ function OvertimePage() {
         />
       )}
 
-      {tab === "employees" && isManager && <EmployeeManagement />}
+      {tab === "employees" && (isManager || isLogistics) && <EmployeeManagement readOnly={!isManager} />}
 
       {showNew && canRequest && (
         <NewRequestModal
@@ -1558,7 +1558,7 @@ function downloadEmployeeTemplate() {
   XLSX.writeFile(workbook, "modelo_importacao_colaboradores.xlsx");
 }
 
-function EmployeeManagement() {
+function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
   const [search, setSearch] = useState("");
@@ -1624,24 +1624,26 @@ function EmployeeManagement() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-          <button
-            type="button"
-            onClick={downloadEmployeeTemplate}
-            className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
-          >
-            <span className="flex items-center justify-center gap-1.5">
-              <Download className="h-3.5 w-3.5" /> Baixar modelo
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowImport(true)}
-            className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
-          >
-            <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
-          </button>
-        </div>
+        {!readOnly && (
+          <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button
+              type="button"
+              onClick={downloadEmployeeTemplate}
+              className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted sm:w-auto"
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Download className="h-3.5 w-3.5" /> Baixar modelo
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowImport(true)}
+              className="btn-primary min-h-10 w-full justify-center text-[12px] sm:w-auto"
+            >
+              <Upload className="h-3.5 w-3.5" /> Importar / atualizar lista
+            </button>
+          </div>
+        )}
       </div>
       {employees.isLoading ? (
         <div className="p-6 text-center text-[12px] text-muted-foreground">Carregando colaboradores…</div>
@@ -1702,14 +1704,16 @@ function EmployeeManagement() {
                     {employee.transport_line || "—"}
                   </div>
                 </div>
-                <button
-                  disabled={changingId === employee.id}
-                  onClick={() => changeStatus(employee)}
-                  className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
-                >
-                  {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                  {employee.is_active ? "Inativar" : "Reativar"}
-                </button>
+                {!readOnly && (
+                  <button
+                    disabled={changingId === employee.id}
+                    onClick={() => changeStatus(employee)}
+                    className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
+                  >
+                    {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                    {employee.is_active ? "Inativar" : "Reativar"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
@@ -1726,7 +1730,7 @@ function EmployeeManagement() {
                   <th className="px-3 py-2">Endereço</th>
                   <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2 text-right">Ação</th>
+                  {!readOnly && <th className="px-3 py-2 text-right">Ação</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1743,15 +1747,17 @@ function EmployeeManagement() {
                     </td>
                     <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        disabled={changingId === employee.id}
-                        onClick={() => changeStatus(employee)}
-                        className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
-                      >
-                        {employee.is_active ? "Inativar" : "Reativar"}
-                      </button>
-                    </td>
+                    {!readOnly && (
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          disabled={changingId === employee.id}
+                          onClick={() => changeStatus(employee)}
+                          className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
+                        >
+                          {employee.is_active ? "Inativar" : "Reativar"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
