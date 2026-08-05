@@ -291,7 +291,7 @@ function OvertimePage() {
       </div>
 
       {tab === "export" && canExportOvertime && (
-        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={logisticsOnly} />
+        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={isLogistics} />
       )}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
