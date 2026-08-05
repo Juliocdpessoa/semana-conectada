@@ -217,40 +217,58 @@ export type Database = {
       }
       employees: {
         Row: {
+          address: string | null
           admission_date: string
           badge: string
+          city: string | null
           created_at: string
           employee_id: string
           full_name: string
           id: string
           is_active: boolean
           job_title: string
+          message_contact: string | null
+          neighborhood: string | null
+          phone: string | null
+          transport_line: string | null
           updated_at: string
           updated_by_name: string | null
           updated_by_user_id: string | null
         }
         Insert: {
+          address?: string | null
           admission_date: string
           badge: string
+          city?: string | null
           created_at?: string
           employee_id: string
           full_name: string
           id?: string
           is_active?: boolean
           job_title: string
+          message_contact?: string | null
+          neighborhood?: string | null
+          phone?: string | null
+          transport_line?: string | null
           updated_at?: string
           updated_by_name?: string | null
           updated_by_user_id?: string | null
         }
         Update: {
+          address?: string | null
           admission_date?: string
           badge?: string
+          city?: string | null
           created_at?: string
           employee_id?: string
           full_name?: string
           id?: string
           is_active?: boolean
           job_title?: string
+          message_contact?: string | null
+          neighborhood?: string | null
+          phone?: string | null
+          transport_line?: string | null
           updated_at?: string
           updated_by_name?: string | null
           updated_by_user_id?: string | null

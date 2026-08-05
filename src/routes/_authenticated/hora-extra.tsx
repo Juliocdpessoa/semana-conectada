@@ -291,7 +291,7 @@ function OvertimePage() {
       </div>
 
       {tab === "export" && canExportOvertime && (
-        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={logisticsOnly} />
+        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={isLogistics} />
       )}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
@@ -622,9 +622,6 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
         "Precisa de transporte",
         "Status",
         "Solicitante",
-        "Ordem",
-        "Serviço",
-        "Justificativa",
       ];
       const logisticsValues = dailyRows.map((row) => [
         row.employee_external_id || "",
@@ -644,9 +641,6 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
         row.needs_transport ? "Sim" : "Não",
         formatOvertimeStatus(row.status),
         row.requester_name || row.requester_email,
-        row.order_number || "",
-        row.service_description,
-        row.justification,
       ]);
       worksheet.addTable({
         name: "TabelaTransportes",
@@ -663,7 +657,7 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
         columns: logisticsHeaders.map((name) => ({ name, filterButton: true })),
         rows: logisticsValues,
       });
-      const widths = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28, 16, 48, 48];
+      const widths = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28];
       widths.forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
