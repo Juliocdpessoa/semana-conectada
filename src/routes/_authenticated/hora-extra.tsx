@@ -1704,14 +1704,16 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     {employee.transport_line || "—"}
                   </div>
                 </div>
-                <button
-                  disabled={changingId === employee.id}
-                  onClick={() => changeStatus(employee)}
-                  className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
-                >
-                  {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                  {employee.is_active ? "Inativar" : "Reativar"}
-                </button>
+                {!readOnly && (
+                  <button
+                    disabled={changingId === employee.id}
+                    onClick={() => changeStatus(employee)}
+                    className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
+                  >
+                    {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                    {employee.is_active ? "Inativar" : "Reativar"}
+                  </button>
+                )}
               </div>
             ))}
           </div>
