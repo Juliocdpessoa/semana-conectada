@@ -38,7 +38,7 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
 ];
 
 function RoleEditor({ user, onSave }: { user: Row; onSave: (roles: AppRole[]) => Promise<boolean> }) {
-  const initial = user.roles.length > 0 ? user.roles : ["leader"];
+  const initial: AppRole[] = user.roles.length > 0 ? user.roles : ["leader"];
   const [selected, setSelected] = useState<AppRole[]>(initial);
   const [saving, setSaving] = useState(false);
 
