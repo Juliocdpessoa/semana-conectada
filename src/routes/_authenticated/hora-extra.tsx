@@ -1747,15 +1747,17 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     </td>
                     <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
-                    <td className="px-3 py-2 text-right">
-                      <button
-                        disabled={changingId === employee.id}
-                        onClick={() => changeStatus(employee)}
-                        className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
-                      >
-                        {employee.is_active ? "Inativar" : "Reativar"}
-                      </button>
-                    </td>
+                    {!readOnly && (
+                      <td className="px-3 py-2 text-right">
+                        <button
+                          disabled={changingId === employee.id}
+                          onClick={() => changeStatus(employee)}
+                          className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
+                        >
+                          {employee.is_active ? "Inativar" : "Reativar"}
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
