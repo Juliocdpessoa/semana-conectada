@@ -18,6 +18,7 @@ import {
   UserCheck,
   Bus,
   UserX,
+  Pencil,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
@@ -30,6 +31,7 @@ import {
   cancelOvertimeRequest,
   upsertEmployees,
   setEmployeeActive,
+  updateEmployee,
   listOvertimeForExport,
 } from "@/lib/overtime.functions";
 
