@@ -1708,14 +1708,22 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   </div>
                 </div>
                 {!readOnly && (
-                  <button
-                    disabled={changingId === employee.id}
-                    onClick={() => changeStatus(employee)}
-                    className="mt-3 flex min-h-9 w-full items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
-                  >
-                    {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
-                    {employee.is_active ? "Inativar" : "Reativar"}
-                  </button>
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      onClick={() => setEditing(employee)}
+                      className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted"
+                    >
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </button>
+                    <button
+                      disabled={changingId === employee.id}
+                      onClick={() => changeStatus(employee)}
+                      className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
+                    >
+                      {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                      {employee.is_active ? "Inativar" : "Reativar"}
+                    </button>
+                  </div>
                 )}
               </div>
             ))}
