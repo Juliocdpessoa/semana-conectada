@@ -1566,6 +1566,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<EmployeeRow | null>(null);
   const employees = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
