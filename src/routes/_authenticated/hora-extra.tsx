@@ -328,7 +328,7 @@ function OvertimePage() {
         />
       )}
 
-      {tab === "employees" && (isManager || isLogistics) && <EmployeeManagement readOnly={!isManager} />}
+      {tab === "employees" && (isManager || isLogistics) && <EmployeeManagement readOnly={false} />}
 
       {showNew && canRequest && (
         <NewRequestModal
