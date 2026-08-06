@@ -295,8 +295,8 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
-      return { ok: false as const, error: "Somente gerente ou administrador pode alterar colaboradores." };
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+      return { ok: false as const, error: "Somente gerente, logística ou administrador pode alterar colaboradores." };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
