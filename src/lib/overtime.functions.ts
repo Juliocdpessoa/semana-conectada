@@ -289,6 +289,62 @@ export const upsertEmployees = createServerFn({ method: "POST" })
     return { ok: true as const, count: saved?.length ?? 0 };
   });
 
+export const updateEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    z
+      .object({
+        id: z.string().uuid(),
+        badge: z.string().trim().max(50),
+        employee_id: z.string().trim().max(50),
+        admission_date: z.string().refine(isValidDate, "Data de admissão inválida"),
+        full_name: z.string().trim().min(2).max(150),
+        job_title: z.string().trim().min(1).max(120),
+        address: z.string().trim().max(300).nullable().optional(),
+        neighborhood: z.string().trim().max(150).nullable().optional(),
+        city: z.string().trim().max(150).nullable().optional(),
+        phone: z.string().trim().max(50).nullable().optional(),
+        message_contact: z.string().trim().max(100).nullable().optional(),
+        transport_line: z.string().trim().max(100).nullable().optional(),
+      })
+      .refine((employee) => Boolean(employee.badge || employee.employee_id), {
+        message: "Informe a Chapa ou o ID do colaborador",
+      })
+      .parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+      return { ok: false as const, error: "Somente gerente, logística ou administrador pode editar colaboradores." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: updated, error } = await db
+      .from("employees")
+      .update({
+        badge: data.badge || `${MISSING_BADGE_PREFIX}${data.employee_id}`,
+        employee_id: data.employee_id || `${MISSING_EMPLOYEE_ID_PREFIX}${data.badge}`,
+        admission_date: data.admission_date,
+        full_name: data.full_name,
+        job_title: data.job_title,
+        address: data.address || null,
+        neighborhood: data.neighborhood || null,
+        city: data.city || null,
+        phone: data.phone || null,
+        message_contact: data.message_contact || null,
+        transport_line: data.transport_line || null,
+        updated_by_user_id: userId,
+        updated_by_name: info.fullName,
+      })
+      .eq("id", data.id)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!updated) return { ok: false as const, error: "Colaborador não encontrado." };
+    return { ok: true as const };
+  });
+
 export const setEmployeeActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data))
