@@ -1729,7 +1729,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
             ))}
           </div>
           <div className="hidden overflow-x-auto md:block">
-            <table className="w-full min-w-[1320px] text-left text-[12px]">
+            <table className="w-full min-w-[1460px] text-left text-[12px]">
               <thead className="border-b border-border bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">Chapa</th>
@@ -1738,6 +1738,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   <th className="px-3 py-2">Nome</th>
                   <th className="px-3 py-2">Função</th>
                   <th className="px-3 py-2">Telefone</th>
+                  <th className="px-3 py-2">Contato (recado)</th>
                   <th className="px-3 py-2">Endereço</th>
                   <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
@@ -1753,20 +1754,29 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     <td className="px-3 py-2 font-medium">{employee.full_name}</td>
                     <td className="px-3 py-2">{employee.job_title}</td>
                     <td className="px-3 py-2">{employee.phone || "—"}</td>
+                    <td className="px-3 py-2">{employee.message_contact || "—"}</td>
                     <td className="max-w-[360px] px-3 py-2">
                       {[employee.address, employee.neighborhood, employee.city].filter(Boolean).join(" - ") || "—"}
                     </td>
                     <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
                     {!readOnly && (
-                      <td className="px-3 py-2 text-right">
-                        <button
-                          disabled={changingId === employee.id}
-                          onClick={() => changeStatus(employee)}
-                          className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
-                        >
-                          {employee.is_active ? "Inativar" : "Reativar"}
-                        </button>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setEditing(employee)}
+                            className="flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                          >
+                            <Pencil className="h-3 w-3" /> Editar
+                          </button>
+                          <button
+                            disabled={changingId === employee.id}
+                            onClick={() => changeStatus(employee)}
+                            className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
+                          >
+                            {employee.is_active ? "Inativar" : "Reativar"}
+                          </button>
+                        </div>
                       </td>
                     )}
                   </tr>
@@ -1786,7 +1796,123 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
           }}
         />
       )}
+      {editing && (
+        <EditEmployeeModal
+          employee={editing}
+          onClose={() => setEditing(null)}
+          onSaved={() => {
+            setEditing(null);
+            qc.invalidateQueries({ queryKey: ["employees"] });
+            qc.invalidateQueries({ queryKey: ["active-employees"] });
+          }}
+        />
+      )}
     </Panel>
+  );
+}
+
+function EditEmployeeModal({
+  employee,
+  onClose,
+  onSaved,
+}: {
+  employee: EmployeeRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const call = useServerFn(updateEmployee);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    badge: employee.badge.startsWith("__missing_badge__:") ? "" : employee.badge,
+    employee_id: employee.employee_id.startsWith("__missing_employee_id__:") ? "" : employee.employee_id,
+    admission_date: employee.admission_date?.slice(0, 10) ?? "",
+    full_name: employee.full_name,
+    job_title: employee.job_title,
+    phone: employee.phone ?? "",
+    message_contact: employee.message_contact ?? "",
+    address: employee.address ?? "",
+    neighborhood: employee.neighborhood ?? "",
+    city: employee.city ?? "",
+    transport_line: employee.transport_line ?? "",
+  });
+  const set = (key: keyof typeof form) => (event: React.ChangeEvent<HTMLInputElement>) =>
+    setForm((current) => ({ ...current, [key]: event.target.value }));
+
+  async function save() {
+    if (!form.full_name.trim() || !form.job_title.trim()) return toast.error("Nome e função são obrigatórios.");
+    if (!form.badge.trim() && !form.employee_id.trim()) return toast.error("Informe a Chapa ou o ID.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.admission_date)) return toast.error("Informe uma data de admissão válida.");
+    setSaving(true);
+    try {
+      const res = await call({ data: { id: employee.id, ...form } });
+      if (!res.ok) return toast.error(res.error);
+      toast.success("Colaborador atualizado.");
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o colaborador.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Editar colaborador"
+      description={employee.full_name}
+      size="lg"
+      onClose={onClose}
+      footer={
+        <>
+          <button onClick={onClose} className="rounded border border-border px-3 py-1.5 text-[12px] hover:bg-muted">
+            Cancelar
+          </button>
+          <button onClick={save} disabled={saving} className="btn-primary text-[12px] disabled:opacity-60">
+            {saving ? "Salvando…" : "Salvar alterações"}
+          </button>
+        </>
+      }
+    >
+      <div className="grid gap-3 sm:grid-cols-2">
+        <Field label="Nome completo" required>
+          <input className="input-base text-[12px]" value={form.full_name} onChange={set("full_name")} />
+        </Field>
+        <Field label="Função" required>
+          <input className="input-base text-[12px]" value={form.job_title} onChange={set("job_title")} />
+        </Field>
+        <Field label="Chapa">
+          <input className="input-base text-[12px]" value={form.badge} onChange={set("badge")} />
+        </Field>
+        <Field label="ID">
+          <input className="input-base text-[12px]" value={form.employee_id} onChange={set("employee_id")} />
+        </Field>
+        <Field label="Admissão" required>
+          <input
+            type="date"
+            className="input-base text-[12px]"
+            value={form.admission_date}
+            onChange={set("admission_date")}
+          />
+        </Field>
+        <Field label="Telefone">
+          <input className="input-base text-[12px]" value={form.phone} onChange={set("phone")} />
+        </Field>
+        <Field label="Contato (recado)">
+          <input className="input-base text-[12px]" value={form.message_contact} onChange={set("message_contact")} />
+        </Field>
+        <Field label="Linha de transporte">
+          <input className="input-base text-[12px]" value={form.transport_line} onChange={set("transport_line")} />
+        </Field>
+        <Field label="Endereço">
+          <input className="input-base text-[12px]" value={form.address} onChange={set("address")} />
+        </Field>
+        <Field label="Bairro">
+          <input className="input-base text-[12px]" value={form.neighborhood} onChange={set("neighborhood")} />
+        </Field>
+        <Field label="Cidade">
+          <input className="input-base text-[12px]" value={form.city} onChange={set("city")} />
+        </Field>
+      </div>
+    </Modal>
   );
 }
 
