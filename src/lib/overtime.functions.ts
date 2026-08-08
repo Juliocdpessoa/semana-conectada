@@ -57,6 +57,83 @@ export type DisplayOvertimeRow = OvertimeRow & {
   groupMembers?: OvertimeRow[];
 };
 
+export const WEEKLY_ACTIVITY_EXPORT_COLUMNS = [
+  "Tipo de Nota",
+  "Nota",
+  "Confirmação",
+  "Ordem",
+  "Op",
+  "Subop",
+  "Data início",
+  "Hora início",
+  "Data fim",
+  "Hora fim",
+  "Gr pl",
+  "Área op",
+  "CenTrab",
+  "TxtDesc.Oper.",
+  "Localização",
+  "Nº",
+  "Dur n",
+  "Trab",
+  "Gerência",
+  "Local",
+  "Status",
+  "Justificativa",
+  "Observações",
+] as const;
+
+export function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
+  return {
+    ...employee,
+    badge: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
+    employee_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
+  };
+}
+
+export function normalizeEmployeeDate(value: string) {
+  const clean = value.trim();
+  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(clean);
+  const brMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[T\s].*)?$/.exec(clean);
+  const year = isoMatch ? isoMatch[1] : brMatch?.[3];
+  const month = (isoMatch ? isoMatch[2] : brMatch?.[2])?.padStart(2, "0");
+  const day = (isoMatch ? isoMatch[3] : brMatch?.[1])?.padStart(2, "0");
+  if (!year || !month || !day) return null;
+  const iso = `${year}-${month}-${day}`;
+  const date = new Date(`${iso}T00:00:00Z`);
+  return date.getUTCFullYear() === Number(year) &&
+    date.getUTCMonth() + 1 === Number(month) &&
+    date.getUTCDate() === Number(day)
+    ? iso
+    : null;
+}
+
+export function formatDate(iso: string) {
+  if (!iso) return "";
+  const [year, month, day] = iso.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+
+export function formatOvertimeStatus(status: OvertimeRow["status"]) {
+  return {
+    pending: "Pendente",
+    approved: "Aprovado",
+    rejected: "Reprovado",
+    cancelled: "Cancelado",
+  }[status];
+}
+
+export function formatDateTime(iso: string) {
+  const date = new Date(iso);
+  return date.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 async function loadRoleAndProfile(supabase: any, userId: string) {
   const [rolesRes, profRes] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
@@ -282,8 +359,8 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     };
   });
 
-const MISSING_BADGE_PREFIX = "__missing_badge__:";
-const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
+export const MISSING_BADGE_PREFIX = "__missing_badge__:";
+export const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
 
 const employeeSchema = z
   .object({
