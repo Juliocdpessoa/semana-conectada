@@ -2,6 +2,61 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+export type OvertimeRow = {
+  id: string;
+  batch_id: string | null;
+  request_number: number;
+  requester_user_id: string;
+  requester_name: string;
+  requester_email: string;
+  employee_name: string;
+  employee_registration: string;
+  employee_external_id: string | null;
+  employee_role: string;
+  activity_id: string | null;
+  week_id: string | null;
+  order_number: string | null;
+  service_description: string;
+  overtime_date: string;
+  entry_time: string | null;
+  departure_time: string;
+  needs_snack: boolean;
+  needs_transport: boolean;
+  employee_address?: string | null;
+  employee_neighborhood?: string | null;
+  employee_city?: string | null;
+  employee_phone?: string | null;
+  employee_message_contact?: string | null;
+  employee_transport_line?: string | null;
+  justification: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  manager_comment: string | null;
+  decided_by_name: string | null;
+  decided_at: string | null;
+  version: number;
+  created_at: string;
+};
+
+export type EmployeeRow = {
+  id: string;
+  badge: string;
+  employee_id: string;
+  admission_date: string;
+  full_name: string;
+  job_title: string;
+  address: string | null;
+  neighborhood: string | null;
+  city: string | null;
+  phone: string | null;
+  message_contact: string | null;
+  transport_line: string | null;
+  is_active: boolean;
+};
+
+export type DisplayOvertimeRow = OvertimeRow & {
+  groupMembers?: OvertimeRow[];
+};
+
 async function loadRoleAndProfile(supabase: any, userId: string) {
   const [rolesRes, profRes] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
