@@ -34,11 +34,14 @@ import {
   updateEmployee,
   listOvertimeForExport,
   WEEKLY_ACTIVITY_EXPORT_COLUMNS,
+  EMPLOYEE_TEMPLATE_HEADERS,
   sanitizeEmployeeRow,
   normalizeEmployeeDate,
   formatDate,
   formatOvertimeStatus,
   formatDateTime,
+  formatPlanningDate,
+  formatReportedDate,
 } from "@/lib/overtime.functions";
 import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtime.functions";
 
@@ -316,43 +319,6 @@ function WeeklyActivityExport() {
       return all;
     },
   });
-
-  function formatPlanningDate(value: unknown) {
-    if (value === null || value === undefined || value === "") return "";
-    if (value instanceof Date && !isNaN(value.getTime())) {
-      return (
-        String(value.getDate()).padStart(2, "0") +
-        "/" +
-        String(value.getMonth() + 1).padStart(2, "0") +
-        "/" +
-        value.getFullYear()
-      );
-    }
-    const text = String(value).trim();
-    const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
-    if (iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
-    const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
-    if (br) return String(Number(br[1])).padStart(2, "0") + "/" + String(Number(br[2])).padStart(2, "0") + "/" + br[3];
-    return text;
-  }
-
-  function formatReportedDate(value: unknown) {
-    if (!value) return "";
-    const date = new Date(String(value));
-    if (isNaN(date.getTime())) return "";
-    const pad = (number: number) => String(number).padStart(2, "0");
-    return (
-      pad(date.getDate()) +
-      "/" +
-      pad(date.getMonth() + 1) +
-      "/" +
-      date.getFullYear() +
-      " " +
-      pad(date.getHours()) +
-      ":" +
-      pad(date.getMinutes())
-    );
-  }
 
   function exportWeeklyExcel() {
     if (!selectedWeek || !activities.data?.length) {
@@ -1441,20 +1407,6 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 }
 
 /* ---------- Employee Management ---------- */
-const EMPLOYEE_TEMPLATE_HEADERS = [
-  "Chapa",
-  "ID",
-  "Data de Admissão",
-  "Nome",
-  "Função",
-  "Endereço",
-  "Bairro",
-  "Cidade",
-  "Telefone",
-  "Contato (recado)",
-  "Linha",
-] as const;
-
 function downloadEmployeeTemplate() {
   const worksheet = XLSX.utils.aoa_to_sheet([[...EMPLOYEE_TEMPLATE_HEADERS]]);
   worksheet["!cols"] = [
