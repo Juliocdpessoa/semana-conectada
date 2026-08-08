@@ -33,45 +33,14 @@ import {
   setEmployeeActive,
   updateEmployee,
   listOvertimeForExport,
+  WEEKLY_ACTIVITY_EXPORT_COLUMNS,
+  sanitizeEmployeeRow,
+  normalizeEmployeeDate,
+  formatDate,
+  formatOvertimeStatus,
+  formatDateTime,
 } from "@/lib/overtime.functions";
 import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtime.functions";
-
-const MISSING_BADGE_PREFIX = "__missing_badge__:";
-const MISSING_EMPLOYEE_ID_PREFIX = "__missing_employee_id__:";
-
-const WEEKLY_ACTIVITY_EXPORT_COLUMNS = [
-  "Tipo de Nota",
-  "Nota",
-  "Confirmação",
-  "Ordem",
-  "Op",
-  "Subop",
-  "Data início",
-  "Hora início",
-  "Data fim",
-  "Hora fim",
-  "Gr pl",
-  "Área op",
-  "CenTrab",
-  "TxtDesc.Oper.",
-  "Localização",
-  "Nº",
-  "Dur n",
-  "Trab",
-  "Gerência",
-  "Local",
-  "Status",
-  "Justificativa",
-  "Observações",
-] as const;
-
-function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
-  return {
-    ...employee,
-    badge: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
-    employee_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
-  };
-}
 
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
@@ -1862,23 +1831,6 @@ function EditEmployeeModal({
   );
 }
 
-function normalizeEmployeeDate(value: string) {
-  const clean = value.trim();
-  const isoMatch = /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/.exec(clean);
-  const brMatch = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:[T\s].*)?$/.exec(clean);
-  const year = isoMatch ? isoMatch[1] : brMatch?.[3];
-  const month = (isoMatch ? isoMatch[2] : brMatch?.[2])?.padStart(2, "0");
-  const day = (isoMatch ? isoMatch[3] : brMatch?.[1])?.padStart(2, "0");
-  if (!year || !month || !day) return null;
-  const iso = `${year}-${month}-${day}`;
-  const date = new Date(`${iso}T00:00:00Z`);
-  return date.getUTCFullYear() === Number(year) &&
-    date.getUTCMonth() + 1 === Number(month) &&
-    date.getUTCDate() === Number(day)
-    ? iso
-    : null;
-}
-
 function formatEmployeeSpreadsheetDate(value: unknown) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     const day = String(value.getUTCDate()).padStart(2, "0");
@@ -2707,28 +2659,4 @@ function DecideModal({
       </div>
     </Modal>
   );
-}
-
-function formatDate(iso: string) {
-  if (!iso) return "";
-  const [y, m, d] = iso.slice(0, 10).split("-");
-  return `${d}/${m}/${y}`;
-}
-function formatOvertimeStatus(status: OvertimeRow["status"]) {
-  return {
-    pending: "Pendente",
-    approved: "Aprovado",
-    rejected: "Reprovado",
-    cancelled: "Cancelado",
-  }[status];
-}
-function formatDateTime(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
