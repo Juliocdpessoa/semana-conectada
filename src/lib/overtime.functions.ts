@@ -83,6 +83,59 @@ export const WEEKLY_ACTIVITY_EXPORT_COLUMNS = [
   "Observações",
 ] as const;
 
+export const EMPLOYEE_TEMPLATE_HEADERS = [
+  "Chapa",
+  "ID",
+  "Data de Admissão",
+  "Nome",
+  "Função",
+  "Endereço",
+  "Bairro",
+  "Cidade",
+  "Telefone",
+  "Contato (recado)",
+  "Linha",
+] as const;
+
+export function formatPlanningDate(value: unknown) {
+  if (value === null || value === undefined || value === "") return "";
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return (
+      String(value.getDate()).padStart(2, "0") +
+      "/" +
+      String(value.getMonth() + 1).padStart(2, "0") +
+      "/" +
+      value.getFullYear()
+    );
+  }
+  const text = String(value).trim();
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
+  const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
+  if (br) {
+    return String(Number(br[1])).padStart(2, "0") + "/" + String(Number(br[2])).padStart(2, "0") + "/" + br[3];
+  }
+  return text;
+}
+
+export function formatReportedDate(value: unknown) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (number: number) => String(number).padStart(2, "0");
+  return (
+    pad(date.getDate()) +
+    "/" +
+    pad(date.getMonth() + 1) +
+    "/" +
+    date.getFullYear() +
+    " " +
+    pad(date.getHours()) +
+    ":" +
+    pad(date.getMinutes())
+  );
+}
+
 export function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
   return {
     ...employee,
