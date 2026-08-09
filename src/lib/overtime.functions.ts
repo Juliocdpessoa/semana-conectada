@@ -97,6 +97,128 @@ export const EMPLOYEE_TEMPLATE_HEADERS = [
   "Linha",
 ] as const;
 
+export const REGULAR_OVERTIME_EXPORT_HEADERS = [
+  "ID",
+  "Matrícula",
+  "Nome",
+  "Função",
+  "Data",
+  "Horário de entrada",
+  "Horário de saída",
+  "Lanche",
+  "Status",
+  "Solicitante",
+  "Ordem",
+  "Serviço",
+  "Justificativa",
+] as const;
+
+export const REGULAR_OVERTIME_EXPORT_WIDTHS = [14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 48, 48] as const;
+
+export const LOGISTICS_EXPORT_HEADERS = [
+  "ID",
+  "Matrícula",
+  "Nome",
+  "Função",
+  "Endereço",
+  "Bairro",
+  "Cidade",
+  "Telefone",
+  "Contato (recado)",
+  "Linha",
+  "Data",
+  "Horário de entrada",
+  "Horário de saída",
+  "Lanche",
+  "Precisa de transporte",
+  "Status",
+  "Solicitante",
+] as const;
+
+export const LOGISTICS_EXPORT_WIDTHS = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28] as const;
+
+export const TRANSPORT_EXPORT_HEADERS = [
+  "Data",
+  "Chapa",
+  "ID",
+  "Nome",
+  "Função",
+  "Endereço completo",
+  "Telefone",
+  "Contato (recado)",
+  "Linha",
+  "Horário de entrada",
+  "Horário de saída",
+  "Ordem",
+  "Serviço",
+  "Solicitante",
+  "Precisa de transporte",
+  "Status",
+] as const;
+
+export const TRANSPORT_EXPORT_WIDTHS = [12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 20, 16] as const;
+
+export function mapRegularOvertimeExportRow(row: OvertimeRow) {
+  return [
+    row.employee_external_id || "",
+    row.employee_registration || "",
+    row.employee_name,
+    row.employee_role,
+    formatDate(row.overtime_date),
+    row.entry_time || "",
+    row.departure_time,
+    row.needs_snack ? "Sim" : "Não",
+    formatOvertimeStatus(row.status),
+    row.requester_name || row.requester_email,
+    row.order_number || "",
+    row.service_description,
+    row.justification,
+  ];
+}
+
+export function mapLogisticsExportRow(row: OvertimeRow) {
+  return [
+    row.employee_external_id || "",
+    row.employee_registration || "",
+    row.employee_name,
+    row.employee_role,
+    row.employee_address || "",
+    row.employee_neighborhood || "",
+    row.employee_city || "",
+    row.employee_phone || "",
+    row.employee_message_contact || "",
+    row.employee_transport_line || "",
+    formatDate(row.overtime_date),
+    row.entry_time || "",
+    row.departure_time,
+    row.needs_snack ? "Sim" : "Não",
+    row.needs_transport ? "Sim" : "Não",
+    formatOvertimeStatus(row.status),
+    row.requester_name || row.requester_email,
+  ];
+}
+
+export function mapTransportExportRow(row: OvertimeRow) {
+  return [
+    formatDate(row.overtime_date),
+    row.employee_registration || "",
+    row.employee_external_id || "",
+    row.employee_name,
+    row.employee_role,
+    [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+    row.employee_phone || "",
+    row.employee_message_contact || "",
+    row.employee_transport_line || "",
+    row.entry_time || "",
+    row.departure_time,
+    row.order_number || "",
+    row.service_description,
+    row.requester_name || row.requester_email,
+    row.needs_transport ? "Sim" : "Não",
+    formatOvertimeStatus(row.status),
+  ];
+}
+
 export function formatPlanningDate(value: unknown) {
   if (value === null || value === undefined || value === "") return "";
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
