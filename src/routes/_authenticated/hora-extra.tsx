@@ -42,6 +42,15 @@ import {
   formatDateTime,
   formatPlanningDate,
   formatReportedDate,
+  REGULAR_OVERTIME_EXPORT_HEADERS,
+  REGULAR_OVERTIME_EXPORT_WIDTHS,
+  LOGISTICS_EXPORT_HEADERS,
+  LOGISTICS_EXPORT_WIDTHS,
+  TRANSPORT_EXPORT_HEADERS,
+  TRANSPORT_EXPORT_WIDTHS,
+  mapRegularOvertimeExportRow,
+  mapLogisticsExportRow,
+  mapTransportExportRow,
 } from "@/lib/overtime.functions";
 import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtime.functions";
 
@@ -424,54 +433,11 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       return;
     }
 
-    const regularHeaders = [
-      "ID",
-      "Matrícula",
-      "Nome",
-      "Função",
-      "Data",
-      "Horário de entrada",
-      "Horário de saída",
-      "Lanche",
-      "Status",
-      "Solicitante",
-      "Ordem",
-      "Serviço",
-      "Justificativa",
-    ];
-    const regularValues = dailyRows.map((row) => [
-      row.employee_external_id || "",
-      row.employee_registration || "",
-      row.employee_name,
-      row.employee_role,
-      formatDate(row.overtime_date),
-      row.entry_time || "",
-      row.departure_time,
-      row.needs_snack ? "Sim" : "Não",
-      formatOvertimeStatus(row.status),
-      row.requester_name || row.requester_email,
-      row.order_number || "",
-      row.service_description,
-      row.justification,
-    ]);
+    const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
 
     if (!transportOnly) {
-      const sheet = XLSX.utils.aoa_to_sheet([regularHeaders, ...regularValues]);
-      sheet["!cols"] = [
-        { wch: 14 },
-        { wch: 14 },
-        { wch: 32 },
-        { wch: 24 },
-        { wch: 12 },
-        { wch: 18 },
-        { wch: 18 },
-        { wch: 10 },
-        { wch: 14 },
-        { wch: 28 },
-        { wch: 16 },
-        { wch: 48 },
-        { wch: 48 },
-      ];
+      const sheet = XLSX.utils.aoa_to_sheet([[...REGULAR_OVERTIME_EXPORT_HEADERS], ...regularValues]);
+      sheet["!cols"] = REGULAR_OVERTIME_EXPORT_WIDTHS.map((wch) => ({ wch }));
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
       XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
@@ -487,44 +453,7 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       const worksheet = workbook.addWorksheet("Transportes", {
         views: [{ state: "frozen", ySplit: 1 }],
       });
-      const logisticsHeaders = [
-        "ID",
-        "Matrícula",
-        "Nome",
-        "Função",
-        "Endereço",
-        "Bairro",
-        "Cidade",
-        "Telefone",
-        "Contato (recado)",
-        "Linha",
-        "Data",
-        "Horário de entrada",
-        "Horário de saída",
-        "Lanche",
-        "Precisa de transporte",
-        "Status",
-        "Solicitante",
-      ];
-      const logisticsValues = dailyRows.map((row) => [
-        row.employee_external_id || "",
-        row.employee_registration || "",
-        row.employee_name,
-        row.employee_role,
-        row.employee_address || "",
-        row.employee_neighborhood || "",
-        row.employee_city || "",
-        row.employee_phone || "",
-        row.employee_message_contact || "",
-        row.employee_transport_line || "",
-        formatDate(row.overtime_date),
-        row.entry_time || "",
-        row.departure_time,
-        row.needs_snack ? "Sim" : "Não",
-        row.needs_transport ? "Sim" : "Não",
-        formatOvertimeStatus(row.status),
-        row.requester_name || row.requester_email,
-      ]);
+      const logisticsValues = dailyRows.map(mapLogisticsExportRow);
       worksheet.addTable({
         name: "TabelaTransportes",
         ref: "A1",
@@ -537,11 +466,10 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
           showRowStripes: true,
           showColumnStripes: false,
         },
-        columns: logisticsHeaders.map((name) => ({ name, filterButton: true })),
+        columns: LOGISTICS_EXPORT_HEADERS.map((name) => ({ name, filterButton: true })),
         rows: logisticsValues,
       });
-      const widths = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28];
-      widths.forEach((width, index) => {
+      LOGISTICS_EXPORT_WIDTHS.forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
       worksheet.getRow(1).height = 26;
@@ -743,61 +671,9 @@ function TransportView({
 
   function exportExcel() {
     if (filtered.length === 0) return toast.error("Não há colaboradores para exportar com os filtros atuais.");
-    const headers = [
-      "Data",
-      "Chapa",
-      "ID",
-      "Nome",
-      "Função",
-      "Endereço completo",
-      "Telefone",
-      "Contato (recado)",
-      "Linha",
-      "Horário de entrada",
-      "Horário de saída",
-      "Ordem",
-      "Serviço",
-      "Solicitante",
-      "Precisa de transporte",
-      "Status",
-    ];
-    const values = filtered.map((row) => [
-      formatDate(row.overtime_date),
-      row.employee_registration || "",
-      row.employee_external_id || "",
-      row.employee_name,
-      row.employee_role,
-      [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
-      row.employee_phone || "",
-      row.employee_message_contact || "",
-      row.employee_transport_line || "",
-      row.entry_time || "",
-      row.departure_time,
-      row.order_number || "",
-      row.service_description,
-      row.requester_name || row.requester_email,
-      row.needs_transport ? "Sim" : "Não",
-      formatOvertimeStatus(row.status),
-    ]);
-    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
-    sheet["!cols"] = [
-      { wch: 12 },
-      { wch: 14 },
-      { wch: 14 },
-      { wch: 32 },
-      { wch: 24 },
-      { wch: 50 },
-      { wch: 20 },
-      { wch: 24 },
-      { wch: 16 },
-      { wch: 18 },
-      { wch: 18 },
-      { wch: 16 },
-      { wch: 48 },
-      { wch: 28 },
-      { wch: 20 },
-      { wch: 16 },
-    ];
+    const values = filtered.map(mapTransportExportRow);
+    const sheet = XLSX.utils.aoa_to_sheet([[...TRANSPORT_EXPORT_HEADERS], ...values]);
+    sheet["!cols"] = TRANSPORT_EXPORT_WIDTHS.map((wch) => ({ wch }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
     XLSX.writeFile(workbook, "transportes-" + effectiveDate + ".xlsx");
