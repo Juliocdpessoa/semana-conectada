@@ -51,6 +51,8 @@ import {
   mapRegularOvertimeExportRow,
   mapLogisticsExportRow,
   mapTransportExportRow,
+  filterEmployees,
+  parseEmployeeImportText,
 } from "@/lib/overtime.functions";
 import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtime.functions";
 
@@ -1324,24 +1326,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
       return ((data ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
     },
   });
-  const filtered = useMemo(() => {
-    const term = search.trim().toLocaleLowerCase("pt-BR");
-    if (!term) return employees.data ?? [];
-    return (employees.data ?? []).filter((employee) =>
-      [
-        employee.full_name,
-        employee.badge,
-        employee.employee_id,
-        employee.job_title,
-        employee.address ?? "",
-        employee.neighborhood ?? "",
-        employee.city ?? "",
-        employee.phone ?? "",
-        employee.message_contact ?? "",
-        employee.transport_line ?? "",
-      ].some((value) => value.toLocaleLowerCase("pt-BR").includes(term)),
-    );
-  }, [employees.data, search]);
+  const filtered = useMemo(() => filterEmployees(employees.data ?? [], search), [employees.data, search]);
 
   async function changeStatus(employee: EmployeeRow) {
     setChangingId(employee.id);
@@ -1683,51 +1668,7 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   const [raw, setRaw] = useState("");
   const [saving, setSaving] = useState(false);
   const [readingFile, setReadingFile] = useState(false);
-  const parsed = useMemo(() => {
-    const records: Array<{
-      badge: string;
-      employee_id: string;
-      admission_date: string;
-      full_name: string;
-      job_title: string;
-      address: string | null;
-      neighborhood: string | null;
-      city: string | null;
-      phone: string | null;
-      message_contact: string | null;
-      transport_line: string | null;
-    }> = [];
-    const errors: string[] = [];
-    raw.split(/\r?\n/).forEach((line, index) => {
-      if (!line.trim()) return;
-      const columns = line.includes("\t") ? line.split("\t") : line.split(";");
-      const values = columns.map((value) => value.trim());
-      if (index === 0 && /chapa/i.test(values[0] ?? "")) return;
-      if (values.length < EMPLOYEE_TEMPLATE_HEADERS.length) {
-        errors.push(`Linha ${index + 1}: informe as ${EMPLOYEE_TEMPLATE_HEADERS.length} colunas.`);
-        return;
-      }
-      const date = normalizeEmployeeDate(values[2]);
-      if ((!values[0] && !values[1]) || !date || !values[3] || !values[4]) {
-        errors.push(`Linha ${index + 1}: informe Chapa ou ID e verifique data, nome e função.`);
-        return;
-      }
-      records.push({
-        badge: values[0],
-        employee_id: values[1],
-        admission_date: date,
-        full_name: values[3],
-        job_title: values[4],
-        address: values[5] || null,
-        neighborhood: values[6] || null,
-        city: values[7] || null,
-        phone: values[8] || null,
-        message_contact: values[9] || null,
-        transport_line: values[10] || null,
-      });
-    });
-    return { records, errors };
-  }, [raw]);
+  const parsed = useMemo(() => parseEmployeeImportText(raw), [raw]);
   async function importSpreadsheet(file?: File) {
     if (!file) return;
     setReadingFile(true);
