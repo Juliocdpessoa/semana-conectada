@@ -553,7 +553,7 @@ function NewScheduleModal({
   const [entryTime, setEntryTime] = useState("");
   const [departureTime, setDepartureTime] = useState("");
   const [needsSnack, setNeedsSnack] = useState(false);
-  const [needsTransport, setNeedsTransport] = useState(true);
+  const [transportIds, setTransportIds] = useState<Set<string>>(new Set());
   const [orderNumber, setOrderNumber] = useState("");
   const [service, setService] = useState("");
   const [observation, setObservation] = useState("");
