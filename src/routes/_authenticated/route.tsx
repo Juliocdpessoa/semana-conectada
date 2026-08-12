@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
-import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer } from "lucide-react";
+import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer, Bus } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
@@ -89,19 +89,24 @@ function AuthedLayout() {
   const canOvertime = roleSet.has("leader") || roleSet.has("manager") || isAdmin || isMeasurementControl || isLogistics;
 
   useEffect(() => {
-    if (overtimeOnly && pathname !== "/hora-extra") {
+    if (overtimeOnly && pathname !== "/hora-extra" && pathname !== "/transporte-programado") {
       router.navigate({ to: "/hora-extra", replace: true });
     }
   }, [overtimeOnly, pathname, router]);
+
+
+  const canScheduledTransport = isPlanning || isManager || isAdmin || isLogistics;
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
     { to: "/painel", label: "Painel", icon: BarChart3, show: !overtimeOnly },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
+    { to: "/transporte-programado", label: "Transporte Programado", icon: Bus, show: canScheduledTransport },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
+
 
   void isManager;
 
