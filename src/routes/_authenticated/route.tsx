@@ -94,14 +94,18 @@ function AuthedLayout() {
     }
   }, [overtimeOnly, pathname, router]);
 
+  const canScheduledTransport = isPlanning || isManager || isAdmin || isLogistics;
+
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
     { to: "/painel", label: "Painel", icon: BarChart3, show: !overtimeOnly },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
+    { to: "/transporte-programado", label: "Transporte Programado", icon: Bus, show: canScheduledTransport },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
+
 
   void isManager;
 
