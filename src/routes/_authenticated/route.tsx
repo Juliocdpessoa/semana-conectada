@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
-import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer } from "lucide-react";
+import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer, Bus } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
