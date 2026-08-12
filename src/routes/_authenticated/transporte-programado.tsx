@@ -674,53 +674,45 @@ function NewScheduleModal({
             </div>
           </Field>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <Field label="Necessita lanche">
               <select
                 value={needsSnack ? "yes" : "no"}
                 onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="no">Não</option>
                 <option value="yes">Sim</option>
-              </select>
-            </Field>
-            <Field label="Necessita transporte">
-              <select
-                value={needsTransport ? "yes" : "no"}
-                onChange={(event) => setNeedsTransport(event.target.value === "yes")}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="yes">Sim</option>
-                <option value="no">Não</option>
               </select>
             </Field>
             <Field label="Ordem (opcional)">
               <input
                 value={orderNumber}
                 onChange={(event) => setOrderNumber(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Serviço/atividade (opcional)">
               <input
                 value={service}
                 onChange={(event) => setService(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+              />
+            </Field>
+            <Field label="Observação (opcional)">
+              <textarea
+                value={observation}
+                onChange={(event) => setObservation(event.target.value)}
+                rows={2}
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
           </div>
 
-          <Field label="Observação (opcional)">
-            <textarea
-              value={observation}
-              onChange={(event) => setObservation(event.target.value)}
-              rows={2}
-              className="input-base w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-
-          <Field label={`Colaboradores (${ids.size} selecionado(s))`}>
+          <Field
+            label={`Colaboradores (${ids.size} selecionado(s))`}
+            hint="Marque “Transporte” individualmente para quem precisa de condução."
+          >
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -737,22 +729,62 @@ function NewScheduleModal({
                 visible.map((employee) => (
                   <label
                     key={employee.id}
-                    className="flex cursor-pointer items-center gap-2 border-b border-border px-2 py-1.5 text-[12px] last:border-b-0 hover:bg-muted/50"
+                    className="flex cursor-pointer items-start gap-2 border-b border-border px-2 py-2 text-[12px] last:border-b-0 hover:bg-muted/50"
                   >
                     <input
                       type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                       checked={ids.has(employee.id)}
                       onChange={() => toggleEmployee(employee.id)}
                     />
-                    <span className="font-medium">{employee.full_name}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      Chapa {employee.badge || "—"} · ID {employee.employee_id || "—"} · {employee.job_title}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{employee.full_name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        Chapa {employee.badge || "—"} · ID {employee.employee_id || "—"} · {employee.job_title}
+                      </span>
                     </span>
                   </label>
                 ))
               )}
             </div>
+
+            {selectedEmployees.length > 0 && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {selectedEmployees.map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="flex min-w-0 items-start justify-between gap-2 rounded border border-primary/20 bg-primary/5 p-2 text-[12px]"
+                  >
+                    <span className="min-w-0">
+                      <b className="block truncate">{employee.full_name}</b>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {employee.badge || "—"} · {employee.job_title}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={transportIds.has(employee.id)}
+                          onChange={() => toggleTransport(employee.id)}
+                        />
+                        Transporte
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => toggleEmployee(employee.id)}
+                        className="text-[11px] text-muted-foreground hover:text-destructive"
+                      >
+                        Remover
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
+
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-secondary min-h-9 text-[12px]">
