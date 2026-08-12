@@ -847,8 +847,8 @@ function NewScheduleModal({
               <strong>Entrada:</strong> {entryTime} · <strong>Saída:</strong> {departureTime}
             </div>
             <div>
-              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Transporte:</strong>{" "}
-              {needsTransport ? "Sim" : "Não"}
+              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Com transporte:</strong>{" "}
+              {transportCount} de {ids.size} colaborador(es)
             </div>
           </div>
           <div className="flex justify-end gap-2">
