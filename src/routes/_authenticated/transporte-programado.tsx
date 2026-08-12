@@ -623,40 +623,29 @@ function NewScheduleModal({
     <Modal title="Nova Programação de Transporte" onClose={onClose} size="lg">
       {!preview ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Data inicial">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              />
-            </Field>
-            <Field label="Data final">
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              />
-            </Field>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+            <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
+            <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
             <Field label="Horário de entrada">
               <input
                 type="time"
                 value={entryTime}
                 onChange={(event) => setEntryTime(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                style={{ boxSizing: "border-box" }}
               />
             </Field>
-            <Field label="Horário de saída (pode ser no dia seguinte)">
+            <Field label="Horário de saída" hint="Pode ser no dia seguinte.">
               <input
                 type="time"
                 value={departureTime}
                 onChange={(event) => setDepartureTime(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                style={{ boxSizing: "border-box" }}
               />
             </Field>
           </div>
+
 
           <Field label="Dias da semana">
             <div className="flex flex-wrap gap-1.5">
