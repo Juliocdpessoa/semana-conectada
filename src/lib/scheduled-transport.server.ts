@@ -53,6 +53,7 @@ export function buildScheduleRows(params: {
   missingIdPrefix: string;
 }) {
   const rows: any[] = [];
+  const transportSet = params.transportIds ? new Set(params.transportIds) : null;
   for (const employee of params.employees) {
     for (const date of params.dates) {
       rows.push({
