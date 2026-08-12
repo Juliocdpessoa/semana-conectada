@@ -52,6 +52,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
         departure_time: hhmm,
         needs_snack: z.boolean(),
         needs_transport: z.boolean(),
+        transport_employee_ids: z.array(z.string().uuid()).max(300).optional(),
         order_number: z.string().trim().max(64).nullable().optional(),
         service_description: z.string().trim().max(1000).nullable().optional(),
         observation: z.string().trim().max(1000).nullable().optional(),
