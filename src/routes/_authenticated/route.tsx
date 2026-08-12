@@ -89,10 +89,11 @@ function AuthedLayout() {
   const canOvertime = roleSet.has("leader") || roleSet.has("manager") || isAdmin || isMeasurementControl || isLogistics;
 
   useEffect(() => {
-    if (overtimeOnly && pathname !== "/hora-extra") {
+    if (overtimeOnly && pathname !== "/hora-extra" && pathname !== "/transporte-programado") {
       router.navigate({ to: "/hora-extra", replace: true });
     }
   }, [overtimeOnly, pathname, router]);
+
 
   const canScheduledTransport = isPlanning || isManager || isAdmin || isLogistics;
 
