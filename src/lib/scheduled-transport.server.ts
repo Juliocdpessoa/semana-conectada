@@ -45,6 +45,7 @@ export function buildScheduleRows(params: {
   departure_time: string;
   needs_snack: boolean;
   needs_transport: boolean;
+  transportIds?: string[];
   order_number: string | null;
   service_description: string | null;
   observation: string | null;
