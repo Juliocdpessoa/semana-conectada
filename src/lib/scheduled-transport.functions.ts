@@ -52,6 +52,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
         departure_time: hhmm,
         needs_snack: z.boolean(),
         needs_transport: z.boolean(),
+        transport_employee_ids: z.array(z.string().uuid()).max(300).optional(),
         order_number: z.string().trim().max(64).nullable().optional(),
         service_description: z.string().trim().max(1000).nullable().optional(),
         observation: z.string().trim().max(1000).nullable().optional(),
@@ -110,6 +111,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
       needs_transport: data.needs_transport,
+      transportIds: data.transport_employee_ids,
       order_number: data.order_number?.trim() || null,
       service_description: data.service_description?.trim() || null,
       observation: data.observation?.trim() || null,
@@ -145,7 +147,9 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       entry_time: data.entry_time,
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
-      needs_transport: data.needs_transport,
+      needs_transport: data.transport_employee_ids
+        ? data.transport_employee_ids.length > 0
+        : data.needs_transport,
       order_number: data.order_number?.trim() || null,
       service_description: data.service_description?.trim() || null,
       observation: data.observation?.trim() || null,

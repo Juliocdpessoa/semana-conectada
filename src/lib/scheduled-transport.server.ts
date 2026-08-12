@@ -45,6 +45,7 @@ export function buildScheduleRows(params: {
   departure_time: string;
   needs_snack: boolean;
   needs_transport: boolean;
+  transportIds?: string[];
   order_number: string | null;
   service_description: string | null;
   observation: string | null;
@@ -52,6 +53,7 @@ export function buildScheduleRows(params: {
   missingIdPrefix: string;
 }) {
   const rows: any[] = [];
+  const transportSet = params.transportIds ? new Set(params.transportIds) : null;
   for (const employee of params.employees) {
     for (const date of params.dates) {
       rows.push({
@@ -76,7 +78,7 @@ export function buildScheduleRows(params: {
         entry_time: params.entry_time,
         departure_time: params.departure_time,
         needs_snack: params.needs_snack,
-        needs_transport: params.needs_transport,
+        needs_transport: transportSet ? transportSet.has(employee.id) : params.needs_transport,
         order_number: params.order_number,
         service_description: params.service_description,
         observation: params.observation,

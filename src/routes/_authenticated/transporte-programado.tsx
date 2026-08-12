@@ -252,7 +252,7 @@ function ScheduledTransportPage() {
 
       <div className="mt-4">
         <Panel title="Programações" description="A exportação respeita exatamente os filtros ativos." padded={false}>
-          <div className="grid gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
             <Field label="Pesquisa rápida">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -269,7 +269,7 @@ function ScheduledTransportPage() {
                 type="date"
                 value={filters.startDate}
                 onChange={(event) => setFilters((f) => ({ ...f, startDate: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Data final">
@@ -277,14 +277,14 @@ function ScheduledTransportPage() {
                 type="date"
                 value={filters.endDate}
                 onChange={(event) => setFilters((f) => ({ ...f, endDate: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Função">
               <select
                 value={filters.jobTitle}
                 onChange={(event) => setFilters((f) => ({ ...f, jobTitle: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
                 {jobTitles.map((title) => (
@@ -298,7 +298,7 @@ function ScheduledTransportPage() {
               <select
                 value={filters.line}
                 onChange={(event) => setFilters((f) => ({ ...f, line: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
                 {lines.map((line) => (
@@ -312,7 +312,7 @@ function ScheduledTransportPage() {
               <select
                 value={filters.status}
                 onChange={(event) => setFilters((f) => ({ ...f, status: event.target.value as Filters["status"] }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="scheduled">Programado</option>
                 <option value="cancelled">Cancelado</option>
@@ -325,7 +325,7 @@ function ScheduledTransportPage() {
                 onChange={(event) =>
                   setFilters((f) => ({ ...f, transport: event.target.value as Filters["transport"] }))
                 }
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="all">Todos</option>
                 <option value="yes">Sim</option>
@@ -338,7 +338,7 @@ function ScheduledTransportPage() {
                   type="time"
                   value={filters.entryTime}
                   onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
-                  className="input-base w-full text-[16px] sm:text-[12px]"
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                 />
               </Field>
               <Field label="Saída">
@@ -346,7 +346,7 @@ function ScheduledTransportPage() {
                   type="time"
                   value={filters.departureTime}
                   onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
-                  className="input-base w-full text-[16px] sm:text-[12px]"
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                 />
               </Field>
             </div>
@@ -547,13 +547,14 @@ function NewScheduleModal({
   const create = useServerFn(createScheduledTransport);
   const [search, setSearch] = useState("");
   const [ids, setIds] = useState<Set<string>>(new Set());
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(todayIso);
+  const [endDate, setEndDate] = useState(todayIso);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [entryTime, setEntryTime] = useState("");
   const [departureTime, setDepartureTime] = useState("");
   const [needsSnack, setNeedsSnack] = useState(false);
-  const [needsTransport, setNeedsTransport] = useState(true);
+  const [transportIds, setTransportIds] = useState<Set<string>>(new Set());
   const [orderNumber, setOrderNumber] = useState("");
   const [service, setService] = useState("");
   const [observation, setObservation] = useState("");
@@ -566,8 +567,32 @@ function NewScheduleModal({
     [startDate, endDate, weekdays],
   );
 
+  const selectedEmployees = useMemo(
+    () => employees.filter((employee) => ids.has(employee.id)),
+    [employees, ids],
+  );
+  const transportCount = useMemo(
+    () => selectedEmployees.filter((employee) => transportIds.has(employee.id)).length,
+    [selectedEmployees, transportIds],
+  );
+
   function toggleEmployee(id: string) {
     setIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setTransportIds((previous) => {
+      if (!previous.has(id)) return previous;
+      const next = new Set(previous);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleTransport(id: string) {
+    setTransportIds((previous) => {
       const next = new Set(previous);
       if (next.has(id)) next.delete(id);
       else next.add(id);
@@ -587,7 +612,8 @@ function NewScheduleModal({
           entry_time: entryTime,
           departure_time: departureTime,
           needs_snack: needsSnack,
-          needs_transport: needsTransport,
+          needs_transport: transportIds.size > 0,
+          transport_employee_ids: [...ids].filter((id) => transportIds.has(id)),
           order_number: orderNumber || null,
           service_description: service || null,
           observation: observation || null,
@@ -623,40 +649,29 @@ function NewScheduleModal({
     <Modal title="Nova Programação de Transporte" onClose={onClose} size="lg">
       {!preview ? (
         <div className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <Field label="Data inicial">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(event) => setStartDate(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              />
-            </Field>
-            <Field label="Data final">
-              <input
-                type="date"
-                value={endDate}
-                onChange={(event) => setEndDate(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              />
-            </Field>
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
+            <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
+            <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
             <Field label="Horário de entrada">
               <input
                 type="time"
                 value={entryTime}
                 onChange={(event) => setEntryTime(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                style={{ boxSizing: "border-box" }}
               />
             </Field>
-            <Field label="Horário de saída (pode ser no dia seguinte)">
+            <Field label="Horário de saída" hint="Pode ser no dia seguinte.">
               <input
                 type="time"
                 value={departureTime}
                 onChange={(event) => setDepartureTime(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                style={{ boxSizing: "border-box" }}
               />
             </Field>
           </div>
+
 
           <Field label="Dias da semana">
             <div className="flex flex-wrap gap-1.5">
@@ -685,53 +700,45 @@ function NewScheduleModal({
             </div>
           </Field>
 
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <Field label="Necessita lanche">
               <select
                 value={needsSnack ? "yes" : "no"}
                 onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="no">Não</option>
                 <option value="yes">Sim</option>
-              </select>
-            </Field>
-            <Field label="Necessita transporte">
-              <select
-                value={needsTransport ? "yes" : "no"}
-                onChange={(event) => setNeedsTransport(event.target.value === "yes")}
-                className="input-base w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="yes">Sim</option>
-                <option value="no">Não</option>
               </select>
             </Field>
             <Field label="Ordem (opcional)">
               <input
                 value={orderNumber}
                 onChange={(event) => setOrderNumber(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Serviço/atividade (opcional)">
               <input
                 value={service}
                 onChange={(event) => setService(event.target.value)}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+              />
+            </Field>
+            <Field label="Observação (opcional)">
+              <textarea
+                value={observation}
+                onChange={(event) => setObservation(event.target.value)}
+                rows={2}
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
           </div>
 
-          <Field label="Observação (opcional)">
-            <textarea
-              value={observation}
-              onChange={(event) => setObservation(event.target.value)}
-              rows={2}
-              className="input-base w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-
-          <Field label={`Colaboradores (${ids.size} selecionado(s))`}>
+          <Field
+            label={`Colaboradores (${ids.size} selecionado(s))`}
+            hint="Marque “Transporte” individualmente para quem precisa de condução."
+          >
             <div className="relative mb-2">
               <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
               <input
@@ -748,22 +755,62 @@ function NewScheduleModal({
                 visible.map((employee) => (
                   <label
                     key={employee.id}
-                    className="flex cursor-pointer items-center gap-2 border-b border-border px-2 py-1.5 text-[12px] last:border-b-0 hover:bg-muted/50"
+                    className="flex cursor-pointer items-start gap-2 border-b border-border px-2 py-2 text-[12px] last:border-b-0 hover:bg-muted/50"
                   >
                     <input
                       type="checkbox"
+                      className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
                       checked={ids.has(employee.id)}
                       onChange={() => toggleEmployee(employee.id)}
                     />
-                    <span className="font-medium">{employee.full_name}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      Chapa {employee.badge || "—"} · ID {employee.employee_id || "—"} · {employee.job_title}
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">{employee.full_name}</span>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        Chapa {employee.badge || "—"} · ID {employee.employee_id || "—"} · {employee.job_title}
+                      </span>
                     </span>
                   </label>
                 ))
               )}
             </div>
+
+            {selectedEmployees.length > 0 && (
+              <div className="mt-2 grid gap-2 sm:grid-cols-2">
+                {selectedEmployees.map((employee) => (
+                  <div
+                    key={employee.id}
+                    className="flex min-w-0 items-start justify-between gap-2 rounded border border-primary/20 bg-primary/5 p-2 text-[12px]"
+                  >
+                    <span className="min-w-0">
+                      <b className="block truncate">{employee.full_name}</b>
+                      <span className="block truncate text-[11px] text-muted-foreground">
+                        {employee.badge || "—"} · {employee.job_title}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 flex-col items-end gap-1">
+                      <label className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 accent-primary"
+                          checked={transportIds.has(employee.id)}
+                          onChange={() => toggleTransport(employee.id)}
+                        />
+                        Transporte
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => toggleEmployee(employee.id)}
+                        className="text-[11px] text-muted-foreground hover:text-destructive"
+                      >
+                        Remover
+                      </button>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </Field>
+
 
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-secondary min-h-9 text-[12px]">
@@ -801,8 +848,8 @@ function NewScheduleModal({
               <strong>Entrada:</strong> {entryTime} · <strong>Saída:</strong> {departureTime}
             </div>
             <div>
-              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Transporte:</strong>{" "}
-              {needsTransport ? "Sim" : "Não"}
+              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Com transporte:</strong>{" "}
+              {transportCount} de {ids.size} colaborador(es)
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -879,7 +926,7 @@ function EditScheduleModal({
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value as "single" | "future")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="single">Editar somente este registro</option>
               <option value="future">Editar registros futuros deste grupo</option>
@@ -892,7 +939,7 @@ function EditScheduleModal({
               type="time"
               value={entryTime}
               onChange={(event) => setEntryTime(event.target.value)}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             />
           </Field>
           <Field label="Saída">
@@ -900,14 +947,14 @@ function EditScheduleModal({
               type="time"
               value={departureTime}
               onChange={(event) => setDepartureTime(event.target.value)}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             />
           </Field>
           <Field label="Lanche">
             <select
               value={needsSnack ? "yes" : "no"}
               onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="no">Não</option>
               <option value="yes">Sim</option>
@@ -917,7 +964,7 @@ function EditScheduleModal({
             <select
               value={needsTransport ? "yes" : "no"}
               onChange={(event) => setNeedsTransport(event.target.value === "yes")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="yes">Sim</option>
               <option value="no">Não</option>
@@ -928,14 +975,14 @@ function EditScheduleModal({
           <input
             value={orderNumber}
             onChange={(event) => setOrderNumber(event.target.value)}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <Field label="Serviço">
           <input
             value={service}
             onChange={(event) => setService(event.target.value)}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <Field label="Observação">
@@ -943,7 +990,7 @@ function EditScheduleModal({
             value={observation}
             onChange={(event) => setObservation(event.target.value)}
             rows={2}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <div className="flex justify-end gap-2">
@@ -961,5 +1008,81 @@ function EditScheduleModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ---------- Campo de data (dia / mês / ano) ---------- */
+const MONTH_OPTIONS: [string, string][] = [
+  ["01", "Jan"],
+  ["02", "Fev"],
+  ["03", "Mar"],
+  ["04", "Abr"],
+  ["05", "Mai"],
+  ["06", "Jun"],
+  ["07", "Jul"],
+  ["08", "Ago"],
+  ["09", "Set"],
+  ["10", "Out"],
+  ["11", "Nov"],
+  ["12", "Dez"],
+];
+
+function DateSelectField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const today = new Date();
+  const fallback = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [year, month, day] = (value || fallback).split("-");
+  const years = Array.from({ length: 4 }, (_, index) => String(today.getFullYear() - 1 + index));
+  const days = Array.from({ length: new Date(Number(year), Number(month), 0).getDate() }, (_, index) =>
+    String(index + 1).padStart(2, "0"),
+  );
+
+  function setPart(part: "day" | "month" | "year", next: string) {
+    let y = year;
+    let m = month;
+    let d = day;
+    if (part === "year") y = next;
+    if (part === "month") m = next;
+    if (part === "day") d = next;
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    d = String(Math.min(Number(d), lastDay)).padStart(2, "0");
+    onChange(`${y}-${m}-${d}`);
+  }
+
+  const selectClass = "input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]";
+
+  return (
+    <Field label={label} required>
+      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+        <select aria-label={`Dia — ${label}`} className={selectClass} value={day} onChange={(e) => setPart("day", e.target.value)}>
+          {days.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <select aria-label={`Mês — ${label}`} className={selectClass} value={month} onChange={(e) => setPart("month", e.target.value)}>
+          {MONTH_OPTIONS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <select aria-label={`Ano — ${label}`} className={selectClass} value={year} onChange={(e) => setPart("year", e.target.value)}>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+    </Field>
   );
 }
