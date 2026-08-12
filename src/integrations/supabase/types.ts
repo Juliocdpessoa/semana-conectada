@@ -429,6 +429,186 @@ export type Database = {
         }
         Relationships: []
       }
+      scheduled_transport_batches: {
+        Row: {
+          created_at: string
+          created_by_email: string
+          created_by_name: string
+          created_by_user_id: string | null
+          departure_time: string
+          end_date: string
+          entry_time: string
+          id: string
+          needs_snack: boolean
+          needs_transport: boolean
+          observation: string | null
+          order_number: string | null
+          service_description: string | null
+          start_date: string
+          updated_at: string
+          weekdays: number[]
+        }
+        Insert: {
+          created_at?: string
+          created_by_email?: string
+          created_by_name?: string
+          created_by_user_id?: string | null
+          departure_time: string
+          end_date: string
+          entry_time: string
+          id?: string
+          needs_snack?: boolean
+          needs_transport?: boolean
+          observation?: string | null
+          order_number?: string | null
+          service_description?: string | null
+          start_date: string
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Update: {
+          created_at?: string
+          created_by_email?: string
+          created_by_name?: string
+          created_by_user_id?: string | null
+          departure_time?: string
+          end_date?: string
+          entry_time?: string
+          id?: string
+          needs_snack?: boolean
+          needs_transport?: boolean
+          observation?: string | null
+          order_number?: string | null
+          service_description?: string | null
+          start_date?: string
+          updated_at?: string
+          weekdays?: number[]
+        }
+        Relationships: []
+      }
+      scheduled_transport_requests: {
+        Row: {
+          batch_id: string | null
+          cancelled_at: string | null
+          cancelled_by_name: string | null
+          cancelled_by_user_id: string | null
+          created_at: string
+          departure_time: string
+          employee_address: string | null
+          employee_city: string | null
+          employee_external_id: string | null
+          employee_master_id: string
+          employee_message_contact: string | null
+          employee_name: string
+          employee_neighborhood: string | null
+          employee_phone: string | null
+          employee_registration: string | null
+          employee_role: string
+          employee_transport_line: string | null
+          entry_time: string
+          id: string
+          needs_snack: boolean
+          needs_transport: boolean
+          observation: string | null
+          order_number: string | null
+          requester_email: string
+          requester_name: string
+          requester_user_id: string | null
+          service_description: string | null
+          status: string
+          transport_date: string
+          updated_at: string
+          updated_by_name: string | null
+          updated_by_user_id: string | null
+          version: number
+        }
+        Insert: {
+          batch_id?: string | null
+          cancelled_at?: string | null
+          cancelled_by_name?: string | null
+          cancelled_by_user_id?: string | null
+          created_at?: string
+          departure_time: string
+          employee_address?: string | null
+          employee_city?: string | null
+          employee_external_id?: string | null
+          employee_master_id: string
+          employee_message_contact?: string | null
+          employee_name: string
+          employee_neighborhood?: string | null
+          employee_phone?: string | null
+          employee_registration?: string | null
+          employee_role?: string
+          employee_transport_line?: string | null
+          entry_time: string
+          id?: string
+          needs_snack?: boolean
+          needs_transport?: boolean
+          observation?: string | null
+          order_number?: string | null
+          requester_email?: string
+          requester_name?: string
+          requester_user_id?: string | null
+          service_description?: string | null
+          status?: string
+          transport_date: string
+          updated_at?: string
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
+          version?: number
+        }
+        Update: {
+          batch_id?: string | null
+          cancelled_at?: string | null
+          cancelled_by_name?: string | null
+          cancelled_by_user_id?: string | null
+          created_at?: string
+          departure_time?: string
+          employee_address?: string | null
+          employee_city?: string | null
+          employee_external_id?: string | null
+          employee_master_id?: string
+          employee_message_contact?: string | null
+          employee_name?: string
+          employee_neighborhood?: string | null
+          employee_phone?: string | null
+          employee_registration?: string | null
+          employee_role?: string
+          employee_transport_line?: string | null
+          entry_time?: string
+          id?: string
+          needs_snack?: boolean
+          needs_transport?: boolean
+          observation?: string | null
+          order_number?: string | null
+          requester_email?: string
+          requester_name?: string
+          requester_user_id?: string | null
+          service_description?: string | null
+          status?: string
+          transport_date?: string
+          updated_at?: string
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scheduled_transport_requests_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "scheduled_transport_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scheduled_transport_requests_employee_master_id_fkey"
+            columns: ["employee_master_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sharepoint_config: {
         Row: {
           column_mapping: Json
@@ -586,6 +766,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      can_manage_scheduled_transport: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
       current_role_label: { Args: { _user_id: string }; Returns: string }
       has_role: {
         Args: {
