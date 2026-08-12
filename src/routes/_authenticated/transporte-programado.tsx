@@ -332,23 +332,17 @@ function ScheduledTransportPage() {
                 <option value="no">Não</option>
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Entrada">
-                <input
-                  type="time"
-                  value={filters.entryTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                />
-              </Field>
-              <Field label="Saída">
-                <input
-                  type="time"
-                  value={filters.departureTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                />
-              </Field>
+            <div className="grid min-w-0 grid-cols-2 gap-2 [&>*]:min-w-0">
+              <TimeSelectField
+                label="Entrada"
+                value={filters.entryTime}
+                onChange={(value) => setFilters((f) => ({ ...f, entryTime: value }))}
+              />
+              <TimeSelectField
+                label="Saída"
+                value={filters.departureTime}
+                onChange={(value) => setFilters((f) => ({ ...f, departureTime: value }))}
+              />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
               <button
