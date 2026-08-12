@@ -1009,3 +1009,79 @@ function EditScheduleModal({
     </Modal>
   );
 }
+
+/* ---------- Campo de data (dia / mês / ano) ---------- */
+const MONTH_OPTIONS: [string, string][] = [
+  ["01", "Jan"],
+  ["02", "Fev"],
+  ["03", "Mar"],
+  ["04", "Abr"],
+  ["05", "Mai"],
+  ["06", "Jun"],
+  ["07", "Jul"],
+  ["08", "Ago"],
+  ["09", "Set"],
+  ["10", "Out"],
+  ["11", "Nov"],
+  ["12", "Dez"],
+];
+
+function DateSelectField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  const today = new Date();
+  const fallback = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+  const [year, month, day] = (value || fallback).split("-");
+  const years = Array.from({ length: 4 }, (_, index) => String(today.getFullYear() - 1 + index));
+  const days = Array.from({ length: new Date(Number(year), Number(month), 0).getDate() }, (_, index) =>
+    String(index + 1).padStart(2, "0"),
+  );
+
+  function setPart(part: "day" | "month" | "year", next: string) {
+    let y = year;
+    let m = month;
+    let d = day;
+    if (part === "year") y = next;
+    if (part === "month") m = next;
+    if (part === "day") d = next;
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    d = String(Math.min(Number(d), lastDay)).padStart(2, "0");
+    onChange(`${y}-${m}-${d}`);
+  }
+
+  const selectClass = "input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]";
+
+  return (
+    <Field label={label} required>
+      <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
+        <select aria-label={`Dia — ${label}`} className={selectClass} value={day} onChange={(e) => setPart("day", e.target.value)}>
+          {days.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
+        </select>
+        <select aria-label={`Mês — ${label}`} className={selectClass} value={month} onChange={(e) => setPart("month", e.target.value)}>
+          {MONTH_OPTIONS.map(([v, l]) => (
+            <option key={v} value={v}>
+              {l}
+            </option>
+          ))}
+        </select>
+        <select aria-label={`Ano — ${label}`} className={selectClass} value={year} onChange={(e) => setPart("year", e.target.value)}>
+          {years.map((y) => (
+            <option key={y} value={y}>
+              {y}
+            </option>
+          ))}
+        </select>
+      </div>
+    </Field>
+  );
+}
