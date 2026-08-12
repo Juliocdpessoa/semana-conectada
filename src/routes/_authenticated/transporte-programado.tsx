@@ -332,23 +332,17 @@ function ScheduledTransportPage() {
                 <option value="no">Não</option>
               </select>
             </Field>
-            <div className="grid grid-cols-2 gap-2">
-              <Field label="Entrada">
-                <input
-                  type="time"
-                  value={filters.entryTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                />
-              </Field>
-              <Field label="Saída">
-                <input
-                  type="time"
-                  value={filters.departureTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                />
-              </Field>
+            <div className="grid min-w-0 grid-cols-2 gap-2 [&>*]:min-w-0">
+              <TimeSelectField
+                label="Entrada"
+                value={filters.entryTime}
+                onChange={(value) => setFilters((f) => ({ ...f, entryTime: value }))}
+              />
+              <TimeSelectField
+                label="Saída"
+                value={filters.departureTime}
+                onChange={(value) => setFilters((f) => ({ ...f, departureTime: value }))}
+              />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
               <button
@@ -652,24 +646,19 @@ function NewScheduleModal({
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
             <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
-            <Field label="Horário de entrada">
-              <input
-                type="time"
-                value={entryTime}
-                onChange={(event) => setEntryTime(event.target.value)}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                style={{ boxSizing: "border-box" }}
-              />
-            </Field>
-            <Field label="Horário de saída" hint="Pode ser no dia seguinte.">
-              <input
-                type="time"
-                value={departureTime}
-                onChange={(event) => setDepartureTime(event.target.value)}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                style={{ boxSizing: "border-box" }}
-              />
-            </Field>
+            <TimeSelectField
+              label="Horário de entrada"
+              value={entryTime}
+              onChange={setEntryTime}
+              required
+            />
+            <TimeSelectField
+              label="Horário de saída"
+              value={departureTime}
+              onChange={setDepartureTime}
+              required
+              hint="Pode ser no dia seguinte."
+            />
           </div>
 
 
@@ -933,23 +922,9 @@ function EditScheduleModal({
             </select>
           </Field>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Entrada">
-            <input
-              type="time"
-              value={entryTime}
-              onChange={(event) => setEntryTime(event.target.value)}
-              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-          <Field label="Saída">
-            <input
-              type="time"
-              value={departureTime}
-              onChange={(event) => setDepartureTime(event.target.value)}
-              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
+        <div className="grid min-w-0 grid-cols-2 gap-3 [&>*]:min-w-0">
+          <TimeSelectField label="Entrada" value={entryTime} onChange={setEntryTime} required />
+          <TimeSelectField label="Saída" value={departureTime} onChange={setDepartureTime} required />
           <Field label="Lanche">
             <select
               value={needsSnack ? "yes" : "no"}
@@ -1008,6 +983,81 @@ function EditScheduleModal({
         </div>
       </div>
     </Modal>
+  );
+}
+
+/* ---------- Campo de horário (select + outro) ---------- */
+const TIME_OPTIONS = [
+  "04:30",
+  "05:30",
+  "06:30",
+  "07:30",
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "18:30",
+  "19:00",
+  "19:30",
+  "20:00",
+  "20:30",
+  "21:00",
+  "22:00",
+  "23:00",
+];
+
+function TimeSelectField({
+  label,
+  value,
+  onChange,
+  required,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  required?: boolean;
+  hint?: string;
+}) {
+  const [custom, setCustom] = useState(value ? !TIME_OPTIONS.includes(value) : false);
+
+  return (
+    <Field label={label} required={required} hint={hint}>
+      <select
+        value={custom ? "__other__" : value}
+        onChange={(event) => {
+          const isOther = event.target.value === "__other__";
+          setCustom(isOther);
+          onChange(isOther ? "" : event.target.value);
+        }}
+        className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+        style={{ boxSizing: "border-box" }}
+      >
+        <option value="">{required ? "Selecione" : "Sem horário"}</option>
+        {TIME_OPTIONS.map((time) => (
+          <option key={time} value={time}>
+            {time.replace(/^0/, "")}
+          </option>
+        ))}
+        <option value="__other__">Outro horário</option>
+      </select>
+      {custom && (
+        <input
+          type="time"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="input-base mt-2 block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+          style={{ boxSizing: "border-box" }}
+        />
+      )}
+    </Field>
   );
 }
 
