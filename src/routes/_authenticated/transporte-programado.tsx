@@ -986,6 +986,81 @@ function EditScheduleModal({
   );
 }
 
+/* ---------- Campo de horário (select + outro) ---------- */
+const TIME_OPTIONS = [
+  "04:30",
+  "05:30",
+  "06:30",
+  "07:30",
+  "08:00",
+  "09:00",
+  "10:00",
+  "11:00",
+  "12:00",
+  "13:00",
+  "14:00",
+  "15:00",
+  "16:00",
+  "17:00",
+  "18:00",
+  "18:30",
+  "19:00",
+  "19:30",
+  "20:00",
+  "20:30",
+  "21:00",
+  "22:00",
+  "23:00",
+];
+
+function TimeSelectField({
+  label,
+  value,
+  onChange,
+  required,
+  hint,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  required?: boolean;
+  hint?: string;
+}) {
+  const [custom, setCustom] = useState(value ? !TIME_OPTIONS.includes(value) : false);
+
+  return (
+    <Field label={label} required={required} hint={hint}>
+      <select
+        value={custom ? "__other__" : value}
+        onChange={(event) => {
+          const isOther = event.target.value === "__other__";
+          setCustom(isOther);
+          onChange(isOther ? "" : event.target.value);
+        }}
+        className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+        style={{ boxSizing: "border-box" }}
+      >
+        <option value="">{required ? "Selecione" : "Sem horário"}</option>
+        {TIME_OPTIONS.map((time) => (
+          <option key={time} value={time}>
+            {time.replace(/^0/, "")}
+          </option>
+        ))}
+        <option value="__other__">Outro horário</option>
+      </select>
+      {custom && (
+        <input
+          type="time"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="input-base mt-2 block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+          style={{ boxSizing: "border-box" }}
+        />
+      )}
+    </Field>
+  );
+}
+
 /* ---------- Campo de data (dia / mês / ano) ---------- */
 const MONTH_OPTIONS: [string, string][] = [
   ["01", "Jan"],
