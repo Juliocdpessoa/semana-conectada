@@ -252,7 +252,7 @@ function ScheduledTransportPage() {
 
       <div className="mt-4">
         <Panel title="Programações" description="A exportação respeita exatamente os filtros ativos." padded={false}>
-          <div className="grid gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
             <Field label="Pesquisa rápida">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
@@ -269,7 +269,7 @@ function ScheduledTransportPage() {
                 type="date"
                 value={filters.startDate}
                 onChange={(event) => setFilters((f) => ({ ...f, startDate: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Data final">
@@ -277,14 +277,14 @@ function ScheduledTransportPage() {
                 type="date"
                 value={filters.endDate}
                 onChange={(event) => setFilters((f) => ({ ...f, endDate: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               />
             </Field>
             <Field label="Função">
               <select
                 value={filters.jobTitle}
                 onChange={(event) => setFilters((f) => ({ ...f, jobTitle: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
                 {jobTitles.map((title) => (
@@ -298,7 +298,7 @@ function ScheduledTransportPage() {
               <select
                 value={filters.line}
                 onChange={(event) => setFilters((f) => ({ ...f, line: event.target.value }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
                 {lines.map((line) => (
@@ -312,7 +312,7 @@ function ScheduledTransportPage() {
               <select
                 value={filters.status}
                 onChange={(event) => setFilters((f) => ({ ...f, status: event.target.value as Filters["status"] }))}
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="scheduled">Programado</option>
                 <option value="cancelled">Cancelado</option>
@@ -325,7 +325,7 @@ function ScheduledTransportPage() {
                 onChange={(event) =>
                   setFilters((f) => ({ ...f, transport: event.target.value as Filters["transport"] }))
                 }
-                className="input-base w-full text-[16px] sm:text-[12px]"
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="all">Todos</option>
                 <option value="yes">Sim</option>
@@ -338,7 +338,7 @@ function ScheduledTransportPage() {
                   type="time"
                   value={filters.entryTime}
                   onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
-                  className="input-base w-full text-[16px] sm:text-[12px]"
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                 />
               </Field>
               <Field label="Saída">
@@ -346,7 +346,7 @@ function ScheduledTransportPage() {
                   type="time"
                   value={filters.departureTime}
                   onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
-                  className="input-base w-full text-[16px] sm:text-[12px]"
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                 />
               </Field>
             </div>
@@ -547,8 +547,9 @@ function NewScheduleModal({
   const create = useServerFn(createScheduledTransport);
   const [search, setSearch] = useState("");
   const [ids, setIds] = useState<Set<string>>(new Set());
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const [startDate, setStartDate] = useState(todayIso);
+  const [endDate, setEndDate] = useState(todayIso);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [entryTime, setEntryTime] = useState("");
   const [departureTime, setDepartureTime] = useState("");
@@ -925,7 +926,7 @@ function EditScheduleModal({
             <select
               value={scope}
               onChange={(event) => setScope(event.target.value as "single" | "future")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="single">Editar somente este registro</option>
               <option value="future">Editar registros futuros deste grupo</option>
@@ -938,7 +939,7 @@ function EditScheduleModal({
               type="time"
               value={entryTime}
               onChange={(event) => setEntryTime(event.target.value)}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             />
           </Field>
           <Field label="Saída">
@@ -946,14 +947,14 @@ function EditScheduleModal({
               type="time"
               value={departureTime}
               onChange={(event) => setDepartureTime(event.target.value)}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             />
           </Field>
           <Field label="Lanche">
             <select
               value={needsSnack ? "yes" : "no"}
               onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="no">Não</option>
               <option value="yes">Sim</option>
@@ -963,7 +964,7 @@ function EditScheduleModal({
             <select
               value={needsTransport ? "yes" : "no"}
               onChange={(event) => setNeedsTransport(event.target.value === "yes")}
-              className="input-base w-full text-[16px] sm:text-[12px]"
+              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
             >
               <option value="yes">Sim</option>
               <option value="no">Não</option>
@@ -974,14 +975,14 @@ function EditScheduleModal({
           <input
             value={orderNumber}
             onChange={(event) => setOrderNumber(event.target.value)}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <Field label="Serviço">
           <input
             value={service}
             onChange={(event) => setService(event.target.value)}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <Field label="Observação">
@@ -989,7 +990,7 @@ function EditScheduleModal({
             value={observation}
             onChange={(event) => setObservation(event.target.value)}
             rows={2}
-            className="input-base w-full text-[16px] sm:text-[12px]"
+            className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
           />
         </Field>
         <div className="flex justify-end gap-2">
