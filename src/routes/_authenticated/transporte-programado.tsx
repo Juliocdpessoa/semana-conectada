@@ -566,8 +566,32 @@ function NewScheduleModal({
     [startDate, endDate, weekdays],
   );
 
+  const selectedEmployees = useMemo(
+    () => employees.filter((employee) => ids.has(employee.id)),
+    [employees, ids],
+  );
+  const transportCount = useMemo(
+    () => selectedEmployees.filter((employee) => transportIds.has(employee.id)).length,
+    [selectedEmployees, transportIds],
+  );
+
   function toggleEmployee(id: string) {
     setIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+    setTransportIds((previous) => {
+      if (!previous.has(id)) return previous;
+      const next = new Set(previous);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function toggleTransport(id: string) {
+    setTransportIds((previous) => {
       const next = new Set(previous);
       if (next.has(id)) next.delete(id);
       else next.add(id);
