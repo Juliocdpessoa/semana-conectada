@@ -922,23 +922,9 @@ function EditScheduleModal({
             </select>
           </Field>
         )}
-        <div className="grid grid-cols-2 gap-3">
-          <Field label="Entrada">
-            <input
-              type="time"
-              value={entryTime}
-              onChange={(event) => setEntryTime(event.target.value)}
-              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-          <Field label="Saída">
-            <input
-              type="time"
-              value={departureTime}
-              onChange={(event) => setDepartureTime(event.target.value)}
-              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
+        <div className="grid min-w-0 grid-cols-2 gap-3 [&>*]:min-w-0">
+          <TimeSelectField label="Entrada" value={entryTime} onChange={setEntryTime} required />
+          <TimeSelectField label="Saída" value={departureTime} onChange={setDepartureTime} required />
           <Field label="Lanche">
             <select
               value={needsSnack ? "yes" : "no"}
