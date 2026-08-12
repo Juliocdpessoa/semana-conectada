@@ -111,6 +111,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
       needs_transport: data.needs_transport,
+      transportIds: data.transport_employee_ids,
       order_number: data.order_number?.trim() || null,
       service_description: data.service_description?.trim() || null,
       observation: data.observation?.trim() || null,
