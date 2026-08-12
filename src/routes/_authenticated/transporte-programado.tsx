@@ -646,24 +646,19 @@ function NewScheduleModal({
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
             <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
-            <Field label="Horário de entrada">
-              <input
-                type="time"
-                value={entryTime}
-                onChange={(event) => setEntryTime(event.target.value)}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                style={{ boxSizing: "border-box" }}
-              />
-            </Field>
-            <Field label="Horário de saída" hint="Pode ser no dia seguinte.">
-              <input
-                type="time"
-                value={departureTime}
-                onChange={(event) => setDepartureTime(event.target.value)}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                style={{ boxSizing: "border-box" }}
-              />
-            </Field>
+            <TimeSelectField
+              label="Horário de entrada"
+              value={entryTime}
+              onChange={setEntryTime}
+              required
+            />
+            <TimeSelectField
+              label="Horário de saída"
+              value={departureTime}
+              onChange={setDepartureTime}
+              required
+              hint="Pode ser no dia seguinte."
+            />
           </div>
 
 
