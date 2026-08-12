@@ -78,7 +78,7 @@ export function buildScheduleRows(params: {
         entry_time: params.entry_time,
         departure_time: params.departure_time,
         needs_snack: params.needs_snack,
-        needs_transport: params.needs_transport,
+        needs_transport: transportSet ? transportSet.has(employee.id) : params.needs_transport,
         order_number: params.order_number,
         service_description: params.service_description,
         observation: params.observation,
