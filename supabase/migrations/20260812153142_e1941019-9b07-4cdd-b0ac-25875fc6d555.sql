@@ -166,8 +166,8 @@ CREATE POLICY "sched transport update" ON public.scheduled_transport_requests
 
 -- Mudanças de escala são gravadas somente pelas funções autenticadas do servidor.
 -- As funções usam service_role após validar aprovação e papel do usuário.
-REVOKE INSERT, UPDATE, DELETE ON public.scheduled_transport_batches FROM authenticated;
-REVOKE INSERT, UPDATE, DELETE ON public.scheduled_transport_requests FROM authenticated;
+REVOKE ALL PRIVILEGES ON public.scheduled_transport_batches FROM authenticated;
+REVOKE ALL PRIVILEGES ON public.scheduled_transport_requests FROM authenticated;
 
 DROP POLICY IF EXISTS "sched transport batches insert" ON public.scheduled_transport_batches;
 DROP POLICY IF EXISTS "sched transport batches update" ON public.scheduled_transport_batches;
