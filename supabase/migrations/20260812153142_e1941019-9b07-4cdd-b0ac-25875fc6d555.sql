@@ -163,3 +163,17 @@ CREATE POLICY "sched transport insert" ON public.scheduled_transport_requests
 CREATE POLICY "sched transport update" ON public.scheduled_transport_requests
   FOR UPDATE TO authenticated USING (public.can_manage_scheduled_transport(auth.uid()))
   WITH CHECK (public.can_manage_scheduled_transport(auth.uid()));
+
+-- Mudanças de escala são gravadas somente pelas funções autenticadas do servidor.
+-- As funções usam service_role após validar aprovação e papel do usuário.
+REVOKE INSERT, UPDATE, DELETE ON public.scheduled_transport_batches FROM authenticated;
+REVOKE INSERT, UPDATE, DELETE ON public.scheduled_transport_requests FROM authenticated;
+
+DROP POLICY IF EXISTS "sched transport batches insert" ON public.scheduled_transport_batches;
+DROP POLICY IF EXISTS "sched transport batches update" ON public.scheduled_transport_batches;
+DROP POLICY IF EXISTS "sched transport insert" ON public.scheduled_transport_requests;
+DROP POLICY IF EXISTS "sched transport update" ON public.scheduled_transport_requests;
+
+-- A leitura direta permanece limitada pela política RLS can_manage_scheduled_transport.
+GRANT SELECT ON public.scheduled_transport_batches TO authenticated;
+GRANT SELECT ON public.scheduled_transport_requests TO authenticated;
