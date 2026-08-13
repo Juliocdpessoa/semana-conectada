@@ -130,7 +130,6 @@ export const REGULAR_OVERTIME_EXPORT_HEADERS = [
 export const REGULAR_OVERTIME_EXPORT_WIDTHS = [14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 48, 48] as const;
 
 export const LOGISTICS_EXPORT_HEADERS = [
-  "ID",
   "Matrícula",
   "Nome",
   "Função",
@@ -143,13 +142,10 @@ export const LOGISTICS_EXPORT_HEADERS = [
   "Data",
   "Horário de entrada",
   "Horário de saída",
-  "Lanche",
   "Precisa de transporte",
-  "Status",
-  "Solicitante",
 ] as const;
 
-export const LOGISTICS_EXPORT_WIDTHS = [14, 14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 10, 20, 14, 28] as const;
+export const LOGISTICS_EXPORT_WIDTHS = [14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 20] as const;
 
 export const TRANSPORT_EXPORT_HEADERS = [
   "Data",
@@ -192,7 +188,6 @@ export function mapRegularOvertimeExportRow(row: OvertimeRow) {
 
 export function mapLogisticsExportRow(row: OvertimeRow) {
   return [
-    row.employee_external_id || "",
     row.employee_registration || "",
     row.employee_name,
     row.employee_role,
@@ -205,10 +200,7 @@ export function mapLogisticsExportRow(row: OvertimeRow) {
     formatDate(row.overtime_date),
     row.entry_time || "",
     row.departure_time,
-    row.needs_snack ? "Sim" : "Não",
     row.needs_transport ? "Sim" : "Não",
-    formatOvertimeStatus(row.status),
-    row.requester_name || row.requester_email,
   ];
 }
 
