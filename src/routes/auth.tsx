@@ -161,6 +161,18 @@ function AuthPage() {
             </div>
           </div>
 
+          <div className="mb-5 flex flex-wrap gap-1.5 lg:hidden">
+            {["Programação semanal", "Apontamento", "Painel", "Hora extra", "Mudança de escala"].map((t) => (
+              <span
+                key={t}
+                className="rounded-full border border-border/70 bg-card px-2.5 py-1 text-[10px] font-medium text-muted-foreground"
+              >
+                {t}
+              </span>
+            ))}
+          </div>
+
+
           <div className="surface-card p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
