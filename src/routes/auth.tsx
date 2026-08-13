@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import { ShieldCheck, ClipboardCheck, BarChart3 } from "lucide-react";
+import { ShieldCheck, ClipboardCheck, BarChart3, Timer, Bus, Users } from "lucide-react";
 
 
 export const Route = createFileRoute("/auth")({
@@ -103,40 +103,50 @@ function AuthPage() {
           <div className="inline-flex items-center gap-2.5 rounded-md border border-border/40 bg-white px-3.5 py-2 shadow-sm">
             <BrandLogo className="h-9 w-auto" />
           </div>
-          <div className="mt-10 max-w-md">
+          <div className="mt-10 max-w-xl">
             <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-sidebar-primary">
-              NEXO
+              NEXO · Plataforma operacional
             </div>
-            <h1 className="mt-2 text-2xl font-semibold leading-tight text-sidebar-foreground">
-              Gestão integrada da manutenção
+            <h1 className="mt-2 text-3xl font-semibold leading-tight text-sidebar-foreground">
+              Um só lugar para planejar, executar e comprovar a manutenção
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/75">
-              Plataforma corporativa para líderes e planejamento acompanharem
-              cerca de 1.400 atividades por semana com apontamento auditado,
-              filtros técnicos e indicadores de aderência.
+              Programação semanal, apontamento auditado, hora extra, mudança de
+              escala e logística de transporte — com controle de acesso por
+              perfil e histórico completo de cada alteração.
             </p>
           </div>
         </div>
 
-        <ul className="relative mt-10 space-y-3 text-sm text-sidebar-foreground/85">
+        <div className="relative mt-10 grid max-w-xl grid-cols-2 gap-2.5">
           {[
-            { icon: ClipboardCheck, label: "Apontamento individual e em lote com auditoria" },
-            { icon: BarChart3, label: "Painel gerencial com aderência da semana" },
-            { icon: ShieldCheck, label: "Acesso controlado e aprovação por administrador" },
+            { icon: ClipboardCheck, title: "Programação semanal", desc: "Importação, versionamento e atividades imediatas" },
+            { icon: BarChart3, title: "Painel gerencial", desc: "Aderência, curva de avanço em HH e pendências" },
+            { icon: Timer, title: "Hora extra", desc: "Solicitação do líder e aprovação do gerente" },
+            { icon: Bus, title: "Mudança de escala", desc: "Transporte por colaborador e exportação Excel" },
+            { icon: Users, title: "Colaboradores", desc: "Cadastro, contatos e dados de transporte" },
+            { icon: ShieldCheck, title: "Acesso controlado", desc: "Perfis, aprovação e trilha de auditoria" },
           ].map((f) => (
-            <li key={f.label} className="flex items-start gap-3">
-              <span className="mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-md bg-sidebar-accent text-sidebar-primary">
-                <f.icon className="h-3.5 w-3.5" />
-              </span>
-              <span>{f.label}</span>
-            </li>
+            <div
+              key={f.title}
+              className="rounded-md border border-sidebar-border/40 bg-sidebar-accent/40 p-3"
+            >
+              <div className="flex items-center gap-2">
+                <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-sidebar-accent text-sidebar-primary">
+                  <f.icon className="h-3.5 w-3.5" />
+                </span>
+                <span className="text-[12px] font-semibold text-sidebar-foreground">{f.title}</span>
+              </div>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-sidebar-foreground/70">{f.desc}</p>
+            </div>
           ))}
-        </ul>
+        </div>
 
-        <div className="relative text-[11px] uppercase tracking-widest text-sidebar-foreground/50">
+        <div className="relative mt-10 text-[11px] uppercase tracking-widest text-sidebar-foreground/50">
           Normatel Engenharia · Uso interno
         </div>
       </aside>
+
 
       {/* Formulário */}
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
