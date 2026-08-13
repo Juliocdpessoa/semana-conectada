@@ -255,7 +255,7 @@ function ScheduledTransportPage() {
               <Download className="h-4 w-4" /> Exportar para Excel
             </button>
             <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
-              <Plus className="h-4 w-4" /> Nova Programação
+              <Plus className="h-4 w-4" /> Nova Mudança de Escala
             </button>
           </div>
         }
@@ -639,7 +639,7 @@ function NewScheduleModal({
   const canPreview = ids.size > 0 && dates.length > 0 && entryTime && departureTime;
 
   return (
-    <Modal title="Nova Programação de Transporte" onClose={onClose} size="lg">
+    <Modal title="Nova Mudança de Escala" onClose={onClose} size="lg">
       {!preview ? (
         <div className="space-y-4">
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
