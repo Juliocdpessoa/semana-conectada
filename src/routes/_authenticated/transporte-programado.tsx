@@ -71,6 +71,13 @@ const EMPTY_FILTERS: Filters = {
   departureTime: "",
 };
 
+function localIsoDate(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function ScheduledTransportPage() {
   const queryClient = useQueryClient();
   const load = useServerFn(listScheduledTransport);
@@ -206,14 +213,29 @@ function ScheduledTransportPage() {
     const ids = [...selected];
     if (ids.length === 0) return;
     if (!confirm(`Cancelar ${ids.length} programação(ões)?`)) return;
-    const result = await cancelFn({ data: { ids } });
-    if (!result.ok) {
-      toast.error(result.error);
-      return;
+    try {
+      const result = await cancelFn({ data: { ids } });
+      if (!result.ok) return toast.error(result.error);
+      if (result.count === 0) return toast.error("As programações selecionadas já foram alteradas ou canceladas.");
+      toast.success(result.count + " programação(ões) cancelada(s).");
+      setSelected(new Set());
+      queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar as programações.");
     }
-    toast.success(result.count + " programação(ões) cancelada(s).");
-    setSelected(new Set());
-    queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
+  }
+
+  async function cancelOne(row: ScheduledTransportRow) {
+    if (!confirm(`Cancelar a programação de ${row.employee_name} em ${formatDate(row.transport_date)}?`)) return;
+    try {
+      const result = await cancelFn({ data: { ids: [row.id] } });
+      if (!result.ok) return toast.error(result.error);
+      if (result.count === 0) return toast.error("A programação já foi alterada ou cancelada.");
+      toast.success("Programação cancelada.");
+      queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a programação.");
+    }
   }
 
   function toggleSelected(id: string) {
@@ -393,26 +415,23 @@ function ScheduledTransportPage() {
                       {row.employee_transport_line || "—"}
                     </div>
                     <div className="mt-2 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setEditing(row)}
-                        className="btn-secondary min-h-8 text-[11px]"
-                      >
-                        <Pencil className="h-3.5 w-3.5" /> Editar
-                      </button>
                       {row.status === "scheduled" && (
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const result = await cancelFn({ data: { ids: [row.id] } });
-                            if (!result.ok) return toast.error(result.error);
-                            toast.success("Programação cancelada.");
-                            queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
-                          }}
-                          className="btn-secondary min-h-8 text-[11px]"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" /> Cancelar
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => setEditing(row)}
+                            className="btn-secondary min-h-8 text-[11px]"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => cancelOne(row)}
+                            className="btn-secondary min-h-8 text-[11px]"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Cancelar
+                          </button>
+                        </>
                       )}
                     </div>
                   </article>
@@ -443,7 +462,10 @@ function ScheduledTransportPage() {
                   </thead>
                   <tbody>
                     {filtered.slice(0, 1000).map((row) => (
-                      <tr key={row.id} className={cn("border-t border-border", row.status === "cancelled" && "opacity-60")}>
+                      <tr
+                        key={row.id}
+                        className={cn("border-t border-border", row.status === "cancelled" && "opacity-60")}
+                      >
                         <td className="px-2 py-1.5">
                           <input
                             type="checkbox"
@@ -469,28 +491,25 @@ function ScheduledTransportPage() {
                         <td className="px-2 py-1.5">{row.requester_name || row.requester_email}</td>
                         <td className="px-2 py-1.5">{formatScheduledStatus(row.status)}</td>
                         <td className="whitespace-nowrap px-2 py-1.5">
-                          <button
-                            type="button"
-                            onClick={() => setEditing(row)}
-                            className="rounded p-1 hover:bg-muted"
-                            title="Editar"
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </button>
                           {row.status === "scheduled" && (
-                            <button
-                              type="button"
-                              title="Cancelar"
-                              onClick={async () => {
-                                const result = await cancelFn({ data: { ids: [row.id] } });
-                                if (!result.ok) return toast.error(result.error);
-                                toast.success("Programação cancelada.");
-                                queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
-                              }}
-                              className="rounded p-1 hover:bg-muted"
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setEditing(row)}
+                                className="rounded p-1 hover:bg-muted"
+                                title="Editar"
+                              >
+                                <Pencil className="h-3.5 w-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                title="Cancelar"
+                                onClick={() => cancelOne(row)}
+                                className="rounded p-1 hover:bg-muted"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </button>
+                            </>
                           )}
                         </td>
                       </tr>
@@ -541,7 +560,7 @@ function NewScheduleModal({
   const create = useServerFn(createScheduledTransport);
   const [search, setSearch] = useState("");
   const [ids, setIds] = useState<Set<string>>(new Set());
-  const todayIso = new Date().toISOString().slice(0, 10);
+  const todayIso = localIsoDate();
   const [startDate, setStartDate] = useState(todayIso);
   const [endDate, setEndDate] = useState(todayIso);
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
@@ -561,10 +580,7 @@ function NewScheduleModal({
     [startDate, endDate, weekdays],
   );
 
-  const selectedEmployees = useMemo(
-    () => employees.filter((employee) => ids.has(employee.id)),
-    [employees, ids],
-  );
+  const selectedEmployees = useMemo(() => employees.filter((employee) => ids.has(employee.id)), [employees, ids]);
   const transportCount = useMemo(
     () => selectedEmployees.filter((employee) => transportIds.has(employee.id)).length,
     [selectedEmployees, transportIds],
@@ -627,7 +643,8 @@ function NewScheduleModal({
         return;
       }
       toast.success(
-        `${result.count} registro(s) criado(s)` + (result.skipped ? ` · ${result.skipped} duplicado(s) ignorado(s)` : ""),
+        `${result.count} registro(s) criado(s)` +
+          (result.skipped ? ` · ${result.skipped} duplicado(s) ignorado(s)` : ""),
       );
       onSaved();
     } catch (error) {
@@ -646,12 +663,7 @@ function NewScheduleModal({
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
             <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
-            <TimeSelectField
-              label="Horário de entrada"
-              value={entryTime}
-              onChange={setEntryTime}
-              required
-            />
+            <TimeSelectField label="Horário de entrada" value={entryTime} onChange={setEntryTime} required />
             <TimeSelectField
               label="Horário de saída"
               value={departureTime}
@@ -660,7 +672,6 @@ function NewScheduleModal({
               hint="Pode ser no dia seguinte."
             />
           </div>
-
 
           <Field label="Dias da semana">
             <div className="flex flex-wrap gap-1.5">
@@ -800,7 +811,6 @@ function NewScheduleModal({
             )}
           </Field>
 
-
           <div className="flex justify-end gap-2">
             <button type="button" onClick={onClose} className="btn-secondary min-h-9 text-[12px]">
               Cancelar
@@ -837,8 +847,8 @@ function NewScheduleModal({
               <strong>Entrada:</strong> {entryTime} · <strong>Saída:</strong> {departureTime}
             </div>
             <div>
-              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Com transporte:</strong>{" "}
-              {transportCount} de {ids.size} colaborador(es)
+              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Com transporte:</strong> {transportCount}{" "}
+              de {ids.size} colaborador(es)
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -899,7 +909,11 @@ function EditScheduleModal({
         },
       });
       if (!result.ok) return toast.error(result.error);
-      toast.success(result.count + " registro(s) atualizado(s).");
+      toast.success(
+        result.count +
+          " registro(s) atualizado(s)." +
+          (result.conflicts ? ` ${result.conflicts} conflito(s) foram preservados e não sobrescritos.` : ""),
+      );
       onSaved();
     } finally {
       setSaving(false);
@@ -1111,21 +1125,36 @@ function DateSelectField({
   return (
     <Field label={label} required>
       <div className="grid min-w-0 max-w-full grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)_minmax(0,1fr)] gap-2">
-        <select aria-label={`Dia — ${label}`} className={selectClass} value={day} onChange={(e) => setPart("day", e.target.value)}>
+        <select
+          aria-label={`Dia — ${label}`}
+          className={selectClass}
+          value={day}
+          onChange={(e) => setPart("day", e.target.value)}
+        >
           {days.map((d) => (
             <option key={d} value={d}>
               {d}
             </option>
           ))}
         </select>
-        <select aria-label={`Mês — ${label}`} className={selectClass} value={month} onChange={(e) => setPart("month", e.target.value)}>
+        <select
+          aria-label={`Mês — ${label}`}
+          className={selectClass}
+          value={month}
+          onChange={(e) => setPart("month", e.target.value)}
+        >
           {MONTH_OPTIONS.map(([v, l]) => (
             <option key={v} value={v}>
               {l}
             </option>
           ))}
         </select>
-        <select aria-label={`Ano — ${label}`} className={selectClass} value={year} onChange={(e) => setPart("year", e.target.value)}>
+        <select
+          aria-label={`Ano — ${label}`}
+          className={selectClass}
+          value={year}
+          onChange={(e) => setPart("year", e.target.value)}
+        >
           {years.map((y) => (
             <option key={y} value={y}>
               {y}
