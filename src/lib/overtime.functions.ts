@@ -138,14 +138,12 @@ export const LOGISTICS_EXPORT_HEADERS = [
   "Cidade",
   "Telefone",
   "Contato (recado)",
-  "Linha",
   "Data",
   "Horário de entrada",
   "Horário de saída",
-  "Precisa de transporte",
 ] as const;
 
-export const LOGISTICS_EXPORT_WIDTHS = [14, 32, 25, 38, 24, 20, 20, 22, 12, 12, 18, 18, 20] as const;
+export const LOGISTICS_EXPORT_WIDTHS = [14, 32, 25, 38, 24, 20, 20, 22, 12, 18, 18] as const;
 
 export const TRANSPORT_EXPORT_HEADERS = [
   "Data",
@@ -196,11 +194,9 @@ export function mapLogisticsExportRow(row: OvertimeRow) {
     row.employee_city || "",
     row.employee_phone || "",
     row.employee_message_contact || "",
-    row.employee_transport_line || "",
     formatDate(row.overtime_date),
     row.entry_time || "",
     row.departure_time,
-    row.needs_transport ? "Sim" : "Não",
   ];
 }
 
