@@ -1306,12 +1306,14 @@ function downloadEmployeeTemplate() {
 }
 
 function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
+  const pageSize = 30;
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
+  const [page, setPage] = useState(1);
   const employees = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
@@ -1327,6 +1329,15 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
     },
   });
   const filtered = useMemo(() => filterEmployees(employees.data ?? [], search), [employees.data, search]);
+  const totalEmployees = employees.data?.length ?? 0;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedEmployees = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [search]);
+  useEffect(() => {
+    if (page > pageCount) setPage(pageCount);
+  }, [page, pageCount]);
 
   async function changeStatus(employee: EmployeeRow) {
     setChangingId(employee.id);
@@ -1346,14 +1357,20 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   return (
     <Panel title="Cadastro de colaboradores" padded={false}>
       <div className="flex flex-col gap-2 border-b border-border p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative min-w-0 flex-1 sm:max-w-md">
-          <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-          <input
-            className="input-base pl-7 text-[12px]"
-            placeholder="Buscar por nome, chapa, ID ou função…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="flex min-w-0 flex-1 flex-col gap-2 sm:max-w-xl sm:flex-row sm:items-center">
+          <div className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              className="input-base pl-7 text-[12px]"
+              placeholder="Buscar por nome, chapa, ID ou função…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          <div className="shrink-0 text-[11px] text-muted-foreground">
+            Total: <span className="font-semibold text-foreground">{totalEmployees}</span> colaboradores
+            {search && ` · ${filtered.length} encontrados`}
+          </div>
         </div>
         {!readOnly && (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
@@ -1389,7 +1406,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
       ) : (
         <>
           <div className="divide-y divide-border md:hidden">
-            {filtered.map((employee) => (
+            {paginatedEmployees.map((employee) => (
               <div key={employee.id} className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
@@ -1456,9 +1473,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
               </div>
             ))}
           </div>
-          <div className="hidden overflow-x-auto md:block">
+          <div className="hidden max-h-[65vh] overflow-auto md:block">
             <table className="w-full min-w-[1460px] text-left text-[12px]">
-              <thead className="border-b border-border bg-muted/30 text-[10px] uppercase tracking-wider text-muted-foreground">
+              <thead className="sticky top-0 z-20 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2">Chapa</th>
                   <th className="px-3 py-2">ID</th>
@@ -1470,11 +1487,11 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   <th className="px-3 py-2">Endereço</th>
                   <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
-                  {!readOnly && <th className="px-3 py-2 text-right">Ação</th>}
+                  {!readOnly && <th className="sticky right-0 z-30 bg-muted px-3 py-2 text-right">Ação</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {filtered.map((employee) => (
+                {paginatedEmployees.map((employee) => (
                   <tr key={employee.id} className="hover:bg-muted/30">
                     <td className="px-3 py-2 tabular">{employee.badge}</td>
                     <td className="px-3 py-2 tabular">{employee.employee_id}</td>
@@ -1489,7 +1506,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
                     {!readOnly && (
-                      <td className="px-3 py-2">
+                      <td className="sticky right-0 bg-card px-3 py-2">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
                             onClick={() => setEditing(employee)}
@@ -1512,6 +1529,31 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
               </tbody>
             </table>
           </div>
+          {pageCount > 1 && (
+            <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-[11px]">
+              <span className="text-muted-foreground">
+                Página {currentPage} de {pageCount} · até {pageSize} por página
+              </span>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={currentPage === 1}
+                  onClick={() => setPage((value) => Math.max(1, value - 1))}
+                  className="rounded border border-border px-3 py-1.5 hover:bg-muted disabled:opacity-40"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  disabled={currentPage === pageCount}
+                  onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                  className="rounded border border-border px-3 py-1.5 hover:bg-muted disabled:opacity-40"
+                >
+                  Próxima
+                </button>
+              </div>
+            </div>
+          )}
         </>
       )}
       {showImport && (
