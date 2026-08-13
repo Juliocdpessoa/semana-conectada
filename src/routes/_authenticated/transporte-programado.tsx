@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Bus, CalendarDays, Download, Plus, Search, Trash2, Pencil, Users, Utensils } from "lucide-react";
+import { Bus, Download, Plus, Search, Trash2, Pencil, Users, UserX } from "lucide-react";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import type { SessionInfo } from "./route";
@@ -16,8 +16,11 @@ import {
 import {
   SCHEDULED_TRANSPORT_EXPORT_HEADERS,
   SCHEDULED_TRANSPORT_EXPORT_WIDTHS,
+  LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS,
+  LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS,
   consolidateScheduledTransport,
   mapScheduledTransportExportRow,
+  mapLogisticsScheduledTransportExportRow,
   formatScheduledStatus,
   datesInRange,
   WEEKDAY_LABELS,
@@ -52,7 +55,6 @@ type Filters = {
   startDate: string;
   endDate: string;
   jobTitle: string;
-  line: string;
   status: "all" | "scheduled" | "cancelled";
   transport: "all" | "yes" | "no";
   entryTime: string;
@@ -64,7 +66,6 @@ const EMPTY_FILTERS: Filters = {
   startDate: "",
   endDate: "",
   jobTitle: "",
-  line: "",
   status: "scheduled",
   transport: "all",
   entryTime: "",
@@ -79,6 +80,8 @@ function localIsoDate(date = new Date()) {
 }
 
 function ScheduledTransportPage() {
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const isLogistics = session.roles.includes("logistics");
   const queryClient = useQueryClient();
   const load = useServerFn(listScheduledTransport);
   const cancelFn = useServerFn(cancelScheduledTransport);
@@ -105,14 +108,6 @@ function ScheduledTransportPage() {
     () => [...new Set(rows.map((row) => row.employee_role).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [rows],
   );
-  const lines = useMemo(
-    () =>
-      [...new Set(rows.map((row) => row.employee_transport_line || "").filter(Boolean))].sort((a, b) =>
-        a.localeCompare(b),
-      ),
-    [rows],
-  );
-
   const filtered = useMemo(() => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
     return rows.filter((row) => {
@@ -120,7 +115,6 @@ function ScheduledTransportPage() {
       if (filters.startDate && row.transport_date < filters.startDate) return false;
       if (filters.endDate && row.transport_date > filters.endDate) return false;
       if (filters.jobTitle && row.employee_role !== filters.jobTitle) return false;
-      if (filters.line && (row.employee_transport_line || "") !== filters.line) return false;
       if (filters.transport === "yes" && !row.needs_transport) return false;
       if (filters.transport === "no" && row.needs_transport) return false;
       if (filters.entryTime && row.entry_time !== filters.entryTime) return false;
@@ -132,7 +126,6 @@ function ScheduledTransportPage() {
           row.employee_registration ?? "",
           row.employee_external_id ?? "",
           row.employee_role,
-          row.employee_transport_line ?? "",
           row.order_number ?? "",
           row.service_description ?? "",
           row.requester_name,
@@ -145,13 +138,12 @@ function ScheduledTransportPage() {
 
   const kpis = useMemo(() => {
     const scheduled = filtered.filter((row) => row.status === "scheduled");
+    const cancelled = filtered.filter((row) => row.status === "cancelled");
     return {
-      total: filtered.length,
-      scheduled: scheduled.length,
-      cancelled: filtered.length - scheduled.length,
-      transport: scheduled.filter((row) => row.needs_transport).length,
-      snack: scheduled.filter((row) => row.needs_snack).length,
       employees: new Set(scheduled.map((row) => row.employee_master_id)).size,
+      transport: new Set(scheduled.filter((row) => row.needs_transport).map((row) => row.employee_master_id)).size,
+      noTransport: new Set(scheduled.filter((row) => !row.needs_transport).map((row) => row.employee_master_id)).size,
+      cancelled: new Set(cancelled.map((row) => row.employee_master_id)).size,
     };
   }, [filtered]);
 
@@ -168,6 +160,11 @@ function ScheduledTransportPage() {
       workbook.creator = "NEXO";
       workbook.created = new Date();
       const worksheet = workbook.addWorksheet("Transporte programado", { views: [{ state: "frozen", ySplit: 1 }] });
+      const headers = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS : SCHEDULED_TRANSPORT_EXPORT_HEADERS;
+      const widths = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS : SCHEDULED_TRANSPORT_EXPORT_WIDTHS;
+      const exportRows = isLogistics
+        ? consolidated.map(mapLogisticsScheduledTransportExportRow)
+        : consolidated.map(mapScheduledTransportExportRow);
       worksheet.addTable({
         name: "TabelaTransporteProgramado",
         ref: "A1",
@@ -180,10 +177,10 @@ function ScheduledTransportPage() {
           showRowStripes: true,
           showColumnStripes: false,
         },
-        columns: SCHEDULED_TRANSPORT_EXPORT_HEADERS.map((name) => ({ name, filterButton: true })),
-        rows: consolidated.map(mapScheduledTransportExportRow),
+        columns: headers.map((name) => ({ name, filterButton: true })),
+        rows: exportRows,
       });
-      SCHEDULED_TRANSPORT_EXPORT_WIDTHS.forEach((width, index) => {
+      widths.forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
       worksheet.getRow(1).height = 26;
@@ -264,12 +261,11 @@ function ScheduledTransportPage() {
         }
       />
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-        <KpiCard label="Registros" value={kpis.total} icon={<CalendarDays className="h-4 w-4" />} />
-        <KpiCard label="Programados" value={kpis.scheduled} icon={<CalendarDays className="h-4 w-4" />} />
-        <KpiCard label="Colaboradores" value={kpis.employees} icon={<Users className="h-4 w-4" />} />
+      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <KpiCard label="Colaboradores programados" value={kpis.employees} icon={<Users className="h-4 w-4" />} />
         <KpiCard label="Com transporte" value={kpis.transport} icon={<Bus className="h-4 w-4" />} />
-        <KpiCard label="Com lanche" value={kpis.snack} icon={<Utensils className="h-4 w-4" />} />
+        <KpiCard label="Sem transporte" value={kpis.noTransport} icon={<Users className="h-4 w-4" />} />
+        <KpiCard label="Colaboradores cancelados" value={kpis.cancelled} icon={<UserX className="h-4 w-4" />} />
       </div>
 
       <div className="mt-4">
@@ -281,7 +277,7 @@ function ScheduledTransportPage() {
                 <input
                   value={filters.search}
                   onChange={(event) => setFilters((f) => ({ ...f, search: event.target.value }))}
-                  placeholder="Nome, chapa, ID, função, linha…"
+                  placeholder="Nome, chapa, ID ou função…"
                   className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
                 />
               </div>
@@ -316,20 +312,6 @@ function ScheduledTransportPage() {
                 ))}
               </select>
             </Field>
-            <Field label="Linha">
-              <select
-                value={filters.line}
-                onChange={(event) => setFilters((f) => ({ ...f, line: event.target.value }))}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="">Todas</option>
-                {lines.map((line) => (
-                  <option key={line} value={line}>
-                    {line}
-                  </option>
-                ))}
-              </select>
-            </Field>
             <Field label="Status">
               <select
                 value={filters.status}
@@ -359,11 +341,13 @@ function ScheduledTransportPage() {
                 label="Entrada"
                 value={filters.entryTime}
                 onChange={(value) => setFilters((f) => ({ ...f, entryTime: value }))}
+                options={ENTRY_TIME_OPTIONS}
               />
               <TimeSelectField
                 label="Saída"
                 value={filters.departureTime}
                 onChange={(value) => setFilters((f) => ({ ...f, departureTime: value }))}
+                options={DEPARTURE_TIME_OPTIONS}
               />
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
@@ -411,8 +395,7 @@ function ScheduledTransportPage() {
                       <span className="text-[11px]">{formatScheduledStatus(row.status)}</span>
                     </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
-                      Chapa {row.employee_registration || "—"} · {row.employee_role} · Linha{" "}
-                      {row.employee_transport_line || "—"}
+                      Chapa {row.employee_registration || "—"} · {row.employee_role}
                     </div>
                     <div className="mt-2 flex gap-2">
                       {row.status === "scheduled" && (
@@ -450,9 +433,7 @@ function ScheduledTransportPage() {
                       <th className="px-2 py-2">Função</th>
                       <th className="px-2 py-2">Entrada</th>
                       <th className="px-2 py-2">Saída</th>
-                      <th className="px-2 py-2">Lanche</th>
                       <th className="px-2 py-2">Transporte</th>
-                      <th className="px-2 py-2">Linha</th>
                       <th className="px-2 py-2">Ordem</th>
                       <th className="px-2 py-2">Serviço</th>
                       <th className="px-2 py-2">Solicitante</th>
@@ -481,9 +462,7 @@ function ScheduledTransportPage() {
                         <td className="px-2 py-1.5">{row.employee_role}</td>
                         <td className="px-2 py-1.5">{row.entry_time}</td>
                         <td className="px-2 py-1.5">{row.departure_time}</td>
-                        <td className="px-2 py-1.5">{row.needs_snack ? "Sim" : "Não"}</td>
                         <td className="px-2 py-1.5">{row.needs_transport ? "Sim" : "Não"}</td>
-                        <td className="px-2 py-1.5">{row.employee_transport_line || "—"}</td>
                         <td className="px-2 py-1.5">{row.order_number || "—"}</td>
                         <td className="max-w-[280px] truncate px-2 py-1.5" title={row.service_description || ""}>
                           {row.service_description || "—"}
@@ -562,11 +541,10 @@ function NewScheduleModal({
   const [ids, setIds] = useState<Set<string>>(new Set());
   const todayIso = localIsoDate();
   const [startDate, setStartDate] = useState(todayIso);
-  const [endDate, setEndDate] = useState(todayIso);
+  const [endDate, setEndDate] = useState("");
   const [weekdays, setWeekdays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [entryTime, setEntryTime] = useState("");
   const [departureTime, setDepartureTime] = useState("");
-  const [needsSnack, setNeedsSnack] = useState(false);
   const [transportIds, setTransportIds] = useState<Set<string>>(new Set());
   const [orderNumber, setOrderNumber] = useState("");
   const [service, setService] = useState("");
@@ -575,9 +553,13 @@ function NewScheduleModal({
   const [saving, setSaving] = useState(false);
 
   const visible = useMemo(() => filterEmployees(employees, search).slice(0, 200), [employees, search]);
+  const effectiveEndDate = endDate || startDate;
   const dates = useMemo(
-    () => (startDate && endDate && startDate <= endDate ? datesInRange(startDate, endDate, weekdays) : []),
-    [startDate, endDate, weekdays],
+    () =>
+      startDate && effectiveEndDate && startDate <= effectiveEndDate
+        ? datesInRange(startDate, effectiveEndDate, weekdays)
+        : [],
+    [startDate, effectiveEndDate, weekdays],
   );
 
   const selectedEmployees = useMemo(() => employees.filter((employee) => ids.has(employee.id)), [employees, ids]);
@@ -617,11 +599,11 @@ function NewScheduleModal({
         data: {
           employee_ids: [...ids],
           start_date: startDate,
-          end_date: endDate,
+          end_date: effectiveEndDate,
           weekdays,
           entry_time: entryTime,
           departure_time: departureTime,
-          needs_snack: needsSnack,
+          needs_snack: false,
           needs_transport: transportIds.size > 0,
           transport_employee_ids: [...ids].filter((id) => transportIds.has(id)),
           order_number: orderNumber || null,
@@ -662,12 +644,27 @@ function NewScheduleModal({
         <div className="space-y-4">
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
             <DateSelectField label="Data inicial" value={startDate} onChange={setStartDate} />
-            <DateSelectField label="Data final" value={endDate} onChange={setEndDate} />
-            <TimeSelectField label="Horário de entrada" value={entryTime} onChange={setEntryTime} required />
+            <Field label="Data final (opcional)" hint="Deixe em branco para programar somente a data inicial.">
+              <input
+                type="date"
+                value={endDate}
+                min={startDate}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+              />
+            </Field>
+            <TimeSelectField
+              label="Horário de entrada"
+              value={entryTime}
+              onChange={setEntryTime}
+              options={ENTRY_TIME_OPTIONS}
+              required
+            />
             <TimeSelectField
               label="Horário de saída"
               value={departureTime}
               onChange={setDepartureTime}
+              options={DEPARTURE_TIME_OPTIONS}
               required
               hint="Pode ser no dia seguinte."
             />
@@ -701,16 +698,6 @@ function NewScheduleModal({
           </Field>
 
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
-            <Field label="Necessita lanche">
-              <select
-                value={needsSnack ? "yes" : "no"}
-                onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="no">Não</option>
-                <option value="yes">Sim</option>
-              </select>
-            </Field>
             <Field label="Ordem (opcional)">
               <input
                 value={orderNumber}
@@ -829,7 +816,8 @@ function NewScheduleModal({
         <div className="space-y-3 text-[13px]">
           <div className="rounded-md border border-border bg-muted/30 p-3">
             <div>
-              <strong>Período:</strong> {formatDate(startDate)} a {formatDate(endDate)}
+              <strong>{endDate ? "Período" : "Data"}:</strong> {formatDate(startDate)}
+              {endDate ? ` a ${formatDate(effectiveEndDate)}` : ""}
             </div>
             <div>
               <strong>Dias considerados:</strong> {weekdays.map((day) => WEEKDAY_SHORT[day]).join(", ")}
@@ -841,14 +829,10 @@ function NewScheduleModal({
               <strong>Colaboradores selecionados:</strong> {ids.size}
             </div>
             <div>
-              <strong>Registros que serão criados:</strong> {ids.size * dates.length}
-            </div>
-            <div>
               <strong>Entrada:</strong> {entryTime} · <strong>Saída:</strong> {departureTime}
             </div>
             <div>
-              <strong>Lanche:</strong> {needsSnack ? "Sim" : "Não"} · <strong>Com transporte:</strong> {transportCount}{" "}
-              de {ids.size} colaborador(es)
+              <strong>Com transporte:</strong> {transportCount} de {ids.size} colaborador(es)
             </div>
           </div>
           <div className="flex justify-end gap-2">
@@ -884,7 +868,6 @@ function EditScheduleModal({
   const [scope, setScope] = useState<"single" | "future">("single");
   const [entryTime, setEntryTime] = useState(row.entry_time);
   const [departureTime, setDepartureTime] = useState(row.departure_time);
-  const [needsSnack, setNeedsSnack] = useState(row.needs_snack);
   const [needsTransport, setNeedsTransport] = useState(row.needs_transport);
   const [orderNumber, setOrderNumber] = useState(row.order_number ?? "");
   const [service, setService] = useState(row.service_description ?? "");
@@ -900,7 +883,7 @@ function EditScheduleModal({
           scope,
           entry_time: entryTime,
           departure_time: departureTime,
-          needs_snack: needsSnack,
+          needs_snack: row.needs_snack,
           needs_transport: needsTransport,
           order_number: orderNumber || null,
           service_description: service || null,
@@ -937,18 +920,20 @@ function EditScheduleModal({
           </Field>
         )}
         <div className="grid min-w-0 grid-cols-2 gap-3 [&>*]:min-w-0">
-          <TimeSelectField label="Entrada" value={entryTime} onChange={setEntryTime} required />
-          <TimeSelectField label="Saída" value={departureTime} onChange={setDepartureTime} required />
-          <Field label="Lanche">
-            <select
-              value={needsSnack ? "yes" : "no"}
-              onChange={(event) => setNeedsSnack(event.target.value === "yes")}
-              className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-            >
-              <option value="no">Não</option>
-              <option value="yes">Sim</option>
-            </select>
-          </Field>
+          <TimeSelectField
+            label="Entrada"
+            value={entryTime}
+            onChange={setEntryTime}
+            options={ENTRY_TIME_OPTIONS}
+            required
+          />
+          <TimeSelectField
+            label="Saída"
+            value={departureTime}
+            onChange={setDepartureTime}
+            options={DEPARTURE_TIME_OPTIONS}
+            required
+          />
           <Field label="Transporte">
             <select
               value={needsTransport ? "yes" : "no"}
@@ -1001,46 +986,25 @@ function EditScheduleModal({
 }
 
 /* ---------- Campo de horário (select + outro) ---------- */
-const TIME_OPTIONS = [
-  "04:30",
-  "05:30",
-  "06:30",
-  "07:30",
-  "08:00",
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "18:30",
-  "19:00",
-  "19:30",
-  "20:00",
-  "20:30",
-  "21:00",
-  "22:00",
-  "23:00",
-];
+const ENTRY_TIME_OPTIONS = ["07:30", "17:30", "18:30", "06:00", "06:30"] as const;
+const DEPARTURE_TIME_OPTIONS = ["17:18", "03:18", "04:18", "05:00", "07:00"] as const;
 
 function TimeSelectField({
   label,
   value,
   onChange,
+  options,
   required,
   hint,
 }: {
   label: string;
   value: string;
   onChange: (next: string) => void;
+  options: readonly string[];
   required?: boolean;
   hint?: string;
 }) {
-  const [custom, setCustom] = useState(value ? !TIME_OPTIONS.includes(value) : false);
+  const [custom, setCustom] = useState(value ? !options.includes(value) : false);
 
   return (
     <Field label={label} required={required} hint={hint}>
@@ -1055,7 +1019,7 @@ function TimeSelectField({
         style={{ boxSizing: "border-box" }}
       >
         <option value="">{required ? "Selecione" : "Sem horário"}</option>
-        {TIME_OPTIONS.map((time) => (
+        {options.map((time) => (
           <option key={time} value={time}>
             {time.replace(/^0/, "")}
           </option>
