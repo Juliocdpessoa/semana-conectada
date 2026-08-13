@@ -42,7 +42,10 @@ export const Route = createFileRoute("/_authenticated/transporte-programado")({
       { title: "Mudança de Escala | NEXO" },
       { name: "description", content: "Solicitação de mudança de escala de trabalho para equipes de manutenção." },
       { property: "og:title", content: "Mudança de Escala | NEXO" },
-      { property: "og:description", content: "Solicitação de mudança de escala de trabalho para equipes de manutenção." },
+      {
+        property: "og:description",
+        content: "Solicitação de mudança de escala de trabalho para equipes de manutenção.",
+      },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -151,7 +154,7 @@ function ScheduledTransportPage() {
 
   async function exportExcel() {
     if (consolidated.length === 0) {
-      toast.error("Não há programações para exportar com os filtros atuais.");
+      toast.error("Não há mudanças de escala para exportar com os filtros atuais.");
       return;
     }
     try {
@@ -159,14 +162,14 @@ function ScheduledTransportPage() {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
       workbook.created = new Date();
-      const worksheet = workbook.addWorksheet("Transporte programado", { views: [{ state: "frozen", ySplit: 1 }] });
+      const worksheet = workbook.addWorksheet("Mudanças de escala", { views: [{ state: "frozen", ySplit: 1 }] });
       const headers = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS : SCHEDULED_TRANSPORT_EXPORT_HEADERS;
       const widths = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS : SCHEDULED_TRANSPORT_EXPORT_WIDTHS;
       const exportRows = isLogistics
         ? consolidated.map(mapLogisticsScheduledTransportExportRow)
         : consolidated.map(mapScheduledTransportExportRow);
       worksheet.addTable({
-        name: "TabelaTransporteProgramado",
+        name: "TabelaMudancasEscala",
         ref: "A1",
         headerRow: true,
         totalsRow: false,
@@ -195,7 +198,7 @@ function ScheduledTransportPage() {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "transporte-programado.xlsx";
+      anchor.download = "mudancas-de-escala.xlsx";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -209,29 +212,30 @@ function ScheduledTransportPage() {
   async function cancelSelected() {
     const ids = [...selected];
     if (ids.length === 0) return;
-    if (!confirm(`Cancelar ${ids.length} programação(ões)?`)) return;
+    if (!confirm(`Cancelar ${ids.length} mudança(s) de escala?`)) return;
     try {
       const result = await cancelFn({ data: { ids } });
       if (!result.ok) return toast.error(result.error);
-      if (result.count === 0) return toast.error("As programações selecionadas já foram alteradas ou canceladas.");
-      toast.success(result.count + " programação(ões) cancelada(s).");
+      if (result.count === 0)
+        return toast.error("As mudanças de escala selecionadas já foram alteradas ou canceladas.");
+      toast.success(result.count + " mudança(s) de escala cancelada(s).");
       setSelected(new Set());
       queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar as programações.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar as mudanças de escala.");
     }
   }
 
   async function cancelOne(row: ScheduledTransportRow) {
-    if (!confirm(`Cancelar a programação de ${row.employee_name} em ${formatDate(row.transport_date)}?`)) return;
+    if (!confirm(`Cancelar a mudança de escala de ${row.employee_name} em ${formatDate(row.transport_date)}?`)) return;
     try {
       const result = await cancelFn({ data: { ids: [row.id] } });
       if (!result.ok) return toast.error(result.error);
-      if (result.count === 0) return toast.error("A programação já foi alterada ou cancelada.");
-      toast.success("Programação cancelada.");
+      if (result.count === 0) return toast.error("A mudança de escala já foi alterada ou cancelada.");
+      toast.success("Mudança de escala cancelada.");
       queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a programação.");
+      toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a mudança de escala.");
     }
   }
 
@@ -251,7 +255,7 @@ function ScheduledTransportPage() {
         description="Solicitação de mudança de escala de trabalho por dia ou período."
         actions={
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportExcel} className="btn-primary min-h-9 text-[12px]">
+            <button type="button" onClick={exportExcel} className="btn-secondary min-h-9 text-[12px]">
               <Download className="h-4 w-4" /> Exportar para Excel
             </button>
             <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
@@ -269,7 +273,11 @@ function ScheduledTransportPage() {
       </div>
 
       <div className="mt-4">
-        <Panel title="Programações" description="A exportação respeita exatamente os filtros ativos." padded={false}>
+        <Panel
+          title="Mudanças de escala"
+          description="A exportação respeita exatamente os filtros ativos."
+          padded={false}
+        >
           <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
             <Field label="Pesquisa rápida">
               <div className="relative">
@@ -364,7 +372,7 @@ function ScheduledTransportPage() {
                 disabled={selected.size === 0}
                 className="btn-secondary min-h-9 text-[12px] disabled:opacity-50"
               >
-                <Trash2 className="h-4 w-4" /> Cancelar selecionados ({selected.size})
+                <Trash2 className="h-4 w-4" /> Cancelar mudanças selecionadas ({selected.size})
               </button>
               <span className="ml-auto text-[11px] text-muted-foreground">
                 {filtered.length} registro(s) · {consolidated.length} linha(s) na planilha
@@ -373,12 +381,12 @@ function ScheduledTransportPage() {
           </div>
 
           {query.isLoading ? (
-            <div className="p-6 text-[12px] text-muted-foreground">Carregando programações…</div>
+            <div className="p-6 text-[12px] text-muted-foreground">Carregando mudanças de escala…</div>
           ) : query.isError ? (
             <div className="p-6 text-[12px] text-destructive">{(query.error as Error).message}</div>
           ) : filtered.length === 0 ? (
             <div className="p-6">
-              <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhuma programação encontrada" />
+              <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhuma mudança de escala encontrada" />
             </div>
           ) : (
             <>
@@ -630,7 +638,7 @@ function NewScheduleModal({
       );
       onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Falha ao salvar a programação.");
+      toast.error(error instanceof Error ? error.message : "Falha ao salvar a mudança de escala.");
     } finally {
       setSaving(false);
     }
@@ -845,7 +853,7 @@ function NewScheduleModal({
               onClick={() => submit(false)}
               className="btn-primary min-h-9 text-[12px] disabled:opacity-50"
             >
-              {saving ? "Salvando…" : "Confirmar Programação"}
+              {saving ? "Salvando…" : "Confirmar Mudança de Escala"}
             </button>
           </div>
         </div>
@@ -904,7 +912,7 @@ function EditScheduleModal({
   }
 
   return (
-    <Modal title={`Editar programação · ${row.employee_name}`} onClose={onClose}>
+    <Modal title={`Editar mudança de escala · ${row.employee_name}`} onClose={onClose}>
       <div className="space-y-3">
         <div className="text-[12px] text-muted-foreground">Data: {formatDate(row.transport_date)}</div>
         {row.batch_id && (
