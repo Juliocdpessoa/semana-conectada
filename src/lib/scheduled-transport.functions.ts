@@ -133,7 +133,9 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
     const rows = data.skip_duplicates
       ? allRows.filter(
           (row) =>
-            !existingKeys.has(`${row.employee_master_id}|${row.transport_date}|${row.entry_time}|${row.departure_time}`),
+            !existingKeys.has(
+              `${row.employee_master_id}|${row.transport_date}|${row.entry_time}|${row.departure_time}`,
+            ),
         )
       : allRows;
     if (rows.length === 0) return { ok: false as const, error: "Todas as programações já existiam." };
@@ -147,9 +149,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       entry_time: data.entry_time,
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
-      needs_transport: data.transport_employee_ids
-        ? data.transport_employee_ids.length > 0
-        : data.needs_transport,
+      needs_transport: data.transport_employee_ids ? data.transport_employee_ids.length > 0 : data.needs_transport,
       order_number: data.order_number?.trim() || null,
       service_description: data.service_description?.trim() || null,
       observation: data.observation?.trim() || null,
@@ -224,18 +224,43 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
       updated_by_name: info.fullName,
     };
 
-    let query = db.from("scheduled_transport_requests").update(patch).eq("status", "scheduled");
+    if (current.status !== "scheduled") {
+      return { ok: false as const, error: "Somente programações ativas podem ser editadas." };
+    }
+
+    let targetsQuery = db.from("scheduled_transport_requests").select("id, version").eq("status", "scheduled");
     if (data.scope === "future" && current.batch_id) {
-      query = query
+      targetsQuery = targetsQuery
         .eq("batch_id", current.batch_id)
         .eq("employee_master_id", current.employee_master_id)
         .gte("transport_date", String(current.transport_date).slice(0, 10));
     } else {
-      query = query.eq("id", data.id);
+      targetsQuery = targetsQuery.eq("id", data.id);
     }
-    const { data: updated, error } = await query.select("id");
-    if (error) return { ok: false as const, error: error.message };
-    return { ok: true as const, count: updated?.length ?? 0 };
+    const { data: targets, error: targetsError } = await targetsQuery;
+    if (targetsError) return { ok: false as const, error: targetsError.message };
+    if (!targets?.length) return { ok: false as const, error: "Nenhuma programação ativa foi encontrada." };
+
+    let count = 0;
+    let conflicts = 0;
+    for (const target of targets) {
+      const expectedVersion = target.id === data.id ? data.version : target.version;
+      const { data: updated, error } = await db
+        .from("scheduled_transport_requests")
+        .update(patch)
+        .eq("id", target.id)
+        .eq("status", "scheduled")
+        .eq("version", expectedVersion)
+        .select("id")
+        .maybeSingle();
+      if (error) return { ok: false as const, error: error.message };
+      if (updated) count += 1;
+      else conflicts += 1;
+    }
+    if (count === 0) {
+      return { ok: false as const, error: "Os registros foram alterados por outro usuário. Recarregue a lista." };
+    }
+    return { ok: true as const, count, conflicts };
   });
 
 export const cancelScheduledTransport = createServerFn({ method: "POST" })
