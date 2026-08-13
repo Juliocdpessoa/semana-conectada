@@ -39,10 +39,10 @@ export const Route = createFileRoute("/_authenticated/transporte-programado")({
   },
   head: () => ({
     meta: [
-      { title: "Transporte Programado | NEXO" },
-      { name: "description", content: "Programação de transporte por período para equipes de manutenção." },
-      { property: "og:title", content: "Transporte Programado | NEXO" },
-      { property: "og:description", content: "Programação de transporte por período para equipes de manutenção." },
+      { title: "Mudança de Escala | NEXO" },
+      { name: "description", content: "Solicitação de mudança de escala de trabalho para equipes de manutenção." },
+      { property: "og:title", content: "Mudança de Escala | NEXO" },
+      { property: "og:description", content: "Solicitação de mudança de escala de trabalho para equipes de manutenção." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },
     ],
@@ -247,12 +247,12 @@ function ScheduledTransportPage() {
   return (
     <main className="mx-auto max-w-[1600px] px-3 py-4 sm:px-6">
       <PageHeader
-        title="Transporte Programado"
-        description="Programação de transporte por dia ou período, independente de hora extra."
+        title="Mudança de Escala"
+        description="Solicitação de mudança de escala de trabalho por dia ou período."
         actions={
           <div className="flex flex-wrap gap-2">
             <button type="button" onClick={exportExcel} className="btn-secondary min-h-9 text-[12px]">
-              <Download className="h-4 w-4" /> Exportar Transporte
+              <Download className="h-4 w-4" /> Exportar para Excel
             </button>
             <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
               <Plus className="h-4 w-4" /> Nova Programação
