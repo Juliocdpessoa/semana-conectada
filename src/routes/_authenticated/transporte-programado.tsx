@@ -251,7 +251,7 @@ function ScheduledTransportPage() {
         description="Solicitação de mudança de escala de trabalho por dia ou período."
         actions={
           <div className="flex flex-wrap gap-2">
-            <button type="button" onClick={exportExcel} className="btn-secondary min-h-9 text-[12px]">
+            <button type="button" onClick={exportExcel} className="btn-primary min-h-9 text-[12px]">
               <Download className="h-4 w-4" /> Exportar para Excel
             </button>
             <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
