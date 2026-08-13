@@ -72,6 +72,21 @@ export const SCHEDULED_TRANSPORT_EXPORT_WIDTHS = [
   12, 12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 20, 16,
 ] as const;
 
+export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS = [
+  "Data Inicial",
+  "Data Final",
+  "Chapa",
+  "Nome",
+  "Função",
+  "Endereço completo",
+  "Telefone",
+  "Contato (recado)",
+  "Horário de entrada",
+  "Horário de saída",
+] as const;
+
+export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS = [12, 12, 14, 32, 24, 50, 20, 24, 18, 18] as const;
+
 export function formatScheduledStatus(status: ScheduledTransportRow["status"]) {
   return status === "cancelled" ? "Cancelado" : "Programado";
 }
@@ -209,5 +224,21 @@ export function mapScheduledTransportExportRow(group: ConsolidatedTransportGroup
     row.requester_name || row.requester_email,
     row.needs_transport ? "Sim" : "Não",
     formatScheduledStatus(row.status),
+  ];
+}
+
+export function mapLogisticsScheduledTransportExportRow(group: ConsolidatedTransportGroup) {
+  const row = group.sample;
+  return [
+    formatDate(group.startDate),
+    formatDate(group.endDate),
+    row.employee_registration || "",
+    row.employee_name,
+    row.employee_role,
+    fullAddress(row),
+    row.employee_phone || "",
+    row.employee_message_contact || "",
+    row.entry_time,
+    row.departure_time,
   ];
 }
