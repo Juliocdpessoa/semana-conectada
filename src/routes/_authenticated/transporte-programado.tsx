@@ -111,6 +111,18 @@ function ScheduledTransportPage() {
     () => [...new Set(rows.map((row) => row.employee_role).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
     [rows],
   );
+  const availableDates = useMemo(
+    () => [...new Set(rows.map((row) => row.transport_date).filter(Boolean))].sort(),
+    [rows],
+  );
+  const availableEntryTimes = useMemo(
+    () => [...new Set(rows.map((row) => row.entry_time).filter(Boolean))].sort(),
+    [rows],
+  );
+  const availableDepartureTimes = useMemo(
+    () => [...new Set(rows.map((row) => row.departure_time).filter(Boolean))].sort(),
+    [rows],
+  );
   const filtered = useMemo(() => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
     return rows.filter((row) => {
@@ -291,20 +303,32 @@ function ScheduledTransportPage() {
               </div>
             </Field>
             <Field label="Data inicial">
-              <input
-                type="date"
+              <select
                 value={filters.startDate}
                 onChange={(event) => setFilters((f) => ({ ...f, startDate: event.target.value }))}
                 className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              />
+              >
+                <option value="">Todas</option>
+                {availableDates.map((date) => (
+                  <option key={date} value={date}>
+                    {formatDate(date)}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Data final">
-              <input
-                type="date"
+              <select
                 value={filters.endDate}
                 onChange={(event) => setFilters((f) => ({ ...f, endDate: event.target.value }))}
                 className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              />
+              >
+                <option value="">Todas</option>
+                {availableDates.map((date) => (
+                  <option key={date} value={date}>
+                    {formatDate(date)}
+                  </option>
+                ))}
+              </select>
             </Field>
             <Field label="Função">
               <select
@@ -345,18 +369,34 @@ function ScheduledTransportPage() {
               </select>
             </Field>
             <div className="grid min-w-0 grid-cols-2 gap-2 [&>*]:min-w-0">
-              <TimeSelectField
-                label="Entrada"
-                value={filters.entryTime}
-                onChange={(value) => setFilters((f) => ({ ...f, entryTime: value }))}
-                options={ENTRY_TIME_OPTIONS}
-              />
-              <TimeSelectField
-                label="Saída"
-                value={filters.departureTime}
-                onChange={(value) => setFilters((f) => ({ ...f, departureTime: value }))}
-                options={DEPARTURE_TIME_OPTIONS}
-              />
+              <Field label="Entrada">
+                <select
+                  value={filters.entryTime}
+                  onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                >
+                  <option value="">Todos</option>
+                  {availableEntryTimes.map((time) => (
+                    <option key={time} value={time}>
+                      {time.replace(/^0/, "")}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="Saída">
+                <select
+                  value={filters.departureTime}
+                  onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
+                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                >
+                  <option value="">Todos</option>
+                  {availableDepartureTimes.map((time) => (
+                    <option key={time} value={time}>
+                      {time.replace(/^0/, "")}
+                    </option>
+                  ))}
+                </select>
+              </Field>
             </div>
             <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
               <button
