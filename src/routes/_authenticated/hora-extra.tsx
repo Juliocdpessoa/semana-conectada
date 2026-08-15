@@ -501,7 +501,7 @@ function ApprovedDailyExport({
       workbook.creator = "NEXO";
       workbook.created = new Date();
       const worksheet = workbook.addWorksheet("Transportes", {
-        views: [{ state: "frozen", ySplit: 1 }],
+        views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
       });
       const logisticsValues = dailyRows.map(mapLogisticsExportRow);
       worksheet.addRow([...LOGISTICS_EXPORT_HEADERS]);
