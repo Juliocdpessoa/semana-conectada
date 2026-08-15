@@ -446,7 +446,7 @@ function ApprovedDailyExport({
     () =>
       exportableRows.filter(
         (row) =>
-          row.overtime_date === effectiveDate &&
+          (effectiveDate === "all" || row.overtime_date === effectiveDate) &&
           (transportOnly || transportFilter === "yes"
             ? row.needs_transport
             : transportFilter === "no"
@@ -482,10 +482,11 @@ function ApprovedDailyExport({
 
   async function exportDailyExcel() {
     if (!effectiveDate || dailyRows.length === 0) {
-      toast.error("Não há solicitações de hora extra para exportar nesta data.");
+      toast.error("Não há solicitações de hora extra para exportar com os filtros atuais.");
       return;
     }
 
+    const exportDateLabel = effectiveDate === "all" ? "todos-os-dias" : effectiveDate;
     const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
 
     if (!transportOnly) {
@@ -493,7 +494,7 @@ function ApprovedDailyExport({
       sheet["!cols"] = REGULAR_OVERTIME_EXPORT_WIDTHS.map((wch) => ({ wch }));
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
-      XLSX.writeFile(workbook, "horas-extras-" + effectiveDate + ".xlsx");
+      XLSX.writeFile(workbook, "horas-extras-" + exportDateLabel + ".xlsx");
       toast.success(dailyRows.length + " registro(s) exportado(s).");
       return;
     }
@@ -539,7 +540,7 @@ function ApprovedDailyExport({
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = "transportes-" + effectiveDate + ".xlsx";
+      anchor.download = "transportes-" + exportDateLabel + ".xlsx";
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -552,7 +553,7 @@ function ApprovedDailyExport({
 
   return (
     <Panel
-      title="Exportação diária de horas extras"
+      title="Exportação de horas extras"
       description="Consulte e exporte pendentes, aprovadas e reprovadas. Solicitações canceladas não são incluídas."
       padded={false}
     >
@@ -569,6 +570,7 @@ function ApprovedDailyExport({
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             >
               {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
+              {availableDates.length > 0 && <option value="all">Todos os dias</option>}
               {availableDates.map((date) => (
                 <option key={date} value={date}>
                   {formatDate(date)}
@@ -635,13 +637,16 @@ function ApprovedDailyExport({
           disabled={!effectiveDate || dailyRows.length === 0}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
-          <Download className="h-4 w-4" /> Exportar Excel do dia
+          <Download className="h-4 w-4" /> {effectiveDate === "all" ? "Exportar todos" : "Exportar Excel do dia"}
         </button>
       </div>
 
       {dailyRows.length === 0 ? (
         <div className="p-6">
-          <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma solicitação de hora extra nesta data" />
+          <EmptyState
+            icon={<Timer className="h-4 w-4" />}
+            title="Nenhuma solicitação de hora extra com os filtros atuais"
+          />
         </div>
       ) : (
         <>
@@ -788,7 +793,7 @@ function TransportView({
     sheet["!cols"] = TRANSPORT_EXPORT_WIDTHS.map((wch) => ({ wch }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
-    XLSX.writeFile(workbook, "transportes-" + effectiveDate + ".xlsx");
+    XLSX.writeFile(workbook, "transportes-" + exportDateLabel + ".xlsx");
     toast.success(filtered.length + " colaborador(es) exportado(s).");
   }
 
