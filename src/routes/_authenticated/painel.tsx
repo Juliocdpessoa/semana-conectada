@@ -1,12 +1,30 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { CheckCircle2, XCircle, Clock, Zap, ListChecks, Percent } from "lucide-react";
-import { PageHeader, KpiCard, Panel, EmptyState, Skeleton } from "@/components/ui-kit";
+import {
+  AlertTriangle,
+  Ban,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Clock,
+  Download,
+  FileWarning,
+  ListChecks,
+  Percent,
+  Search,
+  Target,
+  TrendingDown,
+  Wrench,
+  XCircle,
+  Zap,
+} from "lucide-react";
+import { PageHeader, KpiCard, Panel, EmptyState, Field, Skeleton, StatusPill } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import {
   Bar,
+  BarChart,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -17,10 +35,52 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
+import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
 });
+function PainelPage() {
+  const initialView =
+    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "nao-executadas"
+      ? "nao-executadas"
+      : "geral";
+  const [view, setView] = useState<"geral" | "nao-executadas">(initialView);
+
+  function changeView(next: "geral" | "nao-executadas") {
+    setView(next);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      if (next === "nao-executadas") url.searchParams.set("view", next);
+      else url.searchParams.delete("view");
+      window.history.replaceState({}, "", url);
+    }
+  }
+
+  return (
+    <>
+      <div className="mx-auto flex w-full max-w-[1500px] gap-2 px-3 pt-4 sm:px-6 sm:pt-6">
+        <button
+          type="button"
+          onClick={() => changeView("geral")}
+          className={view === "geral" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"}
+        >
+          Visão geral
+        </button>
+        <button
+          type="button"
+          onClick={() => changeView("nao-executadas")}
+          className={
+            view === "nao-executadas" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"
+          }
+        >
+          Não execução
+        </button>
+      </div>
+      {view === "geral" ? <OverviewPanel /> : <NonExecutionDashboard />}
+    </>
+  );
+}
 
 type Row = {
   id: string;
@@ -38,7 +98,7 @@ type Row = {
   planning_data: Record<string, unknown> | null;
 };
 
-function PainelPage() {
+function OverviewPanel() {
   const [selectedJustification, setSelectedJustification] = useState<string | null>(null);
   const activeWeek = useQuery({
     queryKey: ["active-week"],
@@ -474,7 +534,6 @@ function hoursOf(pd: Record<string, unknown> | null): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-
 function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDate: string; endDate: string }) {
   const [metric, setMetric] = useState<"count" | "hours">("count");
 
@@ -501,7 +560,6 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       if (effectiveMetric === "hours" && r.is_immediate) continue;
       const unit = unitOf(r);
       if (unit <= 0) continue;
-
 
       const reportedIso = reportedIsoDay(r.reported_at);
       const reportedInWeek = reportedIso && daySet.has(reportedIso) ? reportedIso : null;
@@ -802,4 +860,707 @@ function CurveStat({
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
+}
+
+const PAGE_SIZE = 30;
+
+type WeekRow = {
+  id: string;
+  code: string;
+  label: string;
+  start_date: string;
+  end_date: string;
+  is_active: boolean;
+};
+
+type ActivityRow = {
+  id: string;
+  order_number: string | null;
+  note_number: string | null;
+  description: string;
+  area: string | null;
+  specialty: string | null;
+  scheduled_date: string | null;
+  status: string;
+  justification: string | null;
+  observation: string | null;
+  reported_by_name: string | null;
+  reported_by_email: string | null;
+  reported_at: string | null;
+  is_immediate: boolean;
+  planning_data: Record<string, unknown> | null;
+};
+
+type Filters = {
+  search: string;
+  date: string;
+  management: string;
+  specialty: string;
+  reason: string;
+  responsible: string;
+  origin: "all" | "programmed" | "immediate";
+};
+
+const EMPTY_FILTERS: Filters = {
+  search: "",
+  date: "",
+  management: "",
+  specialty: "",
+  reason: "",
+  responsible: "",
+  origin: "all",
+};
+
+function NonExecutionDashboard() {
+  const weeks = useQuery({
+    queryKey: ["non-execution-weeks"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("weeks")
+        .select("id,code,label,start_date,end_date,is_active")
+        .order("start_date", { ascending: false });
+      if (error) throw error;
+      return (data ?? []) as WeekRow[];
+    },
+  });
+  const [selectedWeekId, setSelectedWeekId] = useState("");
+  const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
+  const effectiveWeekId = selectedWeekId || weeks.data?.find((week) => week.is_active)?.id || weeks.data?.[0]?.id || "";
+  const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
+
+  const activities = useQuery({
+    queryKey: ["non-execution-activities", effectiveWeekId],
+    enabled: !!effectiveWeekId,
+    queryFn: async () => {
+      const all: ActivityRow[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await supabase
+          .from("activities")
+          .select(
+            "id,order_number,note_number,description,area,specialty,scheduled_date,status,justification,observation,reported_by_name,reported_by_email,reported_at,is_immediate,planning_data",
+          )
+          .eq("week_id", effectiveWeekId)
+          .order("scheduled_date", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const batch = (data ?? []) as ActivityRow[];
+        all.push(...batch);
+        if (batch.length < pageSize) break;
+      }
+      return all;
+    },
+  });
+
+  const rows = activities.data ?? [];
+  const nonExecuted = useMemo(() => rows.filter((row) => row.status === "NÃO EXECUTADO"), [rows]);
+
+  const dateOptions = useMemo(
+    () => uniqueNe(nonExecuted.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort(),
+    [nonExecuted],
+  );
+  const dateScoped = useMemo(
+    () => nonExecuted.filter((row) => !filters.date || row.scheduled_date === filters.date),
+    [nonExecuted, filters.date],
+  );
+  const managementOptions = useMemo(
+    () => uniqueNe(dateScoped.map(managementLabelNe).filter(Boolean) as string[]).sort(localeSortNe),
+    [dateScoped],
+  );
+  const managementScoped = useMemo(
+    () => dateScoped.filter((row) => !filters.management || managementLabelNe(row) === filters.management),
+    [dateScoped, filters.management],
+  );
+  const specialtyOptions = useMemo(
+    () =>
+      uniqueNe(managementScoped.map((row) => row.specialty).filter((value): value is string => !!value)).sort(
+        localeSortNe,
+      ),
+    [managementScoped],
+  );
+  const specialtyScoped = useMemo(
+    () => managementScoped.filter((row) => !filters.specialty || row.specialty === filters.specialty),
+    [managementScoped, filters.specialty],
+  );
+  const reasonOptions = useMemo(
+    () => uniqueNe(specialtyScoped.map(reasonLabelNe)).sort(localeSortNe),
+    [specialtyScoped],
+  );
+  const reasonScoped = useMemo(
+    () => specialtyScoped.filter((row) => !filters.reason || reasonLabelNe(row) === filters.reason),
+    [specialtyScoped, filters.reason],
+  );
+  const responsibleOptions = useMemo(
+    () => uniqueNe(reasonScoped.map(responsibleLabelNe)).sort(localeSortNe),
+    [reasonScoped],
+  );
+
+  const filtered = useMemo(() => {
+    const term = filters.search.trim().toLocaleLowerCase("pt-BR");
+    return reasonScoped.filter((row) => {
+      if (filters.responsible && responsibleLabelNe(row) !== filters.responsible) return false;
+      if (filters.origin === "programmed" && row.is_immediate) return false;
+      if (filters.origin === "immediate" && !row.is_immediate) return false;
+      if (!term) return true;
+      return [
+        row.order_number,
+        row.note_number,
+        row.description,
+        managementLabelNe(row),
+        row.specialty,
+        reasonLabelNe(row),
+        responsibleLabelNe(row),
+        planValueNe(row.planning_data, "Op"),
+        planValueNe(row.planning_data, "Subop"),
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term);
+    });
+  }, [reasonScoped, filters.search, filters.responsible, filters.origin]);
+
+  const denominator = useMemo(() => {
+    return rows.filter((row) => {
+      if (filters.date && row.scheduled_date !== filters.date) return false;
+      if (filters.management && managementLabelNe(row) !== filters.management) return false;
+      if (filters.specialty && row.specialty !== filters.specialty) return false;
+      if (filters.origin === "programmed" && row.is_immediate) return false;
+      if (filters.origin === "immediate" && !row.is_immediate) return false;
+      return true;
+    });
+  }, [rows, filters.date, filters.management, filters.specialty, filters.origin]);
+
+  const kpis = useMemo(() => {
+    const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
+    const withoutReason = filtered.filter((row) => !row.justification?.trim()).length;
+    const immediate = filtered.filter((row) => row.is_immediate).length;
+    const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
+    return {
+      programmed: denominator.length,
+      nonExecuted: filtered.length,
+      percent,
+      affectedOrders,
+      withoutReason,
+      immediate,
+    };
+  }, [denominator, filtered]);
+
+  const reasonChart = useMemo(() => groupCountsNe(filtered, reasonLabelNe).slice(0, 10), [filtered]);
+  const dailyChart = useMemo(() => {
+    const dates = uniqueNe(rows.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort();
+    return dates.map((date) => {
+      const scoped = rows.filter((row) => {
+        if (row.scheduled_date !== date) return false;
+        if (filters.management && managementLabelNe(row) !== filters.management) return false;
+        if (filters.specialty && row.specialty !== filters.specialty) return false;
+        if (filters.origin === "programmed" && row.is_immediate) return false;
+        if (filters.origin === "immediate" && !row.is_immediate) return false;
+        return true;
+      });
+      return {
+        date: formatShortDateNe(date),
+        programadas: scoped.length,
+        naoExecutadas: scoped.filter((row) => row.status === "NÃO EXECUTADO").length,
+      };
+    });
+  }, [rows, filters.management, filters.specialty, filters.origin]);
+  const areaRanking = useMemo(() => groupCountsNe(filtered, managementLabelNe).slice(0, 8), [filtered]);
+  const specialtyRanking = useMemo(
+    () => groupCountsNe(filtered, (row) => row.specialty || "Sem especialidade").slice(0, 8),
+    [filtered],
+  );
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  function updateFilter<K extends keyof Filters>(key: K, value: Filters[K], resets: (keyof Filters)[] = []) {
+    setFilters((current) => {
+      const next = { ...current, [key]: value };
+      resets.forEach((resetKey) => {
+        (next as Record<string, unknown>)[resetKey] = "";
+      });
+      return next;
+    });
+    setPage(1);
+  }
+
+  function exportExcel() {
+    if (filtered.length === 0) return;
+    const values = filtered.map((row) => [
+      row.order_number || "",
+      row.note_number || "",
+      planValueNe(row.planning_data, "Op") || "",
+      planValueNe(row.planning_data, "Subop") || "",
+      row.description,
+      managementLabelNe(row),
+      row.specialty || "",
+      formatDateNe(row.scheduled_date),
+      reasonLabelNe(row),
+      row.observation || "",
+      responsibleLabelNe(row),
+      formatDateTimeNe(row.reported_at),
+      row.is_immediate ? "Imediata" : "Programada",
+    ]);
+    const headers = [
+      "Ordem",
+      "Nota",
+      "Operação",
+      "Suboperação",
+      "Atividade",
+      "Gerência/Área",
+      "Especialidade",
+      "Data",
+      "Motivo",
+      "Observação",
+      "Responsável",
+      "Última atualização",
+      "Origem",
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = [14, 14, 14, 14, 48, 28, 24, 12, 42, 48, 28, 20, 14].map((wch) => ({ wch }));
+    sheet["!autofilter"] = { ref: `A1:M${values.length + 1}` };
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Não executadas");
+    XLSX.writeFile(workbook, `nao-executadas-${selectedWeek?.code || "semana"}.xlsx`);
+  }
+
+  if (weeks.isLoading) return <DashboardLoading />;
+
+  return (
+    <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
+      <PageHeader
+        eyebrow="Gestão de desvios"
+        title="Análise de Não Execução"
+        description="Identifique o que não foi executado, onde ocorreu e quais motivos concentram as perdas da semana."
+        actions={
+          <button
+            type="button"
+            onClick={exportExcel}
+            disabled={filtered.length === 0}
+            className="btn-primary text-[12px] disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" /> Exportar análise
+          </button>
+        }
+      />
+
+      <Panel padded={false} className="mb-4">
+        <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+          <Field label="Semana">
+            <select
+              value={effectiveWeekId}
+              onChange={(event) => {
+                setSelectedWeekId(event.target.value);
+                setFilters(EMPTY_FILTERS);
+                setPage(1);
+              }}
+              className="input-base text-[12px]"
+            >
+              {(weeks.data ?? []).map((week) => (
+                <option key={week.id} value={week.id}>
+                  {week.label}
+                  {week.is_active ? " · Ativa" : ""}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Data">
+            <select
+              value={filters.date}
+              onChange={(event) =>
+                updateFilter("date", event.target.value, ["management", "specialty", "reason", "responsible"])
+              }
+              className="input-base text-[12px]"
+            >
+              <option value="">Todos os dias</option>
+              {dateOptions.map((date) => (
+                <option key={date} value={date}>
+                  {formatDateNe(date)}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Gerência/Área">
+            <select
+              value={filters.management}
+              onChange={(event) =>
+                updateFilter("management", event.target.value, ["specialty", "reason", "responsible"])
+              }
+              className="input-base text-[12px]"
+            >
+              <option value="">Todas</option>
+              {managementOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Especialidade">
+            <select
+              value={filters.specialty}
+              onChange={(event) => updateFilter("specialty", event.target.value, ["reason", "responsible"])}
+              className="input-base text-[12px]"
+            >
+              <option value="">Todas</option>
+              {specialtyOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Motivo">
+            <select
+              value={filters.reason}
+              onChange={(event) => updateFilter("reason", event.target.value, ["responsible"])}
+              className="input-base text-[12px]"
+            >
+              <option value="">Todos</option>
+              {reasonOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Responsável">
+            <select
+              value={filters.responsible}
+              onChange={(event) => updateFilter("responsible", event.target.value)}
+              className="input-base text-[12px]"
+            >
+              <option value="">Todos</option>
+              {responsibleOptions.map((value) => (
+                <option key={value} value={value}>
+                  {value}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Origem">
+            <select
+              value={filters.origin}
+              onChange={(event) => updateFilter("origin", event.target.value as Filters["origin"])}
+              className="input-base text-[12px]"
+            >
+              <option value="all">Todas</option>
+              <option value="programmed">Programadas</option>
+              <option value="immediate">Imediatas</option>
+            </select>
+          </Field>
+          <div className="sm:col-span-2 lg:col-span-4 xl:col-span-7">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="relative flex-1">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={filters.search}
+                  onChange={(event) => updateFilter("search", event.target.value)}
+                  placeholder="Buscar por ordem, nota, atividade, operação, motivo ou responsável…"
+                  className="input-base w-full pl-8 text-[16px] sm:text-[12px]"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setFilters(EMPTY_FILTERS);
+                  setPage(1);
+                }}
+                className="btn-secondary min-h-10 text-[12px]"
+              >
+                Limpar filtros
+              </button>
+            </div>
+          </div>
+        </div>
+      </Panel>
+
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        <KpiCard label="Programadas no recorte" value={kpis.programmed} icon={<ClipboardList className="h-4 w-4" />} />
+        <KpiCard
+          label="Não executadas"
+          value={kpis.nonExecuted}
+          tone="destructive"
+          icon={<Ban className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Taxa de não execução"
+          value={`${kpis.percent}%`}
+          tone="warning"
+          icon={<TrendingDown className="h-4 w-4" />}
+        />
+        <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
+        <KpiCard
+          label="Sem justificativa"
+          value={kpis.withoutReason}
+          tone={kpis.withoutReason ? "warning" : "success"}
+          icon={<FileWarning className="h-4 w-4" />}
+        />
+        <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
+      </div>
+
+      {activities.isLoading ? (
+        <DashboardLoading />
+      ) : activities.isError ? (
+        <Panel>
+          <EmptyState
+            icon={<AlertTriangle className="h-4 w-4" />}
+            title="Não foi possível carregar as atividades"
+            description={(activities.error as Error).message}
+          />
+        </Panel>
+      ) : filtered.length === 0 ? (
+        <Panel>
+          <EmptyState
+            icon={<Wrench className="h-4 w-4" />}
+            title="Nenhuma atividade não executada"
+            description="Ajuste os filtros ou selecione outra semana."
+          />
+        </Panel>
+      ) : (
+        <>
+          <div className="mb-4 grid gap-4 xl:grid-cols-2">
+            <ChartPanel
+              title="Principais motivos"
+              description="Quantidade de atividades não executadas por justificativa."
+            >
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={reasonChart} layout="vertical" margin={{ left: 10, right: 20 }}>
+                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                  <XAxis type="number" allowDecimals={false} />
+                  <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 10 }} />
+                  <Tooltip />
+                  <Bar dataKey="value" name="Não executadas" fill="#C2413B" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+            <ChartPanel title="Evolução diária" description="Programação e não execução em cada dia da semana.">
+              <ResponsiveContainer width="100%" height={320}>
+                <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Legend />
+                  <Bar dataKey="programadas" name="Programadas" fill="#173D60" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="naoExecutadas" name="Não executadas" fill="#C2413B" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartPanel>
+          </div>
+
+          <div className="mb-4 grid gap-4 xl:grid-cols-2">
+            <RankingPanel title="Áreas mais afetadas" rows={areaRanking} total={filtered.length} />
+            <RankingPanel title="Especialidades mais afetadas" rows={specialtyRanking} total={filtered.length} />
+          </div>
+
+          <Panel
+            title="Atividades não executadas"
+            description={`${filtered.length} atividade(s) com os filtros atuais.`}
+            padded={false}
+          >
+            <div className="grid gap-3 p-3 md:hidden">
+              {paginated.map((row) => (
+                <article key={row.id} className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="font-semibold">
+                      {row.order_number || "Sem ordem"} · {row.description}
+                    </div>
+                    <StatusPill status={row.status} />
+                  </div>
+                  <div className="mt-1 text-muted-foreground">
+                    {formatDateNe(row.scheduled_date)} · {managementLabelNe(row)} ·{" "}
+                    {row.specialty || "Sem especialidade"}
+                  </div>
+                  <div className="mt-2">
+                    <b>Motivo:</b> {reasonLabelNe(row)}
+                  </div>
+                  {row.observation && (
+                    <div className="mt-1">
+                      <b>Observação:</b> {row.observation}
+                    </div>
+                  )}
+                  <div className="mt-1 text-muted-foreground">Informado por {responsibleLabelNe(row)}</div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="w-full min-w-[1450px] text-[12px]">
+                <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wide text-muted-foreground">
+                  <tr>
+                    {[
+                      "Data",
+                      "Ordem/Nota",
+                      "Op/Subop",
+                      "Atividade",
+                      "Gerência/Área",
+                      "Especialidade",
+                      "Motivo",
+                      "Observação",
+                      "Responsável",
+                      "Origem",
+                    ].map((header) => (
+                      <th key={header} className="px-3 py-2 text-left font-semibold">
+                        {header}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {paginated.map((row) => (
+                    <tr key={row.id} className="row-zebra align-top">
+                      <td className="whitespace-nowrap px-3 py-2">{formatDateNe(row.scheduled_date)}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{row.order_number || "—"}</div>
+                        <div className="text-muted-foreground">Nota {row.note_number || "—"}</div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <div>{planValueNe(row.planning_data, "Op") || "—"}</div>
+                        <div className="text-muted-foreground">{planValueNe(row.planning_data, "Subop") || "—"}</div>
+                      </td>
+                      <td className="max-w-[320px] px-3 py-2">{row.description}</td>
+                      <td className="px-3 py-2">{managementLabelNe(row)}</td>
+                      <td className="px-3 py-2">{row.specialty || "—"}</td>
+                      <td className="max-w-[300px] px-3 py-2 font-medium text-destructive">{reasonLabelNe(row)}</td>
+                      <td className="max-w-[300px] px-3 py-2 text-muted-foreground">{row.observation || "—"}</td>
+                      <td className="px-3 py-2">
+                        <div>{responsibleLabelNe(row)}</div>
+                        <div className="text-[10px] text-muted-foreground">{formatDateTimeNe(row.reported_at)}</div>
+                      </td>
+                      <td className="px-3 py-2">{row.is_immediate ? "Imediata" : "Programada"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Página {currentPage} de {pageCount} · {filtered.length} registro(s)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    disabled={currentPage === 1}
+                    className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                    disabled={currentPage === pageCount}
+                    className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </Panel>
+        </>
+      )}
+    </main>
+  );
+}
+
+function ChartPanel({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+  return (
+    <Panel title={title} description={description}>
+      <div className="h-[320px] w-full">{children}</div>
+    </Panel>
+  );
+}
+
+function RankingPanel({
+  title,
+  rows,
+  total,
+}: {
+  title: string;
+  rows: { name: string; value: number }[];
+  total: number;
+}) {
+  return (
+    <Panel title={title} description="Ordenação pela quantidade de atividades não executadas.">
+      <div className="space-y-3">
+        {rows.map((row, index) => {
+          const percent = total ? Math.round((row.value / total) * 100) : 0;
+          return (
+            <div key={row.name}>
+              <div className="mb-1 flex items-center gap-2 text-[12px]">
+                <span className="w-5 text-muted-foreground">{index + 1}.</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
+                <b>{row.value}</b>
+                <span className="w-10 text-right text-muted-foreground">{percent}%</span>
+              </div>
+              <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div className="h-full rounded-full bg-destructive" style={{ width: `${percent}%` }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </Panel>
+  );
+}
+
+function DashboardLoading() {
+  return (
+    <main className="mx-auto w-full max-w-[1500px] px-3 py-6 sm:px-6">
+      <Skeleton className="mb-4 h-20" />
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+        {Array.from({ length: 6 }).map((_, index) => (
+          <Skeleton key={index} className="h-24" />
+        ))}
+      </div>
+    </main>
+  );
+}
+
+function uniqueNe<T>(values: T[]) {
+  return [...new Set(values)];
+}
+function localeSortNe(a: string, b: string) {
+  return a.localeCompare(b, "pt-BR");
+}
+function planValueNe(data: Record<string, unknown> | null, key: string) {
+  const value = data?.[key];
+  return value === null || value === undefined ? "" : String(value).trim();
+}
+function managementLabelNe(row: ActivityRow) {
+  return planValueNe(row.planning_data, "Gerência") || row.area || "Sem área";
+}
+function reasonLabelNe(row: ActivityRow) {
+  return row.justification?.trim() || "Sem justificativa";
+}
+function responsibleLabelNe(row: ActivityRow) {
+  return row.reported_by_name?.trim() || row.reported_by_email?.trim() || "Sem responsável";
+}
+function groupCountsNe(rows: ActivityRow[], label: (row: ActivityRow) => string) {
+  const counts = new Map<string, number>();
+  rows.forEach((row) => {
+    const key = label(row);
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  });
+  return [...counts.entries()]
+    .map(([name, value]) => ({ name, value }))
+    .sort((a, b) => b.value - a.value || localeSortNe(a.name, b.name));
+}
+function formatDateNe(value: string | null) {
+  if (!value) return "—";
+  const [year, month, day] = value.slice(0, 10).split("-");
+  return `${day}/${month}/${year}`;
+}
+function formatShortDateNe(value: string) {
+  const [, month, day] = value.slice(0, 10).split("-");
+  return `${day}/${month}`;
+}
+function formatDateTimeNe(value: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
 }
