@@ -7,6 +7,7 @@ import {
   Ban,
   CalendarDays,
   CheckCircle2,
+  ChevronDown,
   ClipboardList,
   Clock,
   Download,
@@ -21,6 +22,7 @@ import {
   Zap,
 } from "lucide-react";
 import { PageHeader, KpiCard, Panel, EmptyState, Field, Skeleton, StatusPill } from "@/components/ui-kit";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
   Bar,
@@ -1213,31 +1215,54 @@ function NonExecutionDashboard() {
               ))}
             </select>
           </Field>
-          <Field label={`Especialidades${filters.specialty.length ? ` (${filters.specialty.length})` : ""}`}>
-            <div className="max-h-32 overflow-y-auto rounded-md border border-input bg-background p-2 text-[12px]">
-              <label className="mb-1 flex cursor-pointer items-center gap-2 border-b border-border pb-1 font-medium">
-                <input
-                  type="checkbox"
-                  checked={filters.specialty.length === 0}
-                  onChange={() => updateFilter("specialty", [], ["reason", "responsible"])}
-                  className="h-3.5 w-3.5 accent-primary"
-                />
-                Todas as especialidades
-              </label>
-              {specialtyOptions.map((value) => (
-                <label key={value} className="flex cursor-pointer items-center gap-2 py-1">
-                  <input
-                    type="checkbox"
-                    checked={filters.specialty.includes(value)}
-                    onChange={() => toggleSpecialty(value)}
-                    className="h-3.5 w-3.5 accent-primary"
-                  />
-                  <span className="truncate" title={value}>
-                    {value}
+          <Field label="Especialidades">
+            <Popover>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="input-base flex w-full items-center justify-between gap-2 text-left text-[12px]"
+                >
+                  <span className="truncate">
+                    {filters.specialty.length === 0
+                      ? "Todas"
+                      : filters.specialty.length === 1
+                        ? filters.specialty[0]
+                        : `${filters.specialty.length} selecionadas`}
                   </span>
-                </label>
-              ))}
-            </div>
+                  <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent align="start" className="w-[min(360px,calc(100vw-2rem))] p-2">
+                <div className="mb-2 flex items-center justify-between border-b border-border pb-2">
+                  <span className="text-[12px] font-semibold">Selecionar especialidades</span>
+                  {filters.specialty.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => updateFilter("specialty", [], ["reason", "responsible"])}
+                      className="text-[11px] font-medium text-primary hover:underline"
+                    >
+                      Limpar
+                    </button>
+                  )}
+                </div>
+                <div className="max-h-64 overflow-y-auto">
+                  {specialtyOptions.map((value) => (
+                    <label
+                      key={value}
+                      className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-muted"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={filters.specialty.includes(value)}
+                        onChange={() => toggleSpecialty(value)}
+                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
+                      />
+                      <span className="min-w-0 text-[12px] leading-4">{value}</span>
+                    </label>
+                  ))}
+                </div>
+              </PopoverContent>
+            </Popover>
           </Field>
           <Field label="Motivo">
             <select
@@ -1347,42 +1372,21 @@ function NonExecutionDashboard() {
         </Panel>
       ) : (
         <>
-          <div className="mb-4 grid gap-4 xl:grid-cols-2">
-            <ChartPanel
-              title="Principais motivos"
-              description="Quantidade por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
-            >
-              <ResponsiveContainer width="100%" height={320}>
-                <BarChart
-                  data={reasonChart}
-                  layout="vertical"
-                  margin={{ left: 10, right: 20 }}
-                  style={{ fontFamily: "inherit" }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
-                  <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 11, fontFamily: "inherit" }} />
-                  <Tooltip />
-                  <Bar
-                    dataKey="value"
-                    name="Não executadas"
-                    fill="#C2413B"
-                    radius={[0, 4, 4, 0]}
-                    cursor="pointer"
-                    onClick={(entry) => {
-                      const reason = String((entry as { name?: string }).name ?? "");
-                      if (reason) updateFilter("reason", reason, ["responsible"]);
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
-            </ChartPanel>
+          <div className="mb-4">
+            <ReasonPanel
+              rows={reasonChart}
+              selectedReason={filters.reason}
+              onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason, ["responsible"])}
+            />
+          </div>
+
+          <div className="mb-4">
             <ChartPanel title="Evolução diária" description="Programação e não execução em cada dia da semana.">
-              <ResponsiveContainer width="100%" height={320}>
+              <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip />
                   <Legend />
                   <Bar dataKey="programadas" name="Programadas" fill="#173D60" radius={[4, 4, 0, 0]} />
@@ -1505,6 +1509,50 @@ function NonExecutionDashboard() {
         </>
       )}
     </main>
+  );
+}
+
+function ReasonPanel({
+  rows,
+  selectedReason,
+  onSelect,
+}: {
+  rows: { name: string; value: number }[];
+  selectedReason: string;
+  onSelect: (reason: string) => void;
+}) {
+  const max = Math.max(1, ...rows.map((row) => row.value));
+  return (
+    <Panel
+      title="Principais motivos"
+      description="Quantidade por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
+    >
+      <div className="grid gap-2">
+        {rows.map((row) => {
+          const selected = selectedReason === row.name;
+          return (
+            <button
+              key={row.name}
+              type="button"
+              onClick={() => onSelect(row.name)}
+              aria-pressed={selected}
+              className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_48px] sm:items-center ${
+                selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"
+              }`}
+            >
+              <span className="min-w-0 text-[12px] font-medium leading-4 text-foreground">{row.name}</span>
+              <span className="h-2 overflow-hidden rounded-full bg-muted">
+                <span
+                  className="block h-full rounded-full bg-destructive"
+                  style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
+                />
+              </span>
+              <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">{row.value}</span>
+            </button>
+          );
+        })}
+      </div>
+    </Panel>
   );
 }
 
