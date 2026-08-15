@@ -94,7 +94,10 @@ function OvertimePage() {
   const [summaryDate, setSummaryDate] = useState("");
   const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
 
-  useEffect(() => setFilteredKpiRows(null), [tab]);
+  function selectTab(nextTab: typeof tab) {
+    setFilteredKpiRows(null);
+    setTab(nextTab);
+  }
 
   const qc = useQueryClient();
   const requests = useQuery({
@@ -197,22 +200,22 @@ function OvertimePage() {
 
       <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
         {canExportOvertime && (
-          <TabBtn active={tab === "export"} onClick={() => setTab("export")}>
+          <TabBtn active={tab === "export"} onClick={() => selectTab("export")}>
             Exportação diária
           </TabBtn>
         )}
         {isMeasurementControl && (
-          <TabBtn active={tab === "weekly_export"} onClick={() => setTab("weekly_export")}>
+          <TabBtn active={tab === "weekly_export"} onClick={() => selectTab("weekly_export")}>
             Exportação semanal
           </TabBtn>
         )}
         {canRequest && (
-          <TabBtn active={tab === "list"} onClick={() => setTab("list")}>
+          <TabBtn active={tab === "list"} onClick={() => selectTab("list")}>
             Minhas solicitações
           </TabBtn>
         )}
         {isManager && (
-          <TabBtn active={tab === "queue"} onClick={() => setTab("queue")}>
+          <TabBtn active={tab === "queue"} onClick={() => selectTab("queue")}>
             Aprovações{" "}
             {kpis.pending > 0 && (
               <span className="ml-1 rounded bg-warning/20 px-1 text-[10px] text-warning-foreground">
@@ -222,7 +225,7 @@ function OvertimePage() {
           </TabBtn>
         )}
         {(isManager || isLogistics) && (
-          <TabBtn active={tab === "employees"} onClick={() => setTab("employees")}>
+          <TabBtn active={tab === "employees"} onClick={() => selectTab("employees")}>
             Colaboradores
           </TabBtn>
         )}
