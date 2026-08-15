@@ -122,12 +122,19 @@ function OvertimePage() {
   });
 
   const rows = requests.data ?? [];
+  const myRows = useMemo(() => rows.filter((row) => row.requester_user_id === s.userId), [rows, s.userId]);
+  const kpiBaseRows = useMemo(() => {
+    if (tab === "export") return exportRequests.data ?? [];
+    if (tab === "list") return myRows;
+    return rows;
+  }, [tab, exportRequests.data, myRows, rows]);
   const summaryRows = useMemo(
-    () => (summaryDate ? rows.filter((row) => row.overtime_date === summaryDate) : rows),
-    [rows, summaryDate],
+    () =>
+      tab === "queue" && summaryDate ? kpiBaseRows.filter((row) => row.overtime_date === summaryDate) : kpiBaseRows,
+    [kpiBaseRows, summaryDate, tab],
   );
   const kpis = useMemo(() => {
-    // Canceladas permanecem no histórico, mas não representam efetivo ativo no resumo.
+    // Na exportação, resume todos os registros; em Minhas solicitações, somente os do usuário atual.
     const operationalRows = summaryRows.filter((row) => row.status !== "cancelled");
     const total = operationalRows.length;
     const pending = operationalRows.filter((row) => row.status === "pending").length;
@@ -229,7 +236,7 @@ function OvertimePage() {
 
       {tab === "list" && canRequest && (
         <MyRequests
-          rows={rows.filter((r) => r.requester_user_id === s.userId)}
+          rows={myRows}
           onCancel={async (row) => {
             if (!confirm(`Cancelar solicitação #${row.request_number}?`)) return;
             try {
@@ -413,9 +420,12 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
     [exportableRows],
   );
   const [selectedDate, setSelectedDate] = useState("");
+  const [selectedEntryTime, setSelectedEntryTime] = useState("");
+  const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
   const effectiveDate = selectedDate || availableDates[0] || "";
-  const dailyRows = useMemo(
+
+  const dateRows = useMemo(
     () =>
       exportableRows.filter(
         (row) =>
@@ -427,6 +437,22 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
               : true),
       ),
     [exportableRows, effectiveDate, transportFilter, transportOnly],
+  );
+  const availableEntryTimes = useMemo(
+    () => [...new Set(dateRows.map((row) => row.entry_time).filter(Boolean))].sort(),
+    [dateRows],
+  );
+  const entryRows = useMemo(
+    () => dateRows.filter((row) => !selectedEntryTime || row.entry_time === selectedEntryTime),
+    [dateRows, selectedEntryTime],
+  );
+  const availableDepartureTimes = useMemo(
+    () => [...new Set(entryRows.map((row) => row.departure_time).filter(Boolean))].sort(),
+    [entryRows],
+  );
+  const dailyRows = useMemo(
+    () => entryRows.filter((row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime),
+    [entryRows, selectedDepartureTime],
   );
 
   async function exportDailyExcel() {
@@ -503,12 +529,16 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       description="Consulte e exporte pendentes, aprovadas e reprovadas. Solicitações canceladas não são incluídas."
       padded={false}
     >
-      <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Data da hora extra">
             <select
               value={effectiveDate}
-              onChange={(event) => setSelectedDate(event.target.value)}
+              onChange={(event) => {
+                setSelectedDate(event.target.value);
+                setSelectedEntryTime("");
+                setSelectedDepartureTime("");
+              }}
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             >
               {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
@@ -520,11 +550,50 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
             </select>
           </Field>
         </div>
+        <div className="w-full min-w-0 sm:max-w-[180px]">
+          <Field label="Hora de entrada">
+            <select
+              value={selectedEntryTime}
+              onChange={(event) => {
+                setSelectedEntryTime(event.target.value);
+                setSelectedDepartureTime("");
+              }}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            >
+              <option value="">Todas</option>
+              {availableEntryTimes.map((time) => (
+                <option key={time} value={time}>
+                  {time.replace(/^0/, "")}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+        <div className="w-full min-w-0 sm:max-w-[180px]">
+          <Field label="Hora de saída">
+            <select
+              value={selectedDepartureTime}
+              onChange={(event) => setSelectedDepartureTime(event.target.value)}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            >
+              <option value="">Todas</option>
+              {availableDepartureTimes.map((time) => (
+                <option key={time} value={time}>
+                  {time.replace(/^0/, "")}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
         <div className="w-full min-w-0 sm:max-w-[200px]">
           <Field label="Transporte">
             <select
               value={transportFilter}
-              onChange={(event) => setTransportFilter(event.target.value as "all" | "yes" | "no")}
+              onChange={(event) => {
+                setTransportFilter(event.target.value as "all" | "yes" | "no");
+                setSelectedEntryTime("");
+                setSelectedDepartureTime("");
+              }}
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
             >
               {!transportOnly && <option value="all">Todos</option>}
