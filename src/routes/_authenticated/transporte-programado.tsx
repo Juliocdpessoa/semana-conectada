@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import { Bus, Download, Plus, Search, Trash2, Pencil, Users, UserX } from "lucide-react";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
@@ -89,6 +89,7 @@ function ScheduledTransportPage() {
   const load = useServerFn(listScheduledTransport);
   const cancelFn = useServerFn(cancelScheduledTransport);
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
   const [newOpen, setNewOpen] = useState(false);
   const [editing, setEditing] = useState<ScheduledTransportRow | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -171,6 +172,12 @@ function ScheduledTransportPage() {
       return true;
     });
   }, [rows, filters]);
+  const pageSize = 30;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [filters]);
 
   const kpis = useMemo(() => {
     const scheduled = filtered.filter((row) => row.status === "scheduled");
@@ -473,7 +480,7 @@ function ScheduledTransportPage() {
           ) : (
             <>
               <div className="grid gap-3 p-3 md:hidden">
-                {filtered.slice(0, 300).map((row) => (
+                {paginatedRows.map((row) => (
                   <article key={row.id} className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm">
                     <div className="flex items-start justify-between gap-2">
                       <div>
@@ -532,7 +539,7 @@ function ScheduledTransportPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filtered.slice(0, 1000).map((row) => (
+                    {paginatedRows.map((row) => (
                       <tr
                         key={row.id}
                         className={cn("border-t border-border", row.status === "cancelled" && "opacity-60")}
@@ -586,6 +593,31 @@ function ScheduledTransportPage() {
                   </tbody>
                 </table>
               </div>
+              {filtered.length > pageSize && (
+                <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                  <span>
+                    Página {currentPage} de {pageCount} · {filtered.length} registro(s) · até {pageSize} por página
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPage((value) => Math.max(1, value - 1))}
+                      disabled={currentPage === 1}
+                      className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                    >
+                      Anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                      disabled={currentPage === pageCount}
+                      className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                    >
+                      Próxima
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </Panel>
