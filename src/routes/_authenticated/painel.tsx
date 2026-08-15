@@ -1034,11 +1034,10 @@ function NonExecutionDashboard() {
 
   const kpis = useMemo(() => {
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
-    const withoutReason = filtered.filter((row) => !row.justification?.trim()).length;
+    const withoutReason = filtered.filter((row) => isMissingReasonNe(row.justification)).length;
     const immediate = filtered.filter((row) => row.is_immediate).length;
     const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
     return {
-      programmed: denominator.length,
       nonExecuted: filtered.length,
       percent,
       affectedOrders,
@@ -1278,8 +1277,7 @@ function NonExecutionDashboard() {
         </div>
       </Panel>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-        <KpiCard label="Programadas no recorte" value={kpis.programmed} icon={<ClipboardList className="h-4 w-4" />} />
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           label="Não executadas"
           value={kpis.nonExecuted}
@@ -1325,15 +1323,30 @@ function NonExecutionDashboard() {
           <div className="mb-4 grid gap-4 xl:grid-cols-2">
             <ChartPanel
               title="Principais motivos"
-              description="Quantidade de atividades não executadas por justificativa."
+              description="Quantidade por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
             >
               <ResponsiveContainer width="100%" height={320}>
-                <BarChart data={reasonChart} layout="vertical" margin={{ left: 10, right: 20 }}>
+                <BarChart
+                  data={reasonChart}
+                  layout="vertical"
+                  margin={{ left: 10, right: 20 }}
+                  style={{ fontFamily: "inherit" }}
+                >
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                  <XAxis type="number" allowDecimals={false} />
-                  <YAxis type="category" dataKey="name" width={180} tick={{ fontSize: 10 }} />
+                  <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
+                  <YAxis type="category" dataKey="name" width={190} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip />
-                  <Bar dataKey="value" name="Não executadas" fill="#C2413B" radius={[0, 4, 4, 0]} />
+                  <Bar
+                    dataKey="value"
+                    name="Não executadas"
+                    fill="#C2413B"
+                    radius={[0, 4, 4, 0]}
+                    cursor="pointer"
+                    onClick={(entry) => {
+                      const reason = String((entry as { name?: string }).name ?? "");
+                      if (reason) updateFilter("reason", reason, ["responsible"]);
+                    }}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -1536,7 +1549,15 @@ function managementLabelNe(row: ActivityRow) {
   return planValueNe(row.planning_data, "Gerência") || row.area || "Sem área";
 }
 function reasonLabelNe(row: ActivityRow) {
-  return row.justification?.trim() || "Sem justificativa";
+  return isMissingReasonNe(row.justification) ? "Sem justificativa" : row.justification!.trim();
+}
+function isMissingReasonNe(value: string | null) {
+  const normalized = (value ?? "")
+    .trim()
+    .toLocaleLowerCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+  return !normalized || ["sem justificativa", "nao informado", "nao informada", "-", "n/a"].includes(normalized);
 }
 function responsibleLabelNe(row: ActivityRow) {
   return row.reported_by_name?.trim() || row.reported_by_email?.trim() || "Sem responsável";
