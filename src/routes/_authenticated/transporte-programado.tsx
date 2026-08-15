@@ -217,24 +217,27 @@ function ScheduledTransportPage() {
         to: { row: Math.max(1, exportRows.length + 1), column: headers.length },
       };
       const headerRow = worksheet.getRow(1);
-      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
-      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF173D60" } };
-      headerRow.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      for (let column = 1; column <= headers.length; column += 1) {
+        const cell = headerRow.getCell(column);
+        cell.font = { bold: true, color: { argb: "FFFFFFFF" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF173D60" } };
+        cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      }
       exportRows.forEach((_, index) => {
         const row = worksheet.getRow(index + 2);
-        row.font = { bold: false };
-        if (index % 2 === 1) {
-          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F1F7" } };
+        for (let column = 1; column <= headers.length; column += 1) {
+          const cell = row.getCell(column);
+          cell.font = { bold: false };
+          cell.alignment = { vertical: "top", wrapText: true };
+          if (index % 2 === 1) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F1F7" } };
+          }
         }
       });
       widths.forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
-      worksheet.getRow(1).height = 26;
-      worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      worksheet.eachRow((row, rowNumber) => {
-        if (rowNumber > 1) row.alignment = { vertical: "top", wrapText: true };
-      });
+      headerRow.height = 26;
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer as BlobPart], {
         type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
