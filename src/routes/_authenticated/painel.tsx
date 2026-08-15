@@ -895,7 +895,7 @@ type Filters = {
   search: string;
   date: string;
   management: string;
-  specialty: string;
+  specialty: string[];
   reason: string;
   responsible: string;
   origin: "all" | "programmed" | "immediate";
@@ -905,7 +905,7 @@ const EMPTY_FILTERS: Filters = {
   search: "",
   date: "",
   management: "",
-  specialty: "",
+  specialty: [],
   reason: "",
   responsible: "",
   origin: "all",
@@ -980,7 +980,10 @@ function NonExecutionDashboard() {
     [managementScoped],
   );
   const specialtyScoped = useMemo(
-    () => managementScoped.filter((row) => !filters.specialty || row.specialty === filters.specialty),
+    () =>
+      managementScoped.filter(
+        (row) => filters.specialty.length === 0 || filters.specialty.includes(row.specialty || ""),
+      ),
     [managementScoped, filters.specialty],
   );
   const reasonOptions = useMemo(
@@ -1025,7 +1028,7 @@ function NonExecutionDashboard() {
     return rows.filter((row) => {
       if (filters.date && row.scheduled_date !== filters.date) return false;
       if (filters.management && managementLabelNe(row) !== filters.management) return false;
-      if (filters.specialty && row.specialty !== filters.specialty) return false;
+      if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
       if (filters.origin === "programmed" && row.is_immediate) return false;
       if (filters.origin === "immediate" && !row.is_immediate) return false;
       return true;
@@ -1053,7 +1056,7 @@ function NonExecutionDashboard() {
       const scoped = rows.filter((row) => {
         if (row.scheduled_date !== date) return false;
         if (filters.management && managementLabelNe(row) !== filters.management) return false;
-        if (filters.specialty && row.specialty !== filters.specialty) return false;
+        if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
         if (filters.origin === "programmed" && row.is_immediate) return false;
         if (filters.origin === "immediate" && !row.is_immediate) return false;
         return true;
@@ -1079,10 +1082,22 @@ function NonExecutionDashboard() {
     setFilters((current) => {
       const next = { ...current, [key]: value };
       resets.forEach((resetKey) => {
-        (next as Record<string, unknown>)[resetKey] = "";
+        (next as Record<string, unknown>)[resetKey] = resetKey === "specialty" ? [] : "";
       });
       return next;
     });
+    setPage(1);
+  }
+
+  function toggleSpecialty(value: string) {
+    setFilters((current) => ({
+      ...current,
+      specialty: current.specialty.includes(value)
+        ? current.specialty.filter((item) => item !== value)
+        : [...current.specialty, value],
+      reason: "",
+      responsible: "",
+    }));
     setPage(1);
   }
 
@@ -1198,19 +1213,31 @@ function NonExecutionDashboard() {
               ))}
             </select>
           </Field>
-          <Field label="Especialidade">
-            <select
-              value={filters.specialty}
-              onChange={(event) => updateFilter("specialty", event.target.value, ["reason", "responsible"])}
-              className="input-base text-[12px]"
-            >
-              <option value="">Todas</option>
+          <Field label={`Especialidades${filters.specialty.length ? ` (${filters.specialty.length})` : ""}`}>
+            <div className="max-h-32 overflow-y-auto rounded-md border border-input bg-background p-2 text-[12px]">
+              <label className="mb-1 flex cursor-pointer items-center gap-2 border-b border-border pb-1 font-medium">
+                <input
+                  type="checkbox"
+                  checked={filters.specialty.length === 0}
+                  onChange={() => updateFilter("specialty", [], ["reason", "responsible"])}
+                  className="h-3.5 w-3.5 accent-primary"
+                />
+                Todas as especialidades
+              </label>
               {specialtyOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
+                <label key={value} className="flex cursor-pointer items-center gap-2 py-1">
+                  <input
+                    type="checkbox"
+                    checked={filters.specialty.includes(value)}
+                    onChange={() => toggleSpecialty(value)}
+                    className="h-3.5 w-3.5 accent-primary"
+                  />
+                  <span className="truncate" title={value}>
+                    {value}
+                  </span>
+                </label>
               ))}
-            </select>
+            </div>
           </Field>
           <Field label="Motivo">
             <select
