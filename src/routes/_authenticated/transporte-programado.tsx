@@ -208,20 +208,22 @@ function ScheduledTransportPage() {
       const exportRows = isLogistics
         ? consolidated.map(mapLogisticsScheduledTransportExportRow)
         : consolidated.map(mapScheduledTransportExportRow);
-      worksheet.addTable({
-        name: "TabelaMudancasEscala",
-        ref: "A1",
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: "TableStyleMedium2",
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: true,
-          showColumnStripes: false,
-        },
-        columns: headers.map((name) => ({ name, filterButton: true })),
-        rows: exportRows,
+      worksheet.addRow([...headers]);
+      exportRows.forEach((values) => worksheet.addRow(values));
+      worksheet.autoFilter = {
+        from: { row: 1, column: 1 },
+        to: { row: Math.max(1, exportRows.length + 1), column: headers.length },
+      };
+      const headerRow = worksheet.getRow(1);
+      headerRow.font = { bold: true, color: { argb: "FFFFFFFF" } };
+      headerRow.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF173D60" } };
+      headerRow.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      exportRows.forEach((_, index) => {
+        const row = worksheet.getRow(index + 2);
+        row.font = { bold: false };
+        if (index % 2 === 1) {
+          row.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFE8F1F7" } };
+        }
       });
       widths.forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
