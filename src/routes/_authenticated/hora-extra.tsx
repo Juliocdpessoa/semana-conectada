@@ -92,6 +92,9 @@ function OvertimePage() {
   );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
+  const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
+
+  useEffect(() => setFilteredKpiRows(null), [tab]);
 
   const qc = useQueryClient();
   const requests = useQuery({
@@ -124,15 +127,12 @@ function OvertimePage() {
   const rows = requests.data ?? [];
   const myRows = useMemo(() => rows.filter((row) => row.requester_user_id === s.userId), [rows, s.userId]);
   const kpiBaseRows = useMemo(() => {
+    if (filteredKpiRows && ["export", "list", "queue"].includes(tab)) return filteredKpiRows;
     if (tab === "export") return exportRequests.data ?? [];
     if (tab === "list") return myRows;
     return rows;
-  }, [tab, exportRequests.data, myRows, rows]);
-  const summaryRows = useMemo(
-    () =>
-      tab === "queue" && summaryDate ? kpiBaseRows.filter((row) => row.overtime_date === summaryDate) : kpiBaseRows,
-    [kpiBaseRows, summaryDate, tab],
-  );
+  }, [filteredKpiRows, tab, exportRequests.data, myRows, rows]);
+  const summaryRows = kpiBaseRows;
   const kpis = useMemo(() => {
     // Na exportação, resume todos os registros; em Minhas solicitações, somente os do usuário atual.
     const operationalRows = summaryRows.filter((row) => row.status !== "cancelled");
@@ -229,7 +229,11 @@ function OvertimePage() {
       </div>
 
       {tab === "export" && canExportOvertime && (
-        <ApprovedDailyExport rows={exportRequests.data ?? []} transportOnly={isLogistics} />
+        <ApprovedDailyExport
+          rows={exportRequests.data ?? []}
+          transportOnly={isLogistics}
+          onFilteredRowsChange={setFilteredKpiRows}
+        />
       )}
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
@@ -237,6 +241,7 @@ function OvertimePage() {
       {tab === "list" && canRequest && (
         <MyRequests
           rows={myRows}
+          onFilteredRowsChange={setFilteredKpiRows}
           onCancel={async (row) => {
             if (!confirm(`Cancelar solicitação #${row.request_number}?`)) return;
             try {
@@ -258,6 +263,7 @@ function OvertimePage() {
           rows={rows}
           selectedDate={summaryDate}
           onSelectedDateChange={setSummaryDate}
+          onFilteredRowsChange={setFilteredKpiRows}
           onDecided={() => {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
@@ -413,7 +419,15 @@ function WeeklyActivityExport() {
 }
 
 /* ---------- Approved daily export ---------- */
-function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRow[]; transportOnly?: boolean }) {
+function ApprovedDailyExport({
+  rows,
+  transportOnly = false,
+  onFilteredRowsChange,
+}: {
+  rows: OvertimeRow[];
+  transportOnly?: boolean;
+  onFilteredRowsChange: (rows: OvertimeRow[]) => void;
+}) {
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
   const availableDates = useMemo(
     () => [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
@@ -460,6 +474,7 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
   const currentPage = Math.min(page, pageCount);
   const paginatedDailyRows = dailyRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
+  useEffect(() => onFilteredRowsChange(dailyRows), [dailyRows, onFilteredRowsChange]);
   useEffect(() => setPage(1), [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter]);
 
   async function exportDailyExcel() {
@@ -926,13 +941,26 @@ function TransportView({
 }
 
 /* ---------- My Requests ---------- */
-function MyRequests({ rows, onCancel }: { rows: OvertimeRow[]; onCancel: (r: OvertimeRow) => void }) {
+function MyRequests({
+  rows,
+  onCancel,
+  onFilteredRowsChange,
+}: {
+  rows: OvertimeRow[];
+  onCancel: (r: OvertimeRow) => void;
+  onFilteredRowsChange: (rows: OvertimeRow[]) => void;
+}) {
   const [selectedDate, setSelectedDate] = useState("");
   const availableDates = useMemo(
     () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
     [rows],
   );
-  const filteredRows = selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows;
+  const filteredRows = useMemo(
+    () => (selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows),
+    [rows, selectedDate],
+  );
+
+  useEffect(() => onFilteredRowsChange(filteredRows), [filteredRows, onFilteredRowsChange]);
 
   if (rows.length === 0) {
     return (
@@ -981,11 +1009,13 @@ function ApprovalQueue({
   rows,
   selectedDate,
   onSelectedDateChange,
+  onFilteredRowsChange,
   onDecided,
 }: {
   rows: OvertimeRow[];
   selectedDate: string;
   onSelectedDateChange: (date: string) => void;
+  onFilteredRowsChange: (rows: OvertimeRow[]) => void;
   onDecided: () => void;
 }) {
   const [status, setStatus] = useState<"all" | OvertimeRow["status"]>("pending");
@@ -1041,6 +1071,9 @@ function ApprovalQueue({
       return true;
     });
   }, [groupedRows, status, selectedDate, q]);
+  const filteredCollaborators = useMemo(() => filtered.flatMap((row) => row.groupMembers ?? [row]), [filtered]);
+
+  useEffect(() => onFilteredRowsChange(filteredCollaborators), [filteredCollaborators, onFilteredRowsChange]);
 
   return (
     <>
