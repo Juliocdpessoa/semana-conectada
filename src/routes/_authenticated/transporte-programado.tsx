@@ -202,7 +202,9 @@ function ScheduledTransportPage() {
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
       workbook.created = new Date();
-      const worksheet = workbook.addWorksheet("Mudanças de escala", { views: [{ state: "frozen", ySplit: 1 }] });
+      const worksheet = workbook.addWorksheet("Mudanças de escala", {
+        views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
+      });
       const headers = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS : SCHEDULED_TRANSPORT_EXPORT_HEADERS;
       const widths = isLogistics ? LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS : SCHEDULED_TRANSPORT_EXPORT_WIDTHS;
       const exportRows = isLogistics
