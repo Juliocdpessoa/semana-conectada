@@ -115,13 +115,34 @@ function ScheduledTransportPage() {
     () => [...new Set(rows.map((row) => row.transport_date).filter(Boolean))].sort(),
     [rows],
   );
+  const availableEndDates = useMemo(
+    () => availableDates.filter((date) => !filters.startDate || date >= filters.startDate),
+    [availableDates, filters.startDate],
+  );
+  const rowsInSelectedDateRange = useMemo(
+    () =>
+      rows.filter((row) => {
+        if (filters.startDate && row.transport_date < filters.startDate) return false;
+        if (filters.endDate && row.transport_date > filters.endDate) return false;
+        return true;
+      }),
+    [rows, filters.startDate, filters.endDate],
+  );
   const availableEntryTimes = useMemo(
-    () => [...new Set(rows.map((row) => row.entry_time).filter(Boolean))].sort(),
-    [rows],
+    () => [...new Set(rowsInSelectedDateRange.map((row) => row.entry_time).filter(Boolean))].sort(),
+    [rowsInSelectedDateRange],
   );
   const availableDepartureTimes = useMemo(
-    () => [...new Set(rows.map((row) => row.departure_time).filter(Boolean))].sort(),
-    [rows],
+    () =>
+      [
+        ...new Set(
+          rowsInSelectedDateRange
+            .filter((row) => !filters.entryTime || row.entry_time === filters.entryTime)
+            .map((row) => row.departure_time)
+            .filter(Boolean),
+        ),
+      ].sort(),
+    [rowsInSelectedDateRange, filters.entryTime],
   );
   const filtered = useMemo(() => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
@@ -305,7 +326,15 @@ function ScheduledTransportPage() {
             <Field label="Data inicial">
               <select
                 value={filters.startDate}
-                onChange={(event) => setFilters((f) => ({ ...f, startDate: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((f) => ({
+                    ...f,
+                    startDate: event.target.value,
+                    endDate: "",
+                    entryTime: "",
+                    departureTime: "",
+                  }))
+                }
                 className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
@@ -319,11 +348,18 @@ function ScheduledTransportPage() {
             <Field label="Data final">
               <select
                 value={filters.endDate}
-                onChange={(event) => setFilters((f) => ({ ...f, endDate: event.target.value }))}
+                onChange={(event) =>
+                  setFilters((f) => ({
+                    ...f,
+                    endDate: event.target.value,
+                    entryTime: "",
+                    departureTime: "",
+                  }))
+                }
                 className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
               >
                 <option value="">Todas</option>
-                {availableDates.map((date) => (
+                {availableEndDates.map((date) => (
                   <option key={date} value={date}>
                     {formatDate(date)}
                   </option>
@@ -372,7 +408,13 @@ function ScheduledTransportPage() {
               <Field label="Entrada">
                 <select
                   value={filters.entryTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, entryTime: event.target.value }))}
+                  onChange={(event) =>
+                    setFilters((f) => ({
+                      ...f,
+                      entryTime: event.target.value,
+                      departureTime: "",
+                    }))
+                  }
                   className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                 >
                   <option value="">Todos</option>
