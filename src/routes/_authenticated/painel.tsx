@@ -1039,7 +1039,7 @@ function NonExecutionDashboard() {
 
   const kpis = useMemo(() => {
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
-    const withoutReason = filtered.filter((row) => isMissingReasonNe(row.justification)).length;
+    const withoutReason = filtered.filter(isUnjustifiedActivityNe).length;
     const immediate = filtered.filter((row) => row.is_immediate).length;
     const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
     return {
@@ -1335,7 +1335,7 @@ function NonExecutionDashboard() {
         />
         <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
         <KpiCard
-          label="Sem justificativa"
+          label="Não justificadas"
           value={kpis.withoutReason}
           tone={kpis.withoutReason ? "warning" : "success"}
           icon={<FileWarning className="h-4 w-4" />}
@@ -1618,13 +1618,31 @@ function managementLabelNe(row: ActivityRow) {
 function reasonLabelNe(row: ActivityRow) {
   return isMissingReasonNe(row.justification) ? "Sem justificativa" : row.justification!.trim();
 }
-function isMissingReasonNe(value: string | null) {
-  const normalized = (value ?? "")
+function normalizeReasonNe(value: string | null) {
+  return (value ?? "")
     .trim()
     .toLocaleLowerCase("pt-BR")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "");
-  return !normalized || ["sem justificativa", "nao informado", "nao informada", "-", "n/a"].includes(normalized);
+}
+function isMissingReasonNe(value: string | null) {
+  const normalized = normalizeReasonNe(value);
+  return (
+    !normalized ||
+    normalized === "-" ||
+    normalized === "n/a" ||
+    normalized === "pendente" ||
+    normalized.startsWith("selecione") ||
+    normalized.includes("sem justificativa") ||
+    normalized.includes("nao justifica") ||
+    normalized.includes("a justificar") ||
+    normalized.includes("aguardando justific")
+  );
+}
+function isUnjustifiedActivityNe(row: ActivityRow) {
+  const reason = normalizeReasonNe(row.justification);
+  const genericReasonWithoutDetails = ["outro", "outros"].includes(reason) && !row.observation?.trim();
+  return isMissingReasonNe(row.justification) || genericReasonWithoutDetails || !row.reported_at;
 }
 function responsibleLabelNe(row: ActivityRow) {
   return row.reported_by_name?.trim() || row.reported_by_email?.trim() || "Sem responsável";
