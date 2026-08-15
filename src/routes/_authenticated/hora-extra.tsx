@@ -442,6 +442,10 @@ function ApprovedDailyExport({
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
   const effectiveDate = selectedDate || availableDates[0] || "";
 
+  useEffect(() => {
+    if (!selectedDate && availableDates[0]) setSelectedDate(availableDates[0]);
+  }, [availableDates, selectedDate]);
+
   const dateRows = useMemo(
     () =>
       exportableRows.filter(
