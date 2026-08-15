@@ -454,6 +454,13 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
     () => entryRows.filter((row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime),
     [entryRows, selectedDepartureTime],
   );
+  const pageSize = 30;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(dailyRows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedDailyRows = dailyRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter]);
 
   async function exportDailyExcel() {
     if (!effectiveDate || dailyRows.length === 0) {
@@ -619,7 +626,7 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">
-            {dailyRows.map((row) => (
+            {paginatedDailyRows.map((row) => (
               <article
                 key={row.id}
                 className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm"
@@ -679,7 +686,7 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {dailyRows.map((row) => (
+                {paginatedDailyRows.map((row) => (
                   <tr key={row.id} className="row-zebra align-top">
                     <td className="whitespace-nowrap px-3 py-2">{formatDate(row.overtime_date)}</td>
                     <td className="px-3 py-2">{row.employee_registration || "—"}</td>
@@ -698,6 +705,13 @@ function ApprovedDailyExport({ rows, transportOnly = false }: { rows: OvertimeRo
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={currentPage}
+            pageCount={pageCount}
+            total={dailyRows.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </>
       )}
     </Panel>
@@ -736,6 +750,13 @@ function TransportView({
         .includes(term);
     });
   }, [dateRows, search, transportFilter]);
+  const pageSize = 30;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedTransportRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [effectiveDate, search, transportFilter]);
 
   const totalDay = dateRows.length;
   const transportDay = dateRows.filter((row) => row.needs_transport).length;
@@ -815,7 +836,7 @@ function TransportView({
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">
-            {filtered.map((row) => (
+            {paginatedTransportRows.map((row) => (
               <article key={row.id} className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px]">
                 <div className="font-semibold">{row.employee_name}</div>
                 <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
@@ -872,7 +893,7 @@ function TransportView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {filtered.map((row) => (
+                {paginatedTransportRows.map((row) => (
                   <tr key={row.id} className="row-zebra align-top">
                     <td className="whitespace-nowrap px-3 py-2">{formatDate(row.overtime_date)}</td>
                     <td className="px-3 py-2">{row.employee_registration || "—"}</td>
@@ -891,6 +912,13 @@ function TransportView({
               </tbody>
             </table>
           </div>
+          <PaginationControls
+            page={currentPage}
+            pageCount={pageCount}
+            total={filtered.length}
+            pageSize={pageSize}
+            onPageChange={setPage}
+          />
         </>
       )}
     </Panel>
@@ -1087,6 +1115,47 @@ function ApprovalQueue({
   );
 }
 
+function PaginationControls({
+  page,
+  pageCount,
+  total,
+  pageSize = 30,
+  onPageChange,
+}: {
+  page: number;
+  pageCount: number;
+  total: number;
+  pageSize?: number;
+  onPageChange: (page: number) => void;
+}) {
+  if (total <= pageSize) return null;
+  return (
+    <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <span>
+        Página {page} de {pageCount} · {total} registro(s) · até {pageSize} por página
+      </span>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page === 1}
+          className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+        >
+          Anterior
+        </button>
+        <button
+          type="button"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page === pageCount}
+          className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+        >
+          Próxima
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Table ---------- */
 function RequestsTable({
   rows,
@@ -1103,10 +1172,18 @@ function RequestsTable({
   onCancel?: (r: OvertimeRow) => void;
   groupedTeamView?: boolean;
 }) {
+  const pageSize = 30;
+  const [page, setPage] = useState(1);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginatedRows = rows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  useEffect(() => setPage(1), [rows]);
+
   return (
     <>
       <div className="grid gap-3 p-3 md:hidden">
-        {rows.map((r) => (
+        {paginatedRows.map((r) => (
           <article key={r.id} className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
               <div className="min-w-0">
@@ -1243,7 +1320,7 @@ function RequestsTable({
             </tr>
           </thead>
           <tbody className="divide-y divide-border/60">
-            {rows.map((r) => (
+            {paginatedRows.map((r) => (
               <Fragment key={r.id}>
                 <tr className="row-zebra align-top">
                   <td className="px-3 py-2 tabular font-medium">#{r.request_number}</td>
@@ -1338,6 +1415,13 @@ function RequestsTable({
           </tbody>
         </table>
       </div>
+      <PaginationControls
+        page={currentPage}
+        pageCount={pageCount}
+        total={rows.length}
+        pageSize={pageSize}
+        onPageChange={setPage}
+      />
     </>
   );
 }
