@@ -1053,23 +1053,14 @@ function NonExecutionDashboard() {
 
   const reasonChart = useMemo(() => groupCountsNe(filtered, reasonLabelNe).slice(0, 10), [filtered]);
   const dailyChart = useMemo(() => {
-    const dates = uniqueNe(rows.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort();
-    return dates.map((date) => {
-      const scoped = rows.filter((row) => {
-        if (row.scheduled_date !== date) return false;
-        if (filters.management && managementLabelNe(row) !== filters.management) return false;
-        if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
-        if (filters.origin === "programmed" && row.is_immediate) return false;
-        if (filters.origin === "immediate" && !row.is_immediate) return false;
-        return true;
-      });
-      return {
-        date: formatShortDateNe(date),
-        programadas: scoped.length,
-        naoExecutadas: scoped.filter((row) => row.status === "NÃO EXECUTADO").length,
-      };
-    });
-  }, [rows, filters.management, filters.specialty, filters.origin]);
+    const dates = uniqueNe(
+      filtered.map((row) => row.scheduled_date).filter((value): value is string => !!value),
+    ).sort();
+    return dates.map((date) => ({
+      date: formatShortDateNe(date),
+      naoExecutadas: filtered.filter((row) => row.scheduled_date === date).length,
+    }));
+  }, [filtered]);
   const areaRanking = useMemo(() => groupCountsNe(filtered, managementLabelNe).slice(0, 8), [filtered]);
   const specialtyRanking = useMemo(
     () => groupCountsNe(filtered, (row) => row.specialty || "Sem especialidade").slice(0, 8),
@@ -1376,20 +1367,21 @@ function NonExecutionDashboard() {
             <ReasonPanel
               rows={reasonChart}
               selectedReason={filters.reason}
-              onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason, ["responsible"])}
+              onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason)}
             />
           </div>
 
           <div className="mb-4">
-            <ChartPanel title="Evolução diária" description="Programação e não execução em cada dia da semana.">
+            <ChartPanel
+              title="Evolução diária"
+              description="Atividades não executadas por dia, conforme todos os filtros aplicados."
+            >
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip />
-                  <Legend />
-                  <Bar dataKey="programadas" name="Programadas" fill="#173D60" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="naoExecutadas" name="Não executadas" fill="#C2413B" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
