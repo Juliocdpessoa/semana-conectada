@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { Bus, CalendarDays, Download, Plus, Search, Trash2, Pencil, Users, UserX } from "lucide-react";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
+import { supabase } from "@/integrations/supabase/client";
 import type { SessionInfo } from "./route";
 import {
   listScheduledTransport,
