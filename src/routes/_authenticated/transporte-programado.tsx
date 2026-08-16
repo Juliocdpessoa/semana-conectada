@@ -103,9 +103,34 @@ function ScheduledTransportPage() {
     },
   });
 
+  const employeesQuery = useQuery({
+    queryKey: ["active-employees"],
+    enabled: newOpen,
+    staleTime: 5 * 60 * 1000,
+    queryFn: async () => {
+      const all: EmployeeRow[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        const { data, error } = await (supabase as any)
+          .from("employees")
+          .select(
+            "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
+          )
+          .eq("is_active", true)
+          .order("full_name")
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        const pageRows = (data ?? []) as EmployeeRow[];
+        all.push(...pageRows);
+        if (pageRows.length < pageSize) break;
+      }
+      return all.map(sanitizeEmployeeRow);
+    },
+  });
+
   const rows = (query.data?.rows ?? []) as ScheduledTransportRow[];
   const batchesList = (query.data?.batches ?? []) as ScheduledTransportBatch[];
-  const employees = ((query.data?.employees ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
+  const employees = employeesQuery.data ?? [];
   const batches = useMemo(() => new Map(batchesList.map((batch) => [batch.id, batch])), [batchesList]);
 
   const jobTitles = useMemo(
@@ -627,7 +652,19 @@ function ScheduledTransportPage() {
         </Panel>
       </div>
 
-      {newOpen && (
+      {newOpen && employeesQuery.isLoading && (
+        <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+          <div className="py-8 text-center text-sm text-muted-foreground">Carregando colaboradores...</div>
+        </Modal>
+      )}
+
+      {newOpen && employeesQuery.isError && (
+        <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+          <div className="py-8 text-center text-sm text-destructive">Não foi possível carregar os colaboradores.</div>
+        </Modal>
+      )}
+
+      {newOpen && employeesQuery.isSuccess && (
         <NewScheduleModal
           employees={employees}
           onClose={() => setNewOpen(false)}
