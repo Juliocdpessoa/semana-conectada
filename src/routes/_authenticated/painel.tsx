@@ -939,6 +939,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   });
   const [selectedWeekId, setSelectedWeekId] = useState("");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
+  const [specialtySearch, setSpecialtySearch] = useState("");
   const [page, setPage] = useState(1);
   const effectiveWeekId = selectedWeekId || weeks.data?.find((week) => week.is_active)?.id || weeks.data?.[0]?.id || "";
   const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
@@ -1042,6 +1043,22 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
       ).sort(localeSortNe),
     [nonExecuted, filters],
   );
+  const visibleSpecialtyOptions = useMemo(() => {
+    const term = specialtySearch
+      .trim()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLocaleLowerCase("pt-BR");
+    if (!term) return specialtyOptions;
+    return specialtyOptions.filter((value) =>
+      value
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLocaleLowerCase("pt-BR")
+        .includes(term),
+    );
+  }, [specialtyOptions, specialtySearch]);
+
   const reasonOptions = useMemo(
     () => uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "reason")).map(reasonLabelNe)).sort(localeSortNe),
     [nonExecuted, filters],
@@ -1267,21 +1284,38 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                     </button>
                   )}
                 </div>
+                <div className="relative mb-2">
+                  <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="search"
+                    value={specialtySearch}
+                    onChange={(event) => setSpecialtySearch(event.target.value)}
+                    placeholder="Buscar especialidade..."
+                    className="input-base w-full pl-8 text-[12px]"
+                    autoComplete="off"
+                  />
+                </div>
                 <div className="max-h-64 overflow-y-auto">
-                  {specialtyOptions.map((value) => (
-                    <label
-                      key={value}
-                      className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-muted"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={filters.specialty.includes(value)}
-                        onChange={() => toggleSpecialty(value)}
-                        className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
-                      />
-                      <span className="min-w-0 text-[12px] leading-4">{value}</span>
-                    </label>
-                  ))}
+                  {visibleSpecialtyOptions.length === 0 ? (
+                    <div className="px-2 py-4 text-center text-[12px] text-muted-foreground">
+                      Nenhuma especialidade encontrada.
+                    </div>
+                  ) : (
+                    visibleSpecialtyOptions.map((value) => (
+                      <label
+                        key={value}
+                        className="flex cursor-pointer items-start gap-2 rounded px-2 py-1.5 hover:bg-muted"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={filters.specialty.includes(value)}
+                          onChange={() => toggleSpecialty(value)}
+                          className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
+                        />
+                        <span className="min-w-0 text-[12px] leading-4">{value}</span>
+                      </label>
+                    ))
+                  )}
                 </div>
               </PopoverContent>
             </Popover>
