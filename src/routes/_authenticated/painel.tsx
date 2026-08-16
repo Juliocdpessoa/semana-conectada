@@ -43,25 +43,24 @@ export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
 });
 function PainelPage() {
+  const requestedView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const initialView =
-    typeof window !== "undefined" && new URLSearchParams(window.location.search).get("view") === "nao-executadas"
-      ? "nao-executadas"
-      : "geral";
-  const [view, setView] = useState<"geral" | "nao-executadas">(initialView);
+    requestedView === "nao-executadas" || requestedView === "nao-justificadas" ? requestedView : "geral";
+  const [view, setView] = useState<"geral" | "nao-executadas" | "nao-justificadas">(initialView);
 
-  function changeView(next: "geral" | "nao-executadas") {
+  function changeView(next: "geral" | "nao-executadas" | "nao-justificadas") {
     setView(next);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
-      if (next === "nao-executadas") url.searchParams.set("view", next);
-      else url.searchParams.delete("view");
+      if (next === "geral") url.searchParams.delete("view");
+      else url.searchParams.set("view", next);
       window.history.replaceState({}, "", url);
     }
   }
 
   return (
     <>
-      <div className="mx-auto flex w-full max-w-[1500px] gap-2 px-3 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto flex w-full max-w-[1500px] flex-wrap gap-2 px-3 pt-4 sm:px-6 sm:pt-6">
         <button
           type="button"
           onClick={() => changeView("geral")}
@@ -78,8 +77,21 @@ function PainelPage() {
         >
           Não execução
         </button>
+        <button
+          type="button"
+          onClick={() => changeView("nao-justificadas")}
+          className={
+            view === "nao-justificadas" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"
+          }
+        >
+          Não justificadas
+        </button>
       </div>
-      {view === "geral" ? <OverviewPanel /> : <NonExecutionDashboard />}
+      {view === "geral" ? (
+        <OverviewPanel />
+      ) : (
+        <NonExecutionDashboard mode={view === "nao-justificadas" ? "unjustified" : "non-executed"} />
+      )}
     </>
   );
 }
@@ -913,7 +925,8 @@ const EMPTY_FILTERS: Filters = {
   origin: "all",
 };
 
-function NonExecutionDashboard() {
+function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" }) {
+  const isUnjustifiedMode = mode === "unjustified";
   const weeks = useQuery({
     queryKey: ["non-execution-weeks"],
     queryFn: async () => {
@@ -956,7 +969,14 @@ function NonExecutionDashboard() {
   });
 
   const rows = activities.data ?? [];
-  const nonExecuted = useMemo(() => rows.filter((row) => row.status === "NÃO EXECUTADO"), [rows]);
+  const nonExecuted = useMemo(
+    () =>
+      rows.filter((row) => {
+        const status = normalizeStatusNe(row.status);
+        return isUnjustifiedMode ? status !== "EXECUTADO" && status !== "NAO EXECUTADO" : status === "NAO EXECUTADO";
+      }),
+    [rows, isUnjustifiedMode],
+  );
 
   const dateOptions = useMemo(
     () => uniqueNe(nonExecuted.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort(),
@@ -1039,14 +1059,12 @@ function NonExecutionDashboard() {
 
   const kpis = useMemo(() => {
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
-    const withoutReason = filtered.filter(isUnjustifiedActivityNe).length;
     const immediate = filtered.filter((row) => row.is_immediate).length;
     const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
     return {
       nonExecuted: filtered.length,
       percent,
       affectedOrders,
-      withoutReason,
       immediate,
     };
   }, [denominator, filtered]);
@@ -1105,7 +1123,7 @@ function NonExecutionDashboard() {
       managementLabelNe(row),
       row.specialty || "",
       formatDateNe(row.scheduled_date),
-      reasonLabelNe(row),
+      isUnjustifiedMode ? row.status || "Sem apontamento" : reasonLabelNe(row),
       row.observation || "",
       responsibleLabelNe(row),
       formatDateTimeNe(row.reported_at),
@@ -1120,7 +1138,7 @@ function NonExecutionDashboard() {
       "Gerência/Área",
       "Especialidade",
       "Data",
-      "Motivo",
+      isUnjustifiedMode ? "Situação atual" : "Motivo",
       "Observação",
       "Responsável",
       "Última atualização",
@@ -1130,8 +1148,10 @@ function NonExecutionDashboard() {
     sheet["!cols"] = [14, 14, 14, 14, 48, 28, 24, 12, 42, 48, 28, 20, 14].map((wch) => ({ wch }));
     sheet["!autofilter"] = { ref: `A1:M${values.length + 1}` };
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, "Não executadas");
-    XLSX.writeFile(workbook, `nao-executadas-${selectedWeek?.code || "semana"}.xlsx`);
+    const sheetName = isUnjustifiedMode ? "Não justificadas" : "Não executadas";
+    const filePrefix = isUnjustifiedMode ? "nao-justificadas" : "nao-executadas";
+    XLSX.utils.book_append_sheet(workbook, sheet, sheetName);
+    XLSX.writeFile(workbook, `${filePrefix}-${selectedWeek?.code || "semana"}.xlsx`);
   }
 
   if (weeks.isLoading) return <DashboardLoading />;
@@ -1140,8 +1160,12 @@ function NonExecutionDashboard() {
     <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         eyebrow="Gestão de desvios"
-        title="Análise de Não Execução"
-        description="Identifique o que não foi executado, onde ocorreu e quais motivos concentram as perdas da semana."
+        title={isUnjustifiedMode ? "Análise de Atividades Não Justificadas" : "Análise de Não Execução"}
+        description={
+          isUnjustifiedMode
+            ? "Acompanhe as atividades que ainda não foram classificadas como EXECUTADO ou NÃO EXECUTADO."
+            : "Identifique o que não foi executado, onde ocorreu e quais motivos concentram as perdas da semana."
+        }
         actions={
           <button
             type="button"
@@ -1255,20 +1279,22 @@ function NonExecutionDashboard() {
               </PopoverContent>
             </Popover>
           </Field>
-          <Field label="Motivo">
-            <select
-              value={filters.reason}
-              onChange={(event) => updateFilter("reason", event.target.value, ["responsible"])}
-              className="input-base text-[12px]"
-            >
-              <option value="">Todos</option>
-              {reasonOptions.map((value) => (
-                <option key={value} value={value}>
-                  {value}
-                </option>
-              ))}
-            </select>
-          </Field>
+          {!isUnjustifiedMode && (
+            <Field label="Motivo">
+              <select
+                value={filters.reason}
+                onChange={(event) => updateFilter("reason", event.target.value, ["responsible"])}
+                className="input-base text-[12px]"
+              >
+                <option value="">Todos</option>
+                {reasonOptions.map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Responsável">
             <select
               value={filters.responsible}
@@ -1320,26 +1346,20 @@ function NonExecutionDashboard() {
         </div>
       </Panel>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
         <KpiCard
-          label="Não executadas"
+          label={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
           value={kpis.nonExecuted}
-          tone="destructive"
-          icon={<Ban className="h-4 w-4" />}
+          tone={isUnjustifiedMode ? "warning" : "destructive"}
+          icon={isUnjustifiedMode ? <FileWarning className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
         />
         <KpiCard
-          label="Taxa de não execução"
+          label={isUnjustifiedMode ? "Taxa sem definição" : "Taxa de não execução"}
           value={`${kpis.percent}%`}
           tone="warning"
           icon={<TrendingDown className="h-4 w-4" />}
         />
         <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
-        <KpiCard
-          label="Não justificadas"
-          value={kpis.withoutReason}
-          tone={kpis.withoutReason ? "warning" : "success"}
-          icon={<FileWarning className="h-4 w-4" />}
-        />
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
 
@@ -1357,24 +1377,30 @@ function NonExecutionDashboard() {
         <Panel>
           <EmptyState
             icon={<Wrench className="h-4 w-4" />}
-            title="Nenhuma atividade não executada"
+            title={isUnjustifiedMode ? "Nenhuma atividade sem definição" : "Nenhuma atividade não executada"}
             description="Ajuste os filtros ou selecione outra semana."
           />
         </Panel>
       ) : (
         <>
-          <div className="mb-4">
-            <ReasonPanel
-              rows={reasonChart}
-              selectedReason={filters.reason}
-              onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason)}
-            />
-          </div>
+          {!isUnjustifiedMode && (
+            <div className="mb-4">
+              <ReasonPanel
+                rows={reasonChart}
+                selectedReason={filters.reason}
+                onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason)}
+              />
+            </div>
+          )}
 
           <div className="mb-4">
             <ChartPanel
               title="Evolução diária"
-              description="Atividades não executadas por dia, conforme todos os filtros aplicados."
+              description={
+                isUnjustifiedMode
+                  ? "Atividades sem definição por dia, conforme os filtros aplicados."
+                  : "Atividades não executadas por dia, conforme todos os filtros aplicados."
+              }
             >
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
@@ -1382,7 +1408,12 @@ function NonExecutionDashboard() {
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip />
-                  <Bar dataKey="naoExecutadas" name="Não executadas" fill="#C2413B" radius={[4, 4, 0, 0]} />
+                  <Bar
+                    dataKey="naoExecutadas"
+                    name={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
+                    fill="#C2413B"
+                    radius={[4, 4, 0, 0]}
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
@@ -1394,7 +1425,7 @@ function NonExecutionDashboard() {
           </div>
 
           <Panel
-            title="Atividades não executadas"
+            title={isUnjustifiedMode ? "Atividades não justificadas" : "Atividades não executadas"}
             description={`${filtered.length} atividade(s) com os filtros atuais.`}
             padded={false}
           >
@@ -1412,7 +1443,8 @@ function NonExecutionDashboard() {
                     {row.specialty || "Sem especialidade"}
                   </div>
                   <div className="mt-2">
-                    <b>Motivo:</b> {reasonLabelNe(row)}
+                    <b>{isUnjustifiedMode ? "Situação atual:" : "Motivo:"}</b>{" "}
+                    {isUnjustifiedMode ? row.status || "Sem apontamento" : reasonLabelNe(row)}
                   </div>
                   {row.observation && (
                     <div className="mt-1">
@@ -1434,7 +1466,7 @@ function NonExecutionDashboard() {
                       "Atividade",
                       "Gerência/Área",
                       "Especialidade",
-                      "Motivo",
+                      isUnjustifiedMode ? "Situação atual" : "Motivo",
                       "Observação",
                       "Responsável",
                       "Origem",
@@ -1460,7 +1492,9 @@ function NonExecutionDashboard() {
                       <td className="max-w-[320px] px-3 py-2">{row.description}</td>
                       <td className="px-3 py-2">{managementLabelNe(row)}</td>
                       <td className="px-3 py-2">{row.specialty || "—"}</td>
-                      <td className="max-w-[300px] px-3 py-2 font-medium text-destructive">{reasonLabelNe(row)}</td>
+                      <td className="max-w-[300px] px-3 py-2 font-medium text-destructive">
+                        {isUnjustifiedMode ? row.status || "Sem apontamento" : reasonLabelNe(row)}
+                      </td>
                       <td className="max-w-[300px] px-3 py-2 text-muted-foreground">{row.observation || "—"}</td>
                       <td className="px-3 py-2">
                         <div>{responsibleLabelNe(row)}</div>
@@ -1617,6 +1651,13 @@ function managementLabelNe(row: ActivityRow) {
 }
 function reasonLabelNe(row: ActivityRow) {
   return isMissingReasonNe(row.justification) ? "Sem justificativa" : row.justification!.trim();
+}
+function normalizeStatusNe(value: string | null) {
+  return (value ?? "")
+    .trim()
+    .toLocaleUpperCase("pt-BR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 function normalizeReasonNe(value: string | null) {
   return (value ?? "")
