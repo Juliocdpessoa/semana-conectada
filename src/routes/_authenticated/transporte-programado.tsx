@@ -1091,7 +1091,7 @@ function DayOffFormModal({
 }) {
   const create = useServerFn(createEmployeeDayOff);
   const update = useServerFn(updateEmployeeDayOff);
-  const [employeeId, setEmployeeId] = useState(row?.employee_master_id ?? "");
+  const [employeeIds, setEmployeeIds] = useState<Set<string>>(() => new Set(row ? [row.employee_master_id] : []));
   const [employeeSearch, setEmployeeSearch] = useState(row?.employee_name ?? "");
   const [dayOffDate, setDayOffDate] = useState(row?.day_off_date ?? localIsoDate());
   const [observation, setObservation] = useState(row?.observation ?? "");
@@ -1100,22 +1100,71 @@ function DayOffFormModal({
     () => filterEmployees(employees, employeeSearch).slice(0, 100),
     [employees, employeeSearch],
   );
+  const selectedEmployees = useMemo(
+    () => employees.filter((employee) => employeeIds.has(employee.id)),
+    [employees, employeeIds],
+  );
+
+  function toggleEmployee(employee: EmployeeRow) {
+    if (row) {
+      setEmployeeIds(new Set([employee.id]));
+      setEmployeeSearch(employee.full_name);
+      return;
+    }
+    setEmployeeIds((previous) => {
+      const next = new Set(previous);
+      if (next.has(employee.id)) next.delete(employee.id);
+      else next.add(employee.id);
+      return next;
+    });
+  }
 
   async function save() {
-    if (!employeeId) return toast.error("Selecione um colaborador.");
+    if (employeeIds.size === 0) return toast.error("Selecione pelo menos um colaborador.");
     if (!dayOffDate) return toast.error("Informe a data da folga.");
     setSaving(true);
     try {
-      const payload = {
-        employee_id: employeeId,
-        day_off_date: dayOffDate,
-        observation: observation.trim() || null,
-      };
-      const result = row
-        ? await update({ data: { ...payload, id: row.id, version: row.version } })
-        : await create({ data: payload });
-      if (!result.ok) return toast.error(result.error);
-      toast.success(row ? "Folga atualizada." : "Folga registrada.");
+      const observationValue = observation.trim() || null;
+      if (row) {
+        const employeeId = [...employeeIds][0];
+        const result = await update({
+          data: {
+            employee_id: employeeId,
+            day_off_date: dayOffDate,
+            observation: observationValue,
+            id: row.id,
+            version: row.version,
+          },
+        });
+        if (!result.ok) return toast.error(result.error);
+        toast.success("Folga atualizada.");
+        onSaved();
+        return;
+      }
+
+      let createdCount = 0;
+      const errors: string[] = [];
+      for (const employeeId of employeeIds) {
+        const result = await create({
+          data: {
+            employee_id: employeeId,
+            day_off_date: dayOffDate,
+            observation: observationValue,
+          },
+        });
+        if (result.ok) createdCount += 1;
+        else errors.push(result.error);
+      }
+
+      if (createdCount === 0) {
+        return toast.error(errors[0] || "Não foi possível registrar as folgas.");
+      }
+      toast.success(
+        `${createdCount} folga(s) registrada(s)${errors.length ? ` · ${errors.length} não incluída(s)` : ""}.`,
+      );
+      if (errors.length) {
+        toast.warning("Alguns colaboradores já possuíam folga nessa data ou não puderam ser incluídos.");
+      }
       onSaved();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível salvar a folga.");
@@ -1125,16 +1174,19 @@ function DayOffFormModal({
   }
 
   return (
-    <Modal title={row ? "Editar folga" : "Registrar folga"} onClose={onClose}>
+    <Modal title={row ? "Editar folga" : "Registrar folgas"} onClose={onClose}>
       <div className="space-y-4">
-        <Field label="Buscar colaborador">
+        <Field
+          label={row ? "Buscar colaborador" : "Buscar e selecionar colaboradores"}
+          hint={row ? undefined : "Você pode selecionar vários colaboradores antes de registrar."}
+        >
           <div className="relative">
             <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <input
               value={employeeSearch}
               onChange={(event) => {
                 setEmployeeSearch(event.target.value);
-                if (event.target.value !== row?.employee_name) setEmployeeId("");
+                if (row && event.target.value !== row.employee_name) setEmployeeIds(new Set());
               }}
               placeholder="Digite nome, matrícula ou função…"
               className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
@@ -1142,6 +1194,40 @@ function DayOffFormModal({
             />
           </div>
         </Field>
+
+        {!row && (
+          <div className="flex min-h-9 items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2">
+            <span className="text-[12px] font-medium text-foreground">
+              {employeeIds.size} colaborador(es) selecionado(s)
+            </span>
+            {employeeIds.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setEmployeeIds(new Set())}
+                className="text-[11px] font-semibold text-primary hover:underline"
+              >
+                Limpar seleção
+              </button>
+            )}
+          </div>
+        )}
+
+        {!row && selectedEmployees.length > 0 && (
+          <div className="flex max-h-24 flex-wrap gap-1.5 overflow-y-auto rounded-lg border border-border p-2">
+            {selectedEmployees.map((employee) => (
+              <button
+                key={employee.id}
+                type="button"
+                onClick={() => toggleEmployee(employee)}
+                className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary hover:bg-primary/20"
+                title="Clique para remover"
+              >
+                {employee.full_name} ×
+              </button>
+            ))}
+          </div>
+        )}
+
         <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
           {employeesLoading ? (
             <div className="p-4 text-center text-[12px] text-muted-foreground">Carregando colaboradores...</div>
@@ -1152,30 +1238,28 @@ function DayOffFormModal({
           ) : visibleEmployees.length === 0 ? (
             <div className="p-4 text-center text-[12px] text-muted-foreground">Nenhum colaborador encontrado.</div>
           ) : (
-            visibleEmployees.map((employee) => (
-              <button
-                key={employee.id}
-                type="button"
-                onClick={() => {
-                  setEmployeeId(employee.id);
-                  setEmployeeSearch(employee.full_name);
-                }}
-                className={cn(
-                  "flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted",
-                  employeeId === employee.id && "bg-primary/10",
-                )}
-              >
-                <span className="min-w-0">
-                  <span className="block truncate text-[12px] font-medium">{employee.full_name}</span>
-                  <span className="block truncate text-[10px] text-muted-foreground">
-                    {employee.badge} · {employee.job_title}
+            visibleEmployees.map((employee) => {
+              const selected = employeeIds.has(employee.id);
+              return (
+                <button
+                  key={employee.id}
+                  type="button"
+                  onClick={() => toggleEmployee(employee)}
+                  className={cn(
+                    "flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted",
+                    selected && "bg-primary/10",
+                  )}
+                >
+                  <span className="min-w-0">
+                    <span className="block truncate text-[12px] font-medium">{employee.full_name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">
+                      {employee.badge} · {employee.job_title}
+                    </span>
                   </span>
-                </span>
-                {employeeId === employee.id && (
-                  <span className="text-[11px] font-semibold text-primary">Selecionado</span>
-                )}
-              </button>
-            ))
+                  {selected && <span className="text-[11px] font-semibold text-primary">Selecionado</span>}
+                </button>
+              );
+            })
           )}
         </div>
         <Field label="Data da folga">
@@ -1200,8 +1284,13 @@ function DayOffFormModal({
           <button type="button" onClick={onClose} className="btn-secondary" disabled={saving}>
             Cancelar
           </button>
-          <button type="button" onClick={save} className="btn-primary" disabled={saving || !employeeId || !dayOffDate}>
-            {saving ? "Salvando..." : row ? "Salvar alterações" : "Registrar folga"}
+          <button
+            type="button"
+            onClick={save}
+            className="btn-primary"
+            disabled={saving || employeeIds.size === 0 || !dayOffDate}
+          >
+            {saving ? "Salvando..." : row ? "Salvar alterações" : `Registrar ${employeeIds.size} folga(s)`}
           </button>
         </div>
       </div>
