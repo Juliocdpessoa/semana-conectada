@@ -65,8 +65,8 @@ function PainelPage() {
           onClick={() => changeView("geral")}
           className={
             view === "geral"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
           }
         >
           Visão geral
@@ -76,8 +76,8 @@ function PainelPage() {
           onClick={() => changeView("nao-executadas")}
           className={
             view === "nao-executadas"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
           }
         >
           Não execução
@@ -87,8 +87,8 @@ function PainelPage() {
           onClick={() => changeView("nao-justificadas")}
           className={
             view === "nao-justificadas"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
           }
         >
           Não justificadas
