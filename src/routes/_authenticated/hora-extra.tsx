@@ -20,7 +20,6 @@ import {
   UserX,
   Pencil,
 } from "lucide-react";
-import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
@@ -77,19 +76,19 @@ function OvertimePage() {
   const isLogistics = roleSet.has("logistics");
   const logisticsOnly = isLogistics && roleSet.size === 1;
   const canExportOvertime = isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
+  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
+    logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
+  );
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const exportRequests = useQuery({
     queryKey: ["overtime-export-rows"],
-    enabled: canExportOvertime,
+    enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const result = await loadOvertimeForExport({ data: {} });
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
     },
   });
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
-    logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
-  );
   const [showNew, setShowNew] = useState(false);
   const [summaryDate, setSummaryDate] = useState("");
   const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
@@ -102,7 +101,7 @@ function OvertimePage() {
   const qc = useQueryClient();
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
-    enabled: !logisticsOnly,
+    enabled: !logisticsOnly && (tab === "list" || tab === "queue"),
     queryFn: async () => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
@@ -347,7 +346,8 @@ function WeeklyActivityExport() {
     },
   });
 
-  function exportWeeklyExcel() {
+  async function exportWeeklyExcel() {
+    const XLSX = await import("xlsx");
     if (!selectedWeek || !activities.data?.length) {
       return toast.error("Esta semana não possui atividades apontadas como executadas ou não executadas.");
     }
@@ -485,6 +485,7 @@ function ApprovedDailyExport({
   useEffect(() => setPage(1), [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter]);
 
   async function exportDailyExcel() {
+    const XLSX = await import("xlsx");
     if (!effectiveDate || dailyRows.length === 0) {
       toast.error("Não há solicitações de hora extra para exportar com os filtros atuais.");
       return;
@@ -790,7 +791,8 @@ function TransportView({
   const totalDay = dateRows.length;
   const transportDay = dateRows.filter((row) => row.needs_transport).length;
 
-  function exportExcel() {
+  async function exportExcel() {
+    const XLSX = await import("xlsx");
     if (filtered.length === 0) return toast.error("Não há colaboradores para exportar com os filtros atuais.");
     const values = filtered.map(mapTransportExportRow);
     const sheet = XLSX.utils.aoa_to_sheet([[...TRANSPORT_EXPORT_HEADERS], ...values]);
@@ -1485,7 +1487,8 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
 }
 
 /* ---------- Employee Management ---------- */
-function downloadEmployeeTemplate() {
+async function downloadEmployeeTemplate() {
+  const XLSX = await import("xlsx");
   const worksheet = XLSX.utils.aoa_to_sheet([[...EMPLOYEE_TEMPLATE_HEADERS]]);
   worksheet["!cols"] = [
     { wch: 16 },
@@ -1895,8 +1898,10 @@ function formatEmployeeSpreadsheetDate(value: unknown) {
   const numericValue =
     typeof value === "number" ? value : /^\d+(?:\.\d+)?$/.test(String(value).trim()) ? Number(value) : null;
   if (numericValue !== null && numericValue > 0) {
-    const parsed = XLSX.SSF.parse_date_code(numericValue);
-    if (parsed) return `${String(parsed.d).padStart(2, "0")}/${String(parsed.m).padStart(2, "0")}/${parsed.y}`;
+    const parsed = new Date(Date.UTC(1899, 11, 30) + Math.round(numericValue * 86_400_000));
+    if (!Number.isNaN(parsed.getTime())) {
+      return `${String(parsed.getUTCDate()).padStart(2, "0")}/${String(parsed.getUTCMonth() + 1).padStart(2, "0")}/${parsed.getUTCFullYear()}`;
+    }
   }
   const clean = String(value ?? "").trim();
   const normalized = normalizeEmployeeDate(clean);
@@ -1915,6 +1920,7 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     if (!file) return;
     setReadingFile(true);
     try {
+      const XLSX = await import("xlsx");
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const firstSheetName = workbook.SheetNames[0];
       if (!firstSheetName) throw new Error("A planilha não possui nenhuma aba.");
