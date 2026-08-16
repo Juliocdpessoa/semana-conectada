@@ -63,7 +63,11 @@ function PainelPage() {
         <button
           type="button"
           onClick={() => changeView("geral")}
-          className={view === "geral" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"}
+          className={
+            view === "geral"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
+          }
         >
           Visão geral
         </button>
@@ -71,7 +75,9 @@ function PainelPage() {
           type="button"
           onClick={() => changeView("nao-executadas")}
           className={
-            view === "nao-executadas" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"
+            view === "nao-executadas"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
           }
         >
           Não execução
@@ -80,7 +86,9 @@ function PainelPage() {
           type="button"
           onClick={() => changeView("nao-justificadas")}
           className={
-            view === "nao-justificadas" ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"
+            view === "nao-justificadas"
+              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px]"
           }
         >
           Não justificadas
