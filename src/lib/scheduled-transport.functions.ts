@@ -298,3 +298,149 @@ export const cancelScheduledTransport = createServerFn({ method: "POST" })
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, count: cancelled?.length ?? 0 };
   });
+
+export type EmployeeDayOffRow = {
+  id: string;
+  employee_master_id: string;
+  employee_registration: string | null;
+  employee_name: string;
+  employee_role: string | null;
+  day_off_date: string;
+  observation: string | null;
+  created_by_user_id: string;
+  created_by_name: string;
+  created_by_email: string;
+  created_at: string;
+  updated_by_user_id: string | null;
+  updated_by_name: string | null;
+  updated_at: string;
+  version: number;
+};
+
+const dayOffSchema = z.object({
+  employee_id: z.string().uuid(),
+  day_off_date: isoDate,
+  observation: z.string().max(1000).nullable(),
+});
+
+export const listEmployeeDaysOff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({}).parse(data))
+  .handler(async ({ context }) => {
+    const { supabase, userId } = context;
+    const info = await requireTransportAccess(supabase, userId);
+    if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para visualizar folgas." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    try {
+      const rows = await fetchAllRows(db, "employee_days_off", [
+        { column: "day_off_date", ascending: false },
+        { column: "employee_name", ascending: true },
+      ]);
+      return { ok: true as const, rows: rows as EmployeeDayOffRow[] };
+    } catch (error) {
+      return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar folgas." };
+    }
+  });
+
+export const createEmployeeDayOff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => dayOffSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await requireTransportAccess(supabase, userId);
+    if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para registrar folgas." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: employee, error: employeeError } = await db
+      .from("employees")
+      .select("id,badge,full_name,job_title,is_active")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (employeeError) return { ok: false as const, error: employeeError.message };
+    if (!employee?.is_active) return { ok: false as const, error: "Colaborador não encontrado ou inativo." };
+    const { data: created, error } = await db
+      .from("employee_days_off")
+      .insert({
+        employee_master_id: employee.id,
+        employee_registration: employee.badge,
+        employee_name: employee.full_name,
+        employee_role: employee.job_title,
+        day_off_date: data.day_off_date,
+        observation: data.observation?.trim() || null,
+        created_by_user_id: userId,
+        created_by_name: info.fullName,
+        created_by_email: info.email,
+      })
+      .select("*")
+      .single();
+    if (error?.code === "23505") {
+      return { ok: false as const, error: "Este colaborador já possui uma folga registrada nessa data." };
+    }
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, row: created as EmployeeDayOffRow };
+  });
+
+export const updateEmployeeDayOff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) =>
+    dayOffSchema.extend({ id: z.string().uuid(), version: z.number().int().min(1) }).parse(data),
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await requireTransportAccess(supabase, userId);
+    if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para editar folgas." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: employee, error: employeeError } = await db
+      .from("employees")
+      .select("id,badge,full_name,job_title,is_active")
+      .eq("id", data.employee_id)
+      .maybeSingle();
+    if (employeeError) return { ok: false as const, error: employeeError.message };
+    if (!employee?.is_active) return { ok: false as const, error: "Colaborador não encontrado ou inativo." };
+    const { data: updated, error } = await db
+      .from("employee_days_off")
+      .update({
+        employee_master_id: employee.id,
+        employee_registration: employee.badge,
+        employee_name: employee.full_name,
+        employee_role: employee.job_title,
+        day_off_date: data.day_off_date,
+        observation: data.observation?.trim() || null,
+        updated_by_user_id: userId,
+        updated_by_name: info.fullName,
+        updated_at: new Date().toISOString(),
+        version: data.version + 1,
+      })
+      .eq("id", data.id)
+      .eq("version", data.version)
+      .select("*")
+      .maybeSingle();
+    if (error?.code === "23505") {
+      return { ok: false as const, error: "Este colaborador já possui uma folga registrada nessa data." };
+    }
+    if (error) return { ok: false as const, error: error.message };
+    if (!updated) return { ok: false as const, error: "A folga foi alterada por outro usuário. Recarregue a lista." };
+    return { ok: true as const, row: updated as EmployeeDayOffRow };
+  });
+
+export const deleteEmployeeDayOff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ id: z.string().uuid(), version: z.number().int().min(1) }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await requireTransportAccess(supabase, userId);
+    if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para excluir folgas." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: deleted, error } = await (supabaseAdmin as any)
+      .from("employee_days_off")
+      .delete()
+      .eq("id", data.id)
+      .eq("version", data.version)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!deleted) return { ok: false as const, error: "A folga foi alterada por outro usuário. Recarregue a lista." };
+    return { ok: true as const };
+  });
