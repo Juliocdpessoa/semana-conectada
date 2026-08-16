@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { Bus, Download, Plus, Search, Trash2, Pencil, Users, UserX } from "lucide-react";
+import { Bus, CalendarDays, Download, Plus, Search, Trash2, Pencil, Users, UserX } from "lucide-react";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import type { SessionInfo } from "./route";
@@ -12,7 +12,12 @@ import {
   createScheduledTransport,
   updateScheduledTransport,
   cancelScheduledTransport,
+  listEmployeeDaysOff,
+  createEmployeeDayOff,
+  updateEmployeeDayOff,
+  deleteEmployeeDayOff,
 } from "@/lib/scheduled-transport.functions";
+import type { EmployeeDayOffRow } from "@/lib/scheduled-transport.functions";
 import {
   SCHEDULED_TRANSPORT_EXPORT_HEADERS,
   SCHEDULED_TRANSPORT_EXPORT_WIDTHS,
@@ -91,6 +96,7 @@ function ScheduledTransportPage() {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [page, setPage] = useState(1);
   const [newOpen, setNewOpen] = useState(false);
+  const [showDaysOff, setShowDaysOff] = useState(false);
   const [editing, setEditing] = useState<ScheduledTransportRow | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -107,7 +113,7 @@ function ScheduledTransportPage() {
 
   const employeesQuery = useQuery({
     queryKey: ["active-employees"],
-    enabled: newOpen,
+    enabled: newOpen || showDaysOff,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
       const all: EmployeeRow[] = [];
@@ -326,6 +332,13 @@ function ScheduledTransportPage() {
         description="Solicitação de mudança de escala de trabalho por dia ou período."
         actions={
           <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setShowDaysOff((value) => !value)}
+              className={showDaysOff ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"}
+            >
+              <CalendarDays className="h-4 w-4" /> {showDaysOff ? "Ocultar folgas" : "Controle de folgas"}
+            </button>
             <button type="button" onClick={exportExcel} className="btn-primary min-h-9 text-[12px]">
               <Download className="h-4 w-4" /> Exportar para Excel
             </button>
@@ -335,6 +348,16 @@ function ScheduledTransportPage() {
           </div>
         }
       />
+
+      {showDaysOff && (
+        <div className="mt-4">
+          <DaysOffControl
+            employees={employees}
+            employeesLoading={employeesQuery.isLoading}
+            employeesError={employeesQuery.isError}
+          />
+        </div>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard label="Colaboradores programados" value={kpis.employees} icon={<Users className="h-4 w-4" />} />
@@ -692,6 +715,466 @@ function ScheduledTransportPage() {
 }
 
 /* ---------- Nova programação ---------- */
+
+function DaysOffControl({
+  employees,
+  employeesLoading,
+  employeesError,
+}: {
+  employees: EmployeeRow[];
+  employeesLoading: boolean;
+  employeesError: boolean;
+}) {
+  const queryClient = useQueryClient();
+  const load = useServerFn(listEmployeeDaysOff);
+  const remove = useServerFn(deleteEmployeeDayOff);
+  const [search, setSearch] = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [page, setPage] = useState(1);
+  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<EmployeeDayOffRow | null>(null);
+  const rowsQuery = useQuery({
+    queryKey: ["employee-days-off"],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const result = await load({ data: {} });
+      if (!result.ok) throw new Error(result.error);
+      return result.rows as EmployeeDayOffRow[];
+    },
+  });
+  const rows = rowsQuery.data ?? [];
+  const filtered = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase("pt-BR");
+    return rows.filter((row) => {
+      if (startDate && row.day_off_date < startDate) return false;
+      if (endDate && row.day_off_date > endDate) return false;
+      if (
+        term &&
+        ![row.employee_name, row.employee_registration ?? "", row.employee_role ?? "", row.observation ?? ""].some(
+          (value) => value.toLocaleLowerCase("pt-BR").includes(term),
+        )
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [rows, search, startDate, endDate]);
+  const today = localIsoDate();
+  const month = today.slice(0, 7);
+  const cards = useMemo(
+    () => ({
+      collaborators: new Set(filtered.map((row) => row.employee_master_id)).size,
+      month: filtered.filter((row) => row.day_off_date.startsWith(month)).length,
+      today: filtered.filter((row) => row.day_off_date === today).length,
+      upcoming: filtered.filter((row) => row.day_off_date > today).length,
+    }),
+    [filtered, month, today],
+  );
+  const pageSize = 30;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const currentPage = Math.min(page, pageCount);
+  const paginated = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  useEffect(() => setPage(1), [search, startDate, endDate]);
+
+  async function deleteRow(row: EmployeeDayOffRow) {
+    if (!confirm(`Excluir a folga de ${row.employee_name} em ${formatDate(row.day_off_date)}?`)) return;
+    const result = await remove({ data: { id: row.id, version: row.version } });
+    if (!result.ok) return toast.error(result.error);
+    toast.success("Folga excluída.");
+    queryClient.invalidateQueries({ queryKey: ["employee-days-off"] });
+  }
+
+  async function exportDaysOff() {
+    if (filtered.length === 0) return toast.error("Não há folgas para exportar com os filtros atuais.");
+    const XLSX = await import("xlsx");
+    const values = filtered.map((row) => [
+      row.employee_registration ?? "",
+      row.employee_name,
+      row.employee_role ?? "",
+      formatDate(row.day_off_date),
+      row.observation ?? "",
+      row.created_by_name || row.created_by_email,
+      new Date(row.created_at).toLocaleString("pt-BR"),
+    ]);
+    const headers = [
+      "Matrícula",
+      "Colaborador",
+      "Função",
+      "Data da folga",
+      "Observação",
+      "Responsável",
+      "Registrado em",
+    ];
+    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
+    sheet["!cols"] = [14, 34, 28, 16, 48, 30, 20].map((wch) => ({ wch }));
+    sheet["!autofilter"] = { ref: `A1:G${values.length + 1}` };
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Controle de folgas");
+    XLSX.writeFile(workbook, "controle-de-folgas.xlsx");
+    toast.success(filtered.length + " folga(s) exportada(s).");
+  }
+
+  return (
+    <>
+      <Panel
+        title="Controle de folgas"
+        description="Registro manual das folgas concedidas aos colaboradores."
+        padded={false}
+      >
+        <div className="flex flex-col gap-3 border-b border-border p-3 lg:flex-row lg:items-end lg:justify-between">
+          <div className="grid min-w-0 flex-1 grid-cols-1 gap-2 sm:grid-cols-3">
+            <Field label="Buscar colaborador">
+              <div className="relative">
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Nome, matrícula ou função…"
+                  className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
+                />
+              </div>
+            </Field>
+            <Field label="Data inicial">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(event) => setStartDate(event.target.value)}
+                className="input-base text-[16px] sm:text-[12px]"
+              />
+            </Field>
+            <Field label="Data final">
+              <input
+                type="date"
+                value={endDate}
+                min={startDate || undefined}
+                onChange={(event) => setEndDate(event.target.value)}
+                className="input-base text-[16px] sm:text-[12px]"
+              />
+            </Field>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {(search || startDate || endDate) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearch("");
+                  setStartDate("");
+                  setEndDate("");
+                }}
+                className="btn-secondary min-h-9 text-[12px]"
+              >
+                Limpar filtros
+              </button>
+            )}
+            <button type="button" onClick={exportDaysOff} className="btn-secondary min-h-9 text-[12px]">
+              <Download className="h-4 w-4" /> Exportar
+            </button>
+            <button type="button" onClick={() => setCreating(true)} className="btn-primary min-h-9 text-[12px]">
+              <Plus className="h-4 w-4" /> Registrar folga
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3 p-3 lg:grid-cols-4">
+          <KpiCard
+            label="Colaboradores que folgaram"
+            value={cards.collaborators}
+            icon={<Users className="h-4 w-4" />}
+          />
+          <KpiCard label="Folgas no mês" value={cards.month} icon={<CalendarDays className="h-4 w-4" />} />
+          <KpiCard label="Folgas hoje" value={cards.today} icon={<CalendarDays className="h-4 w-4" />} />
+          <KpiCard label="Próximas folgas" value={cards.upcoming} icon={<CalendarDays className="h-4 w-4" />} />
+        </div>
+
+        {rowsQuery.isLoading ? (
+          <div className="p-8 text-center text-sm text-muted-foreground">Carregando folgas...</div>
+        ) : rowsQuery.isError ? (
+          <div className="p-8 text-center text-sm text-destructive">Não foi possível carregar as folgas.</div>
+        ) : filtered.length === 0 ? (
+          <EmptyState
+            icon={<CalendarDays className="h-5 w-5" />}
+            title="Nenhuma folga encontrada"
+            description="Registre uma folga ou ajuste os filtros."
+          />
+        ) : (
+          <>
+            <div className="space-y-2 p-3 md:hidden">
+              {paginated.map((row) => (
+                <article key={row.id} className="rounded-lg border border-border bg-card p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <div className="font-semibold text-foreground">{row.employee_name}</div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {row.employee_registration || "Sem matrícula"} · {row.employee_role || "Sem função"}
+                      </div>
+                    </div>
+                    <div className="font-mono text-[12px] font-semibold text-primary">
+                      {formatDate(row.day_off_date)}
+                    </div>
+                  </div>
+                  {row.observation && <p className="mt-2 text-[12px] text-muted-foreground">{row.observation}</p>}
+                  <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-2">
+                    <span className="text-[10px] text-muted-foreground">
+                      Lançado por {row.created_by_name || row.created_by_email}
+                    </span>
+                    <div className="flex gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditing(row)}
+                        className="btn-ghost min-h-8 px-2 text-[11px]"
+                      >
+                        <Pencil className="h-3.5 w-3.5" /> Editar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => deleteRow(row)}
+                        className="btn-ghost min-h-8 px-2 text-[11px] text-destructive"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" /> Excluir
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </div>
+            <div className="hidden overflow-x-auto md:block">
+              <table className="data-table min-w-[980px]">
+                <thead>
+                  <tr>
+                    <th>Data da folga</th>
+                    <th>Matrícula</th>
+                    <th>Colaborador</th>
+                    <th>Função</th>
+                    <th>Observação</th>
+                    <th>Responsável pelo lançamento</th>
+                    <th>Registrado em</th>
+                    <th className="text-right">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {paginated.map((row) => (
+                    <tr key={row.id}>
+                      <td className="whitespace-nowrap font-mono font-semibold text-primary">
+                        {formatDate(row.day_off_date)}
+                      </td>
+                      <td className="whitespace-nowrap font-mono">{row.employee_registration || "—"}</td>
+                      <td className="font-medium">{row.employee_name}</td>
+                      <td>{row.employee_role || "—"}</td>
+                      <td className="max-w-[320px] whitespace-normal">{row.observation || "—"}</td>
+                      <td>{row.created_by_name || row.created_by_email}</td>
+                      <td className="whitespace-nowrap text-[11px] text-muted-foreground">
+                        {new Date(row.created_at).toLocaleString("pt-BR")}
+                      </td>
+                      <td>
+                        <div className="flex justify-end gap-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditing(row)}
+                            className="btn-ghost min-h-8 px-2 text-[11px]"
+                          >
+                            <Pencil className="h-3.5 w-3.5" /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => deleteRow(row)}
+                            className="btn-ghost min-h-8 px-2 text-[11px] text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" /> Excluir
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {filtered.length > pageSize && (
+              <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                <span>
+                  Página {currentPage} de {pageCount} · {filtered.length} registro(s)
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.max(1, value - 1))}
+                    disabled={currentPage === 1}
+                    className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                  >
+                    Anterior
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                    disabled={currentPage === pageCount}
+                    className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                  >
+                    Próxima
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
+      </Panel>
+
+      {(creating || editing) && (
+        <DayOffFormModal
+          employees={employees}
+          employeesLoading={employeesLoading}
+          employeesError={employeesError}
+          row={editing}
+          onClose={() => {
+            setCreating(false);
+            setEditing(null);
+          }}
+          onSaved={() => {
+            setCreating(false);
+            setEditing(null);
+            queryClient.invalidateQueries({ queryKey: ["employee-days-off"] });
+          }}
+        />
+      )}
+    </>
+  );
+}
+
+function DayOffFormModal({
+  employees,
+  employeesLoading,
+  employeesError,
+  row,
+  onClose,
+  onSaved,
+}: {
+  employees: EmployeeRow[];
+  employeesLoading: boolean;
+  employeesError: boolean;
+  row: EmployeeDayOffRow | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const create = useServerFn(createEmployeeDayOff);
+  const update = useServerFn(updateEmployeeDayOff);
+  const [employeeId, setEmployeeId] = useState(row?.employee_master_id ?? "");
+  const [employeeSearch, setEmployeeSearch] = useState(row?.employee_name ?? "");
+  const [dayOffDate, setDayOffDate] = useState(row?.day_off_date ?? localIsoDate());
+  const [observation, setObservation] = useState(row?.observation ?? "");
+  const [saving, setSaving] = useState(false);
+  const visibleEmployees = useMemo(
+    () => filterEmployees(employees, employeeSearch).slice(0, 100),
+    [employees, employeeSearch],
+  );
+
+  async function save() {
+    if (!employeeId) return toast.error("Selecione um colaborador.");
+    if (!dayOffDate) return toast.error("Informe a data da folga.");
+    setSaving(true);
+    try {
+      const payload = {
+        employee_id: employeeId,
+        day_off_date: dayOffDate,
+        observation: observation.trim() || null,
+      };
+      const result = row
+        ? await update({ data: { ...payload, id: row.id, version: row.version } })
+        : await create({ data: payload });
+      if (!result.ok) return toast.error(result.error);
+      toast.success(row ? "Folga atualizada." : "Folga registrada.");
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a folga.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal title={row ? "Editar folga" : "Registrar folga"} onClose={onClose}>
+      <div className="space-y-4">
+        <Field label="Buscar colaborador">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <input
+              value={employeeSearch}
+              onChange={(event) => {
+                setEmployeeSearch(event.target.value);
+                if (event.target.value !== row?.employee_name) setEmployeeId("");
+              }}
+              placeholder="Digite nome, matrícula ou função…"
+              className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
+              autoComplete="off"
+            />
+          </div>
+        </Field>
+        <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
+          {employeesLoading ? (
+            <div className="p-4 text-center text-[12px] text-muted-foreground">Carregando colaboradores...</div>
+          ) : employeesError ? (
+            <div className="p-4 text-center text-[12px] text-destructive">
+              Não foi possível carregar os colaboradores.
+            </div>
+          ) : visibleEmployees.length === 0 ? (
+            <div className="p-4 text-center text-[12px] text-muted-foreground">Nenhum colaborador encontrado.</div>
+          ) : (
+            visibleEmployees.map((employee) => (
+              <button
+                key={employee.id}
+                type="button"
+                onClick={() => {
+                  setEmployeeId(employee.id);
+                  setEmployeeSearch(employee.full_name);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 border-b border-border px-3 py-2 text-left last:border-b-0 hover:bg-muted",
+                  employeeId === employee.id && "bg-primary/10",
+                )}
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-[12px] font-medium">{employee.full_name}</span>
+                  <span className="block truncate text-[10px] text-muted-foreground">
+                    {employee.badge} · {employee.job_title}
+                  </span>
+                </span>
+                {employeeId === employee.id && (
+                  <span className="text-[11px] font-semibold text-primary">Selecionado</span>
+                )}
+              </button>
+            ))
+          )}
+        </div>
+        <Field label="Data da folga">
+          <input
+            type="date"
+            value={dayOffDate}
+            onChange={(event) => setDayOffDate(event.target.value)}
+            className="input-base w-full text-[16px] sm:text-[12px]"
+          />
+        </Field>
+        <Field label="Observação (opcional)">
+          <textarea
+            value={observation}
+            onChange={(event) => setObservation(event.target.value)}
+            maxLength={1000}
+            rows={4}
+            className="input-base w-full resize-y text-[16px] sm:text-[12px]"
+            placeholder="Informações complementares sobre a folga…"
+          />
+        </Field>
+        <div className="flex justify-end gap-2 border-t border-border pt-4">
+          <button type="button" onClick={onClose} className="btn-secondary" disabled={saving}>
+            Cancelar
+          </button>
+          <button type="button" onClick={save} className="btn-primary" disabled={saving || !employeeId || !dayOffDate}>
+            {saving ? "Salvando..." : row ? "Salvar alterações" : "Registrar folga"}
+          </button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
 function NewScheduleModal({
   employees,
   onClose,
