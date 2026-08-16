@@ -104,6 +104,8 @@ function OvertimePage() {
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const exportRequests = useQuery({
     queryKey: ["overtime-export-rows"],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const result = await loadOvertimeForExport({ data: {} });
@@ -123,6 +125,8 @@ function OvertimePage() {
   const qc = useQueryClient();
   const requests = useQuery({
     queryKey: ["overtime-requests", s.userId, isManager],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
     enabled: !logisticsOnly && (tab === "list" || tab === "queue"),
     queryFn: async () => {
       const pageSize = 1000;
@@ -1541,6 +1545,8 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const [page, setPage] = useState(1);
   const employees = useQuery({
     queryKey: ["employees"],
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: () => loadEmployees(false),
   });
   const filtered = useMemo(() => filterEmployees(employees.data ?? [], search), [employees.data, search]);
@@ -2179,6 +2185,8 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
   const employees = useQuery({
     queryKey: ["active-employees"],
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: () => loadEmployees(true),
   });
   const selectedEmployees = (employees.data ?? []).filter((employee) => selectedEmployeeIds.includes(employee.id));
