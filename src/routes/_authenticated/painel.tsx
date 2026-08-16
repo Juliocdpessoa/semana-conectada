@@ -37,7 +37,6 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import * as XLSX from "xlsx";
 
 export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
@@ -120,7 +119,7 @@ function OverviewPanel() {
   });
 
   const activities = useQuery({
-    queryKey: ["activities-painel", activeWeek.data?.id],
+    queryKey: ["panel-activities", activeWeek.data?.id],
     enabled: !!activeWeek.data?.id,
     queryFn: async () => {
       const chunk = 1000;
@@ -129,7 +128,7 @@ function OverviewPanel() {
         const { data, error } = await supabase
           .from("activities")
           .select(
-            "id,order_number,description,status,justification,observation,area,specialty,scheduled_date,is_immediate,reported_by_name,reported_at,planning_data",
+            "id,order_number,note_number,description,area,specialty,scheduled_date,status,justification,observation,reported_by_name,reported_by_email,reported_at,is_immediate,planning_data",
           )
           .eq("week_id", activeWeek.data!.id)
           .range(from, from + chunk - 1);
@@ -945,7 +944,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
 
   const activities = useQuery({
-    queryKey: ["non-execution-activities", effectiveWeekId],
+    queryKey: ["panel-activities", effectiveWeekId],
     enabled: !!effectiveWeekId,
     queryFn: async () => {
       const all: ActivityRow[] = [];
@@ -1123,8 +1122,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     setPage(1);
   }
 
-  function exportExcel() {
+  async function exportExcel() {
     if (filtered.length === 0) return;
+    const XLSX = await import("xlsx");
     const values = filtered.map((row) => [
       row.order_number || "",
       row.note_number || "",
