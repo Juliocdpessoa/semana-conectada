@@ -96,6 +96,8 @@ function ScheduledTransportPage() {
 
   const query = useQuery({
     queryKey: ["scheduled-transport"],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
     queryFn: async () => {
       const result = await load({ data: {} });
       if (!result.ok) throw new Error(result.error);
