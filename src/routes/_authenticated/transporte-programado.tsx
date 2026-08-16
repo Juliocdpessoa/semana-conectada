@@ -328,26 +328,50 @@ function ScheduledTransportPage() {
   return (
     <main className="mx-auto max-w-[1600px] px-3 py-4 sm:px-6">
       <PageHeader
-        title="Mudança de Escala"
-        description="Solicitação de mudança de escala de trabalho por dia ou período."
+        title={showDaysOff ? "Controle de Folgas" : "Mudança de Escala"}
+        description={
+          showDaysOff
+            ? "Registro e acompanhamento manual das folgas concedidas aos colaboradores."
+            : "Solicitação de mudança de escala de trabalho por dia ou período."
+        }
         actions={
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setShowDaysOff((value) => !value)}
-              className={showDaysOff ? "btn-primary min-h-9 text-[12px]" : "btn-secondary min-h-9 text-[12px]"}
-            >
-              <CalendarDays className="h-4 w-4" /> {showDaysOff ? "Ocultar folgas" : "Controle de folgas"}
-            </button>
-            <button type="button" onClick={exportExcel} className="btn-primary min-h-9 text-[12px]">
-              <Download className="h-4 w-4" /> Exportar para Excel
-            </button>
-            <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
-              <Plus className="h-4 w-4" /> Nova Mudança de Escala
-            </button>
-          </div>
+          !showDaysOff ? (
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={exportExcel} className="btn-primary min-h-9 text-[12px]">
+                <Download className="h-4 w-4" /> Exportar para Excel
+              </button>
+              <button type="button" onClick={() => setNewOpen(true)} className="btn-primary min-h-9 text-[12px]">
+                <Plus className="h-4 w-4" /> Nova Mudança de Escala
+              </button>
+            </div>
+          ) : undefined
         }
       />
+
+      <div className="mt-4 flex flex-wrap gap-2 border-b border-border pb-3">
+        <button
+          type="button"
+          onClick={() => setShowDaysOff(false)}
+          className={
+            !showDaysOff
+              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px] hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+          }
+        >
+          <Bus className="h-4 w-4" /> Mudança de Escala
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowDaysOff(true)}
+          className={
+            showDaysOff
+              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
+              : "btn-secondary min-h-9 cursor-pointer text-[12px] hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
+          }
+        >
+          <CalendarDays className="h-4 w-4" /> Controle de Folgas
+        </button>
+      </div>
 
       {showDaysOff && (
         <div className="mt-4">
@@ -359,356 +383,365 @@ function ScheduledTransportPage() {
         </div>
       )}
 
-      <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <KpiCard label="Colaboradores programados" value={kpis.employees} icon={<Users className="h-4 w-4" />} />
-        <KpiCard label="Com transporte" value={kpis.transport} icon={<Bus className="h-4 w-4" />} />
-        <KpiCard label="Sem transporte" value={kpis.noTransport} icon={<Users className="h-4 w-4" />} />
-        <KpiCard label="Colaboradores cancelados" value={kpis.cancelled} icon={<UserX className="h-4 w-4" />} />
-      </div>
-
-      <div className="mt-4">
-        <Panel
-          title="Mudanças de escala"
-          description="A exportação respeita exatamente os filtros ativos."
-          padded={false}
-        >
-          <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
-            <Field label="Pesquisa rápida">
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  value={filters.search}
-                  onChange={(event) => setFilters((f) => ({ ...f, search: event.target.value }))}
-                  placeholder="Nome, chapa, ID ou função…"
-                  className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
-                />
-              </div>
-            </Field>
-            <Field label="Data inicial">
-              <select
-                value={filters.startDate}
-                onChange={(event) =>
-                  setFilters((f) => ({
-                    ...f,
-                    startDate: event.target.value,
-                    endDate: "",
-                    entryTime: "",
-                    departureTime: "",
-                  }))
-                }
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="">Todas</option>
-                {availableDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDate(date)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Data final">
-              <select
-                value={filters.endDate}
-                onChange={(event) =>
-                  setFilters((f) => ({
-                    ...f,
-                    endDate: event.target.value,
-                    entryTime: "",
-                    departureTime: "",
-                  }))
-                }
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="">Todas</option>
-                {availableEndDates.map((date) => (
-                  <option key={date} value={date}>
-                    {formatDate(date)}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Função">
-              <select
-                value={filters.jobTitle}
-                onChange={(event) => setFilters((f) => ({ ...f, jobTitle: event.target.value }))}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="">Todas</option>
-                {jobTitles.map((title) => (
-                  <option key={title} value={title}>
-                    {title}
-                  </option>
-                ))}
-              </select>
-            </Field>
-            <Field label="Status">
-              <select
-                value={filters.status}
-                onChange={(event) => setFilters((f) => ({ ...f, status: event.target.value as Filters["status"] }))}
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="scheduled">Programado</option>
-                <option value="cancelled">Cancelado</option>
-                <option value="all">Todos</option>
-              </select>
-            </Field>
-            <Field label="Necessita transporte">
-              <select
-                value={filters.transport}
-                onChange={(event) =>
-                  setFilters((f) => ({ ...f, transport: event.target.value as Filters["transport"] }))
-                }
-                className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-              >
-                <option value="all">Todos</option>
-                <option value="yes">Sim</option>
-                <option value="no">Não</option>
-              </select>
-            </Field>
-            <div className="grid min-w-0 grid-cols-2 gap-2 [&>*]:min-w-0">
-              <Field label="Entrada">
-                <select
-                  value={filters.entryTime}
-                  onChange={(event) =>
-                    setFilters((f) => ({
-                      ...f,
-                      entryTime: event.target.value,
-                      departureTime: "",
-                    }))
-                  }
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                >
-                  <option value="">Todos</option>
-                  {availableEntryTimes.map((time) => (
-                    <option key={time} value={time}>
-                      {time.replace(/^0/, "")}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-              <Field label="Saída">
-                <select
-                  value={filters.departureTime}
-                  onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
-                  className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
-                >
-                  <option value="">Todos</option>
-                  {availableDepartureTimes.map((time) => (
-                    <option key={time} value={time}>
-                      {time.replace(/^0/, "")}
-                    </option>
-                  ))}
-                </select>
-              </Field>
-            </div>
-            <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
-              <button
-                type="button"
-                onClick={() => setFilters(EMPTY_FILTERS)}
-                className="btn-secondary min-h-9 text-[12px]"
-              >
-                Limpar filtros
-              </button>
-              <button
-                type="button"
-                onClick={cancelSelected}
-                disabled={selected.size === 0}
-                className="btn-secondary min-h-9 text-[12px] disabled:opacity-50"
-              >
-                <Trash2 className="h-4 w-4" /> Cancelar mudanças selecionadas ({selected.size})
-              </button>
-              <span className="ml-auto text-[11px] text-muted-foreground">
-                {filtered.length} registro(s) · {consolidated.length} linha(s) na planilha
-              </span>
-            </div>
+      {!showDaysOff && (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <KpiCard label="Colaboradores programados" value={kpis.employees} icon={<Users className="h-4 w-4" />} />
+            <KpiCard label="Com transporte" value={kpis.transport} icon={<Bus className="h-4 w-4" />} />
+            <KpiCard label="Sem transporte" value={kpis.noTransport} icon={<Users className="h-4 w-4" />} />
+            <KpiCard label="Colaboradores cancelados" value={kpis.cancelled} icon={<UserX className="h-4 w-4" />} />
           </div>
 
-          {query.isLoading ? (
-            <div className="p-6 text-[12px] text-muted-foreground">Carregando mudanças de escala…</div>
-          ) : query.isError ? (
-            <div className="p-6 text-[12px] text-destructive">{(query.error as Error).message}</div>
-          ) : filtered.length === 0 ? (
-            <div className="p-6">
-              <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhuma mudança de escala encontrada" />
-            </div>
-          ) : (
-            <>
-              <div className="grid gap-3 p-3 md:hidden">
-                {paginatedRows.map((row) => (
-                  <article key={row.id} className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm">
-                    <div className="flex items-start justify-between gap-2">
-                      <div>
-                        <div className="font-semibold">{row.employee_name}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          {formatDate(row.transport_date)} · {row.entry_time}–{row.departure_time}
-                        </div>
-                      </div>
-                      <span className="text-[11px]">{formatScheduledStatus(row.status)}</span>
-                    </div>
-                    <div className="mt-1 text-[11px] text-muted-foreground">
-                      Chapa {row.employee_registration || "—"} · {row.employee_role}
-                    </div>
-                    <div className="mt-2 flex gap-2">
-                      {row.status === "scheduled" && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => setEditing(row)}
-                            className="btn-secondary min-h-8 text-[11px]"
-                          >
-                            <Pencil className="h-3.5 w-3.5" /> Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => cancelOne(row)}
-                            className="btn-secondary min-h-8 text-[11px]"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Cancelar
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </article>
-                ))}
+          <div className="mt-4">
+            <Panel
+              title="Mudanças de escala"
+              description="A exportação respeita exatamente os filtros ativos."
+              padded={false}
+            >
+              <div className="grid min-w-0 grid-cols-1 gap-2 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 [&>*]:min-w-0">
+                <Field label="Pesquisa rápida">
+                  <div className="relative">
+                    <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <input
+                      value={filters.search}
+                      onChange={(event) => setFilters((f) => ({ ...f, search: event.target.value }))}
+                      placeholder="Nome, chapa, ID ou função…"
+                      className="input-base w-full pl-7 text-[16px] sm:text-[12px]"
+                    />
+                  </div>
+                </Field>
+                <Field label="Data inicial">
+                  <select
+                    value={filters.startDate}
+                    onChange={(event) =>
+                      setFilters((f) => ({
+                        ...f,
+                        startDate: event.target.value,
+                        endDate: "",
+                        entryTime: "",
+                        departureTime: "",
+                      }))
+                    }
+                    className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                  >
+                    <option value="">Todas</option>
+                    {availableDates.map((date) => (
+                      <option key={date} value={date}>
+                        {formatDate(date)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Data final">
+                  <select
+                    value={filters.endDate}
+                    onChange={(event) =>
+                      setFilters((f) => ({
+                        ...f,
+                        endDate: event.target.value,
+                        entryTime: "",
+                        departureTime: "",
+                      }))
+                    }
+                    className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                  >
+                    <option value="">Todas</option>
+                    {availableEndDates.map((date) => (
+                      <option key={date} value={date}>
+                        {formatDate(date)}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Função">
+                  <select
+                    value={filters.jobTitle}
+                    onChange={(event) => setFilters((f) => ({ ...f, jobTitle: event.target.value }))}
+                    className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                  >
+                    <option value="">Todas</option>
+                    {jobTitles.map((title) => (
+                      <option key={title} value={title}>
+                        {title}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Status">
+                  <select
+                    value={filters.status}
+                    onChange={(event) => setFilters((f) => ({ ...f, status: event.target.value as Filters["status"] }))}
+                    className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                  >
+                    <option value="scheduled">Programado</option>
+                    <option value="cancelled">Cancelado</option>
+                    <option value="all">Todos</option>
+                  </select>
+                </Field>
+                <Field label="Necessita transporte">
+                  <select
+                    value={filters.transport}
+                    onChange={(event) =>
+                      setFilters((f) => ({ ...f, transport: event.target.value as Filters["transport"] }))
+                    }
+                    className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                  >
+                    <option value="all">Todos</option>
+                    <option value="yes">Sim</option>
+                    <option value="no">Não</option>
+                  </select>
+                </Field>
+                <div className="grid min-w-0 grid-cols-2 gap-2 [&>*]:min-w-0">
+                  <Field label="Entrada">
+                    <select
+                      value={filters.entryTime}
+                      onChange={(event) =>
+                        setFilters((f) => ({
+                          ...f,
+                          entryTime: event.target.value,
+                          departureTime: "",
+                        }))
+                      }
+                      className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                    >
+                      <option value="">Todos</option>
+                      {availableEntryTimes.map((time) => (
+                        <option key={time} value={time}>
+                          {time.replace(/^0/, "")}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Saída">
+                    <select
+                      value={filters.departureTime}
+                      onChange={(event) => setFilters((f) => ({ ...f, departureTime: event.target.value }))}
+                      className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
+                    >
+                      <option value="">Todos</option>
+                      {availableDepartureTimes.map((time) => (
+                        <option key={time} value={time}>
+                          {time.replace(/^0/, "")}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                <div className="flex items-end gap-2 sm:col-span-2 lg:col-span-4">
+                  <button
+                    type="button"
+                    onClick={() => setFilters(EMPTY_FILTERS)}
+                    className="btn-secondary min-h-9 text-[12px]"
+                  >
+                    Limpar filtros
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelSelected}
+                    disabled={selected.size === 0}
+                    className="btn-secondary min-h-9 text-[12px] disabled:opacity-50"
+                  >
+                    <Trash2 className="h-4 w-4" /> Cancelar mudanças selecionadas ({selected.size})
+                  </button>
+                  <span className="ml-auto text-[11px] text-muted-foreground">
+                    {filtered.length} registro(s) · {consolidated.length} linha(s) na planilha
+                  </span>
+                </div>
               </div>
 
-              <div className="hidden overflow-x-auto md:block">
-                <table className="w-full min-w-[1200px] text-[12px]">
-                  <thead className="bg-muted/50 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    <tr>
-                      <th className="px-2 py-2"></th>
-                      <th className="px-2 py-2">Data</th>
-                      <th className="px-2 py-2">Chapa</th>
-                      <th className="px-2 py-2">ID</th>
-                      <th className="px-2 py-2">Nome</th>
-                      <th className="px-2 py-2">Função</th>
-                      <th className="px-2 py-2">Entrada</th>
-                      <th className="px-2 py-2">Saída</th>
-                      <th className="px-2 py-2">Transporte</th>
-                      <th className="px-2 py-2">Ordem</th>
-                      <th className="px-2 py-2">Serviço</th>
-                      <th className="px-2 py-2">Solicitante</th>
-                      <th className="px-2 py-2">Status</th>
-                      <th className="px-2 py-2">Ação</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              {query.isLoading ? (
+                <div className="p-6 text-[12px] text-muted-foreground">Carregando mudanças de escala…</div>
+              ) : query.isError ? (
+                <div className="p-6 text-[12px] text-destructive">{(query.error as Error).message}</div>
+              ) : filtered.length === 0 ? (
+                <div className="p-6">
+                  <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhuma mudança de escala encontrada" />
+                </div>
+              ) : (
+                <>
+                  <div className="grid gap-3 p-3 md:hidden">
                     {paginatedRows.map((row) => (
-                      <tr
+                      <article
                         key={row.id}
-                        className={cn("border-t border-border", row.status === "cancelled" && "opacity-60")}
+                        className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm"
                       >
-                        <td className="px-2 py-1.5">
-                          <input
-                            type="checkbox"
-                            checked={selected.has(row.id)}
-                            onChange={() => toggleSelected(row.id)}
-                            disabled={row.status !== "scheduled"}
-                          />
-                        </td>
-                        <td className="whitespace-nowrap px-2 py-1.5">{formatDate(row.transport_date)}</td>
-                        <td className="px-2 py-1.5">{row.employee_registration || "—"}</td>
-                        <td className="px-2 py-1.5">{row.employee_external_id || "—"}</td>
-                        <td className="px-2 py-1.5">{row.employee_name}</td>
-                        <td className="px-2 py-1.5">{row.employee_role}</td>
-                        <td className="px-2 py-1.5">{row.entry_time}</td>
-                        <td className="px-2 py-1.5">{row.departure_time}</td>
-                        <td className="px-2 py-1.5">{row.needs_transport ? "Sim" : "Não"}</td>
-                        <td className="px-2 py-1.5">{row.order_number || "—"}</td>
-                        <td className="max-w-[280px] truncate px-2 py-1.5" title={row.service_description || ""}>
-                          {row.service_description || "—"}
-                        </td>
-                        <td className="px-2 py-1.5">{row.requester_name || row.requester_email}</td>
-                        <td className="px-2 py-1.5">{formatScheduledStatus(row.status)}</td>
-                        <td className="whitespace-nowrap px-2 py-1.5">
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <div className="font-semibold">{row.employee_name}</div>
+                            <div className="text-[11px] text-muted-foreground">
+                              {formatDate(row.transport_date)} · {row.entry_time}–{row.departure_time}
+                            </div>
+                          </div>
+                          <span className="text-[11px]">{formatScheduledStatus(row.status)}</span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Chapa {row.employee_registration || "—"} · {row.employee_role}
+                        </div>
+                        <div className="mt-2 flex gap-2">
                           {row.status === "scheduled" && (
                             <>
                               <button
                                 type="button"
                                 onClick={() => setEditing(row)}
-                                className="rounded p-1 hover:bg-muted"
-                                title="Editar"
+                                className="btn-secondary min-h-8 text-[11px]"
                               >
-                                <Pencil className="h-3.5 w-3.5" />
+                                <Pencil className="h-3.5 w-3.5" /> Editar
                               </button>
                               <button
                                 type="button"
-                                title="Cancelar"
                                 onClick={() => cancelOne(row)}
-                                className="rounded p-1 hover:bg-muted"
+                                className="btn-secondary min-h-8 text-[11px]"
                               >
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" /> Cancelar
                               </button>
                             </>
                           )}
-                        </td>
-                      </tr>
+                        </div>
+                      </article>
                     ))}
-                  </tbody>
-                </table>
-              </div>
-              {filtered.length > pageSize && (
-                <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-                  <span>
-                    Página {currentPage} de {pageCount} · {filtered.length} registro(s) · até {pageSize} por página
-                  </span>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPage((value) => Math.max(1, value - 1))}
-                      disabled={currentPage === 1}
-                      className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
-                    >
-                      Anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
-                      disabled={currentPage === pageCount}
-                      className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
-                    >
-                      Próxima
-                    </button>
                   </div>
-                </div>
+
+                  <div className="hidden overflow-x-auto md:block">
+                    <table className="w-full min-w-[1200px] text-[12px]">
+                      <thead className="bg-muted/50 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          <th className="px-2 py-2"></th>
+                          <th className="px-2 py-2">Data</th>
+                          <th className="px-2 py-2">Chapa</th>
+                          <th className="px-2 py-2">ID</th>
+                          <th className="px-2 py-2">Nome</th>
+                          <th className="px-2 py-2">Função</th>
+                          <th className="px-2 py-2">Entrada</th>
+                          <th className="px-2 py-2">Saída</th>
+                          <th className="px-2 py-2">Transporte</th>
+                          <th className="px-2 py-2">Ordem</th>
+                          <th className="px-2 py-2">Serviço</th>
+                          <th className="px-2 py-2">Solicitante</th>
+                          <th className="px-2 py-2">Status</th>
+                          <th className="px-2 py-2">Ação</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {paginatedRows.map((row) => (
+                          <tr
+                            key={row.id}
+                            className={cn("border-t border-border", row.status === "cancelled" && "opacity-60")}
+                          >
+                            <td className="px-2 py-1.5">
+                              <input
+                                type="checkbox"
+                                checked={selected.has(row.id)}
+                                onChange={() => toggleSelected(row.id)}
+                                disabled={row.status !== "scheduled"}
+                              />
+                            </td>
+                            <td className="whitespace-nowrap px-2 py-1.5">{formatDate(row.transport_date)}</td>
+                            <td className="px-2 py-1.5">{row.employee_registration || "—"}</td>
+                            <td className="px-2 py-1.5">{row.employee_external_id || "—"}</td>
+                            <td className="px-2 py-1.5">{row.employee_name}</td>
+                            <td className="px-2 py-1.5">{row.employee_role}</td>
+                            <td className="px-2 py-1.5">{row.entry_time}</td>
+                            <td className="px-2 py-1.5">{row.departure_time}</td>
+                            <td className="px-2 py-1.5">{row.needs_transport ? "Sim" : "Não"}</td>
+                            <td className="px-2 py-1.5">{row.order_number || "—"}</td>
+                            <td className="max-w-[280px] truncate px-2 py-1.5" title={row.service_description || ""}>
+                              {row.service_description || "—"}
+                            </td>
+                            <td className="px-2 py-1.5">{row.requester_name || row.requester_email}</td>
+                            <td className="px-2 py-1.5">{formatScheduledStatus(row.status)}</td>
+                            <td className="whitespace-nowrap px-2 py-1.5">
+                              {row.status === "scheduled" && (
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditing(row)}
+                                    className="rounded p-1 hover:bg-muted"
+                                    title="Editar"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    title="Cancelar"
+                                    onClick={() => cancelOne(row)}
+                                    className="rounded p-1 hover:bg-muted"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                  {filtered.length > pageSize && (
+                    <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                      <span>
+                        Página {currentPage} de {pageCount} · {filtered.length} registro(s) · até {pageSize} por página
+                      </span>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPage((value) => Math.max(1, value - 1))}
+                          disabled={currentPage === 1}
+                          className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                        >
+                          Anterior
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
+                          disabled={currentPage === pageCount}
+                          className="btn-secondary min-h-9 px-3 text-[12px] disabled:opacity-50"
+                        >
+                          Próxima
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
-            </>
+            </Panel>
+          </div>
+
+          {newOpen && employeesQuery.isLoading && (
+            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+              <div className="py-8 text-center text-sm text-muted-foreground">Carregando colaboradores...</div>
+            </Modal>
           )}
-        </Panel>
-      </div>
 
-      {newOpen && employeesQuery.isLoading && (
-        <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
-          <div className="py-8 text-center text-sm text-muted-foreground">Carregando colaboradores...</div>
-        </Modal>
-      )}
+          {newOpen && employeesQuery.isError && (
+            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+              <div className="py-8 text-center text-sm text-destructive">
+                Não foi possível carregar os colaboradores.
+              </div>
+            </Modal>
+          )}
 
-      {newOpen && employeesQuery.isError && (
-        <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
-          <div className="py-8 text-center text-sm text-destructive">Não foi possível carregar os colaboradores.</div>
-        </Modal>
-      )}
+          {newOpen && employeesQuery.isSuccess && (
+            <NewScheduleModal
+              employees={employees}
+              onClose={() => setNewOpen(false)}
+              onSaved={() => {
+                setNewOpen(false);
+                queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
+              }}
+            />
+          )}
 
-      {newOpen && employeesQuery.isSuccess && (
-        <NewScheduleModal
-          employees={employees}
-          onClose={() => setNewOpen(false)}
-          onSaved={() => {
-            setNewOpen(false);
-            queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
-          }}
-        />
-      )}
-
-      {editing && (
-        <EditScheduleModal
-          row={editing}
-          onClose={() => setEditing(null)}
-          onSaved={() => {
-            setEditing(null);
-            queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
-          }}
-        />
+          {editing && (
+            <EditScheduleModal
+              row={editing}
+              onClose={() => setEditing(null)}
+              onSaved={() => {
+                setEditing(null);
+                queryClient.invalidateQueries({ queryKey: ["scheduled-transport"] });
+              }}
+            />
+          )}
+        </>
       )}
     </main>
   );
