@@ -978,57 +978,23 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     [rows, isUnjustifiedMode],
   );
 
-  const dateOptions = useMemo(
-    () => uniqueNe(nonExecuted.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort(),
-    [nonExecuted],
-  );
-  const dateScoped = useMemo(
-    () => nonExecuted.filter((row) => !filters.date || row.scheduled_date === filters.date),
-    [nonExecuted, filters.date],
-  );
-  const managementOptions = useMemo(
-    () => uniqueNe(dateScoped.map(managementLabelNe).filter(Boolean) as string[]).sort(localeSortNe),
-    [dateScoped],
-  );
-  const managementScoped = useMemo(
-    () => dateScoped.filter((row) => !filters.management || managementLabelNe(row) === filters.management),
-    [dateScoped, filters.management],
-  );
-  const specialtyOptions = useMemo(
-    () =>
-      uniqueNe(managementScoped.map((row) => row.specialty).filter((value): value is string => !!value)).sort(
-        localeSortNe,
-      ),
-    [managementScoped],
-  );
-  const specialtyScoped = useMemo(
-    () =>
-      managementScoped.filter(
-        (row) => filters.specialty.length === 0 || filters.specialty.includes(row.specialty || ""),
-      ),
-    [managementScoped, filters.specialty],
-  );
-  const reasonOptions = useMemo(
-    () => uniqueNe(specialtyScoped.map(reasonLabelNe)).sort(localeSortNe),
-    [specialtyScoped],
-  );
-  const reasonScoped = useMemo(
-    () => specialtyScoped.filter((row) => !filters.reason || reasonLabelNe(row) === filters.reason),
-    [specialtyScoped, filters.reason],
-  );
-  const responsibleOptions = useMemo(
-    () => uniqueNe(reasonScoped.map(responsibleLabelNe)).sort(localeSortNe),
-    [reasonScoped],
-  );
-
-  const filtered = useMemo(() => {
+  const matchesFilters = (row: ActivityRow, omitted?: keyof Filters) => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-    return reasonScoped.filter((row) => {
-      if (filters.responsible && responsibleLabelNe(row) !== filters.responsible) return false;
+    if (omitted !== "date" && filters.date && row.scheduled_date !== filters.date) return false;
+    if (omitted !== "management" && filters.management && managementLabelNe(row) !== filters.management) return false;
+    if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
+      return false;
+    }
+    if (omitted !== "reason" && filters.reason && reasonLabelNe(row) !== filters.reason) return false;
+    if (omitted !== "responsible" && filters.responsible && responsibleLabelNe(row) !== filters.responsible) {
+      return false;
+    }
+    if (omitted !== "origin") {
       if (filters.origin === "programmed" && row.is_immediate) return false;
       if (filters.origin === "immediate" && !row.is_immediate) return false;
-      if (!term) return true;
-      return [
+    }
+    if (omitted !== "search" && term) {
+      const searchable = [
         row.order_number,
         row.note_number,
         row.description,
@@ -1041,10 +1007,55 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
       ]
         .filter(Boolean)
         .join(" ")
-        .toLocaleLowerCase("pt-BR")
-        .includes(term);
-    });
-  }, [reasonScoped, filters.search, filters.responsible, filters.origin]);
+        .toLocaleLowerCase("pt-BR");
+      if (!searchable.includes(term)) return false;
+    }
+    return true;
+  };
+
+  const dateOptions = useMemo(
+    () =>
+      uniqueNe(
+        nonExecuted
+          .filter((row) => matchesFilters(row, "date"))
+          .map((row) => row.scheduled_date)
+          .filter((value): value is string => !!value),
+      ).sort(),
+    [nonExecuted, filters],
+  );
+  const managementOptions = useMemo(
+    () =>
+      uniqueNe(
+        nonExecuted
+          .filter((row) => matchesFilters(row, "management"))
+          .map(managementLabelNe)
+          .filter(Boolean) as string[],
+      ).sort(localeSortNe),
+    [nonExecuted, filters],
+  );
+  const specialtyOptions = useMemo(
+    () =>
+      uniqueNe(
+        nonExecuted
+          .filter((row) => matchesFilters(row, "specialty"))
+          .map((row) => row.specialty)
+          .filter((value): value is string => !!value),
+      ).sort(localeSortNe),
+    [nonExecuted, filters],
+  );
+  const reasonOptions = useMemo(
+    () => uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "reason")).map(reasonLabelNe)).sort(localeSortNe),
+    [nonExecuted, filters],
+  );
+  const responsibleOptions = useMemo(
+    () =>
+      uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "responsible")).map(responsibleLabelNe)).sort(
+        localeSortNe,
+      ),
+    [nonExecuted, filters],
+  );
+
+  const filtered = useMemo(() => nonExecuted.filter((row) => matchesFilters(row)), [nonExecuted, filters]);
 
   const denominator = useMemo(() => {
     return rows.filter((row) => {
@@ -1201,9 +1212,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           <Field label="Data">
             <select
               value={filters.date}
-              onChange={(event) =>
-                updateFilter("date", event.target.value, ["management", "specialty", "reason", "responsible"])
-              }
+              onChange={(event) => updateFilter("date", event.target.value)}
               className="input-base text-[12px]"
             >
               <option value="">Todos os dias</option>
@@ -1217,9 +1226,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           <Field label="Gerência/Área">
             <select
               value={filters.management}
-              onChange={(event) =>
-                updateFilter("management", event.target.value, ["specialty", "reason", "responsible"])
-              }
+              onChange={(event) => updateFilter("management", event.target.value)}
               className="input-base text-[12px]"
             >
               <option value="">Todas</option>
@@ -1253,7 +1260,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                   {filters.specialty.length > 0 && (
                     <button
                       type="button"
-                      onClick={() => updateFilter("specialty", [], ["reason", "responsible"])}
+                      onClick={() => updateFilter("specialty", [])}
                       className="text-[11px] font-medium text-primary hover:underline"
                     >
                       Limpar
@@ -1283,7 +1290,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
             <Field label="Motivo">
               <select
                 value={filters.reason}
-                onChange={(event) => updateFilter("reason", event.target.value, ["responsible"])}
+                onChange={(event) => updateFilter("reason", event.target.value)}
                 className="input-base text-[12px]"
               >
                 <option value="">Todos</option>
