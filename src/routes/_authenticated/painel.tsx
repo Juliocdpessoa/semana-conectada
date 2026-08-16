@@ -59,40 +59,18 @@ function PainelPage() {
 
   return (
     <>
-      <div className="mx-auto flex w-full max-w-[1500px] flex-wrap gap-2 px-3 pt-4 sm:px-6 sm:pt-6">
-        <button
-          type="button"
-          onClick={() => changeView("geral")}
-          className={
-            view === "geral"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          }
-        >
-          Visão geral
-        </button>
-        <button
-          type="button"
-          onClick={() => changeView("nao-executadas")}
-          className={
-            view === "nao-executadas"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          }
-        >
-          Não execução
-        </button>
-        <button
-          type="button"
-          onClick={() => changeView("nao-justificadas")}
-          className={
-            view === "nao-justificadas"
-              ? "btn-primary min-h-9 cursor-pointer text-[12px] transition-all hover:brightness-110 hover:shadow-sm"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px] transition-colors hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          }
-        >
-          Não justificadas
-        </button>
+      <div className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
+        <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
+          <PanelTabBtn active={view === "geral"} onClick={() => changeView("geral")}>
+            Visão geral
+          </PanelTabBtn>
+          <PanelTabBtn active={view === "nao-executadas"} onClick={() => changeView("nao-executadas")}>
+            Não execução
+          </PanelTabBtn>
+          <PanelTabBtn active={view === "nao-justificadas"} onClick={() => changeView("nao-justificadas")}>
+            Não justificadas
+          </PanelTabBtn>
+        </div>
       </div>
       {view === "geral" ? (
         <OverviewPanel />
@@ -100,6 +78,21 @@ function PainelPage() {
         <NonExecutionDashboard mode={view === "nao-justificadas" ? "unjustified" : "non-executed"} />
       )}
     </>
+  );
+}
+
+function PanelTabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-w-max flex-1 rounded px-3 py-2 font-medium transition-colors sm:flex-none sm:py-1.5",
+        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
   );
 }
 
