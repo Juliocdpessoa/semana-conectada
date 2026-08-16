@@ -124,7 +124,7 @@ function OvertimePage() {
 
   const qc = useQueryClient();
   const requests = useQuery({
-    queryKey: ["overtime-requests", s.userId, isManager],
+    queryKey: ["overtime-requests", s.userId, isManager, tab],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: !logisticsOnly && (tab === "list" || tab === "queue"),
@@ -134,12 +134,16 @@ function OvertimePage() {
       let from = 0;
 
       while (true) {
-        const { data, error } = await supabase
+        let request = supabase
           .from("overtime_requests")
-          .select("*")
+          .select(
+            "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at",
+          )
           .order("created_at", { ascending: false })
           .order("id", { ascending: false })
           .range(from, from + pageSize - 1);
+        if (tab === "list") request = request.eq("requester_user_id", s.userId);
+        const { data, error } = await request;
         if (error) throw error;
 
         const page = (data ?? []) as OvertimeRow[];
