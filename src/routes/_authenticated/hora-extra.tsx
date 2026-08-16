@@ -65,6 +65,28 @@ export const Route = createFileRoute("/_authenticated/hora-extra")({
   component: OvertimePage,
 });
 
+const EMPLOYEE_SELECT =
+  "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active";
+
+async function loadEmployees(activeOnly: boolean) {
+  const all: EmployeeRow[] = [];
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    let request = (supabase as any)
+      .from("employees")
+      .select(EMPLOYEE_SELECT)
+      .order("full_name")
+      .range(from, from + pageSize - 1);
+    if (activeOnly) request = request.eq("is_active", true);
+    const { data, error } = await request;
+    if (error) throw error;
+    const pageRows = (data ?? []) as EmployeeRow[];
+    all.push(...pageRows);
+    if (pageRows.length < pageSize) break;
+  }
+  return all.map(sanitizeEmployeeRow);
+}
+
 function OvertimePage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const s = session;
@@ -1519,17 +1541,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const [page, setPage] = useState(1);
   const employees = useQuery({
     queryKey: ["employees"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("employees")
-        .select(
-          "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
-        )
-        .order("full_name")
-        .limit(2000);
-      if (error) throw error;
-      return ((data ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
-    },
+    queryFn: () => loadEmployees(false),
   });
   const filtered = useMemo(() => filterEmployees(employees.data ?? [], search), [employees.data, search]);
   const totalEmployees = employees.data?.length ?? 0;
@@ -2167,18 +2179,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
   const employees = useQuery({
     queryKey: ["active-employees"],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("employees")
-        .select(
-          "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
-        )
-        .eq("is_active", true)
-        .order("full_name")
-        .limit(2000);
-      if (error) throw error;
-      return ((data ?? []) as EmployeeRow[]).map(sanitizeEmployeeRow);
-    },
+    queryFn: () => loadEmployees(true),
   });
   const selectedEmployees = (employees.data ?? []).filter((employee) => selectedEmployeeIds.includes(employee.id));
   const filteredEmployees = useMemo(() => {
