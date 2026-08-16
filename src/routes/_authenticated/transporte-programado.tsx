@@ -327,7 +327,7 @@ function ScheduledTransportPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1600px] px-3 py-4 sm:px-6">
+    <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title={showDaysOff ? "Controle de Folgas" : "Mudança de Escala"}
         description={
@@ -349,29 +349,13 @@ function ScheduledTransportPage() {
         }
       />
 
-      <div className="mt-4 flex flex-wrap gap-2 border-b border-border pb-3">
-        <button
-          type="button"
-          onClick={() => setShowDaysOff(false)}
-          className={
-            !showDaysOff
-              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px] hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          }
-        >
-          <Bus className="h-4 w-4" /> Mudança de Escala
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowDaysOff(true)}
-          className={
-            showDaysOff
-              ? "btn-primary min-h-9 cursor-pointer text-[12px]"
-              : "btn-secondary min-h-9 cursor-pointer text-[12px] hover:border-primary/40 hover:bg-primary/10 hover:text-primary"
-          }
-        >
-          <CalendarDays className="h-4 w-4" /> Controle de Folgas
-        </button>
+      <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
+        <TabBtn active={!showDaysOff} onClick={() => setShowDaysOff(false)}>
+          Mudança de Escala
+        </TabBtn>
+        <TabBtn active={showDaysOff} onClick={() => setShowDaysOff(true)}>
+          Controle de Folgas
+        </TabBtn>
       </div>
 
       {showDaysOff && (
@@ -749,6 +733,21 @@ function ScheduledTransportPage() {
 }
 
 /* ---------- Nova programação ---------- */
+
+function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "min-w-max flex-1 rounded px-3 py-2 font-medium transition-colors sm:flex-none sm:py-1.5",
+        active ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 function DaysOffControl({
   employees,
