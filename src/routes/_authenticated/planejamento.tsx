@@ -2,7 +2,6 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
-import * as XLSX from "xlsx";
 import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
 import { importWeek, activateWeek, deleteWeek } from "@/lib/week-import.functions";
@@ -106,7 +105,8 @@ const TEMPLATE_JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 
-function downloadWeeklyTemplate() {
+async function downloadWeeklyTemplate() {
+  const XLSX = await import("xlsx");
   const acompanhamento = XLSX.utils.aoa_to_sheet([[...WEEKLY_TEMPLATE_COLUMNS]]);
   acompanhamento["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
     wch:
@@ -143,8 +143,9 @@ function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<st
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
-    reader.onload = () => {
+    reader.onload = async () => {
       try {
+        const XLSX = await import("xlsx");
         const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
         const sheetName = wb.SheetNames[0];
         const ws = wb.Sheets[sheetName];
@@ -204,7 +205,14 @@ function PlanejamentoPage() {
 
   const activeWeek = useQuery({
     queryKey: ["active-week"],
-    queryFn: async () => (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
+    queryFn: async () =>
+      (
+        await supabase
+          .from("weeks")
+          .select("id,code,label,start_date,end_date,is_active")
+          .eq("is_active", true)
+          .maybeSingle()
+      ).data,
   });
 
   const weeksList = useQuery({
@@ -225,12 +233,15 @@ function PlanejamentoPage() {
     if (exportingId) return;
     setExportingId(week.id);
     try {
+      const XLSX = await import("xlsx");
       const acts: any[] = [];
       const chunk = 1000;
       for (let from = 0; ; from += chunk) {
         const { data, error } = await supabase
           .from("activities")
-          .select("*")
+          .select(
+            "planning_data,status,justification,observation,reported_by_name,reported_by_email,reported_at,source_row_number",
+          )
           .eq("week_id", week.id)
           .order("source_row_number", { ascending: true })
           .range(from, from + chunk - 1);
@@ -543,7 +554,8 @@ function PlanejamentoPage() {
   );
 }
 
-function downloadImmediateTemplate() {
+async function downloadImmediateTemplate() {
+  const XLSX = await import("xlsx");
   // O modelo de imediatas usa exatamente as mesmas colunas e sequência da programação semanal.
   const acompanhamento = XLSX.utils.aoa_to_sheet([[...WEEKLY_TEMPLATE_COLUMNS]]);
   acompanhamento["!cols"] = WEEKLY_TEMPLATE_COLUMNS.map((name) => ({
