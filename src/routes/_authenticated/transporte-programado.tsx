@@ -820,33 +820,86 @@ function DaysOffControl({
   }
 
   async function exportDaysOff() {
-    if (filtered.length === 0) return toast.error("Não há folgas para exportar com os filtros atuais.");
-    const XLSX = await import("xlsx");
-    const values = filtered.map((row) => [
-      row.employee_registration ?? "",
-      row.employee_name,
-      row.employee_role ?? "",
-      formatDate(row.day_off_date),
-      row.observation ?? "",
-      row.created_by_name || row.created_by_email,
-      new Date(row.created_at).toLocaleString("pt-BR"),
-    ]);
-    const headers = [
-      "Matrícula",
-      "Colaborador",
-      "Função",
-      "Data da folga",
-      "Observação",
-      "Responsável",
-      "Registrado em",
-    ];
-    const sheet = XLSX.utils.aoa_to_sheet([headers, ...values]);
-    sheet["!cols"] = [14, 34, 28, 16, 48, 30, 20].map((wch) => ({ wch }));
-    sheet["!autofilter"] = { ref: `A1:G${values.length + 1}` };
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, "Controle de folgas");
-    XLSX.writeFile(workbook, "controle-de-folgas.xlsx");
-    toast.success(filtered.length + " folga(s) exportada(s).");
+    if (filtered.length === 0) {
+      toast.error("Não há folgas para exportar com os filtros atuais.");
+      return;
+    }
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "NEXO";
+      workbook.created = new Date();
+      const worksheet = workbook.addWorksheet("Controle de folgas", {
+        views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
+        pageSetup: {
+          orientation: "landscape",
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          paperSize: 9,
+        },
+      });
+      const headers = [
+        "Matrícula",
+        "Colaborador",
+        "Função",
+        "Data da folga",
+        "Observação",
+        "Responsável",
+        "Registrado em",
+      ];
+      const widths = [14, 34, 28, 16, 48, 30, 20];
+      const values = filtered.map((row) => [
+        row.employee_registration ?? "",
+        row.employee_name,
+        row.employee_role ?? "",
+        formatDate(row.day_off_date),
+        row.observation ?? "",
+        row.created_by_name || row.created_by_email,
+        new Date(row.created_at).toLocaleString("pt-BR"),
+      ]);
+      worksheet.addTable({
+        name: "TabelaControleFolgas",
+        ref: "A1",
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: "TableStyleMedium2",
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: true,
+          showColumnStripes: false,
+        },
+        columns: headers.map((name) => ({ name, filterButton: true })),
+        rows: values,
+      });
+      widths.forEach((width, index) => {
+        worksheet.getColumn(index + 1).width = width;
+      });
+      worksheet.getRow(1).height = 26;
+      worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      for (let rowNumber = 2; rowNumber <= values.length + 1; rowNumber += 1) {
+        for (let column = 1; column <= headers.length; column += 1) {
+          worksheet.getRow(rowNumber).getCell(column).alignment = { vertical: "top", wrapText: true };
+        }
+      }
+      worksheet.pageSetup.printArea = `A1:G${values.length + 1}`;
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = "controle-de-folgas.xlsx";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(filtered.length + " folga(s) exportada(s).");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar a planilha.");
+    }
   }
 
   return (
