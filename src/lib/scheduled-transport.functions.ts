@@ -17,23 +17,14 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     try {
-      const [rows, batches, employees] = await Promise.all([
+      const [rows, batches] = await Promise.all([
         fetchAllRows(db, "scheduled_transport_requests", [
           { column: "transport_date", ascending: false },
           { column: "employee_name", ascending: true },
         ]),
         fetchAllRows(db, "scheduled_transport_batches", [{ column: "created_at", ascending: false }]),
-        db
-          .from("employees")
-          .select("*")
-          .eq("is_active", true)
-          .order("full_name", { ascending: true })
-          .then((res: any) => {
-            if (res.error) throw new Error(res.error.message);
-            return res.data ?? [];
-          }),
       ]);
-      return { ok: true as const, rows, batches, employees };
+      return { ok: true as const, rows, batches };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar dados." };
     }
