@@ -215,6 +215,68 @@ export type Database = {
           },
         ]
       }
+      employee_days_off: {
+        Row: {
+          created_at: string
+          created_by_email: string
+          created_by_name: string
+          created_by_user_id: string
+          day_off_date: string
+          employee_master_id: string
+          employee_name: string
+          employee_registration: string | null
+          employee_role: string | null
+          id: string
+          observation: string | null
+          updated_at: string
+          updated_by_name: string | null
+          updated_by_user_id: string | null
+          version: number
+        }
+        Insert: {
+          created_at?: string
+          created_by_email?: string
+          created_by_name?: string
+          created_by_user_id: string
+          day_off_date: string
+          employee_master_id: string
+          employee_name: string
+          employee_registration?: string | null
+          employee_role?: string | null
+          id?: string
+          observation?: string | null
+          updated_at?: string
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
+          version?: number
+        }
+        Update: {
+          created_at?: string
+          created_by_email?: string
+          created_by_name?: string
+          created_by_user_id?: string
+          day_off_date?: string
+          employee_master_id?: string
+          employee_name?: string
+          employee_registration?: string | null
+          employee_role?: string | null
+          id?: string
+          observation?: string | null
+          updated_at?: string
+          updated_by_name?: string | null
+          updated_by_user_id?: string | null
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_days_off_employee_master_id_fkey"
+            columns: ["employee_master_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           address: string | null
@@ -766,6 +828,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      bulk_update_activity_reports: {
+        Args: {
+          p_ids: string[]
+          p_justification: string
+          p_linked_ids?: string[]
+          p_observation: string
+          p_status: string
+        }
+        Returns: number
+      }
       can_manage_scheduled_transport: {
         Args: { _user_id: string }
         Returns: boolean
