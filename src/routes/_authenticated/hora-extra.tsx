@@ -490,7 +490,7 @@ function ApprovedDailyExport({
     [exportableRows, effectiveDate, transportFilter, transportOnly],
   );
   const availableEntryTimes = useMemo(
-    () => [...new Set(dateRows.map((row) => row.entry_time).filter(Boolean))].sort(),
+    () => [...new Set(dateRows.map((row) => row.entry_time ?? "").filter((time) => time !== ""))].sort(),
     [dateRows],
   );
   const entryRows = useMemo(
@@ -498,9 +498,10 @@ function ApprovedDailyExport({
     [dateRows, selectedEntryTime],
   );
   const availableDepartureTimes = useMemo(
-    () => [...new Set(entryRows.map((row) => row.departure_time).filter(Boolean))].sort(),
+    () => [...new Set(entryRows.map((row) => row.departure_time ?? "").filter((time) => time !== ""))].sort(),
     [entryRows],
   );
+
   const dailyRows = useMemo(
     () => entryRows.filter((row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime),
     [entryRows, selectedDepartureTime],
@@ -829,7 +830,7 @@ function TransportView({
     sheet["!cols"] = TRANSPORT_EXPORT_WIDTHS.map((wch) => ({ wch }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
-    XLSX.writeFile(workbook, "transportes-" + exportDateLabel + ".xlsx");
+    XLSX.writeFile(workbook, "transportes-" + (effectiveDate === "all" ? "todos-os-dias" : effectiveDate) + ".xlsx");
     toast.success(filtered.length + " colaborador(es) exportado(s).");
   }
 
