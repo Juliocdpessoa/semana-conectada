@@ -1,0 +1,1 @@
+CREATE POLICY "history select approved" ON public.activity_history FOR SELECT TO authenticated USING (public.is_approved(auth.uid()));
