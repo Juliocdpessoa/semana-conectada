@@ -904,6 +904,9 @@ function ApontarModal({
           />
         </Field>
       </div>
+
+      <ActivityTimeline activityId={activity.id} />
+
       {immediatePickerOpen && (
         <ImmediatePicker
           weekId={activity.week_id}
