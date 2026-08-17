@@ -904,6 +904,9 @@ function ApontarModal({
           />
         </Field>
       </div>
+
+      <ActivityTimeline activityId={activity.id} />
+
       {immediatePickerOpen && (
         <ImmediatePicker
           weekId={activity.week_id}
@@ -917,6 +920,83 @@ function ApontarModal({
         />
       )}
     </Modal>
+  );
+}
+
+const HISTORY_LABELS: Record<string, string> = {
+  status: "Status",
+  justification: "Justificativa",
+  observation: "Observações",
+};
+
+function historyValue(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
+}
+
+function ActivityTimeline({ activityId }: { activityId: string }) {
+  const q = useQuery({
+    queryKey: ["activity-timeline", activityId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("activity_history")
+        .select("id, changed_at, changed_by_name, changed_by_email, change_source, previous_values, new_values")
+        .eq("activity_id", activityId)
+        .order("changed_at", { ascending: false })
+        .limit(50);
+      return data ?? [];
+    },
+  });
+
+  return (
+    <div className="mt-5 border-t border-border pt-4">
+      <div className="mb-2 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+        <Clock className="h-3.5 w-3.5" /> Linha do tempo desta atividade
+      </div>
+      {q.isLoading ? (
+        <Skeleton className="h-16 w-full" />
+      ) : (q.data?.length ?? 0) === 0 ? (
+        <div className="text-[12px] text-muted-foreground">Nenhuma alteração registrada até agora.</div>
+      ) : (
+        <ol className="max-h-64 space-y-3 overflow-y-auto pr-1">
+          {q.data!.map((h: any) => {
+            const prev = (h.previous_values ?? {}) as Record<string, unknown>;
+            const next = (h.new_values ?? {}) as Record<string, unknown>;
+            const keys = Object.keys(HISTORY_LABELS).filter(
+              (k) => k in next && historyValue(prev[k]) !== historyValue(next[k]),
+            );
+            return (
+              <li key={h.id} className="relative border-l border-border pl-3">
+                <span className="absolute -left-[3px] top-1.5 h-1.5 w-1.5 rounded-full bg-primary" />
+                <div className="flex flex-wrap items-baseline gap-x-2 text-[11px]">
+                  <span className="tabular font-medium text-foreground">
+                    {new Date(h.changed_at).toLocaleString("pt-BR")}
+                  </span>
+                  <span className="text-muted-foreground">
+                    {h.changed_by_name || h.changed_by_email || "Sistema"}
+                  </span>
+                  <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
+                </div>
+                <div className="mt-1 space-y-0.5">
+                  {keys.length === 0 ? (
+                    <div className="text-[11px] text-muted-foreground">Atualização sem mudança de campos.</div>
+                  ) : (
+                    keys.map((k) => (
+                      <div key={k} className="text-[11px]">
+                        <span className="font-medium text-foreground">{HISTORY_LABELS[k]}: </span>
+                        <span className="text-muted-foreground line-through">{historyValue(prev[k])}</span>
+                        <span className="text-muted-foreground"> → </span>
+                        <span className="text-foreground">{historyValue(next[k])}</span>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ol>
+      )}
+    </div>
   );
 }
 
