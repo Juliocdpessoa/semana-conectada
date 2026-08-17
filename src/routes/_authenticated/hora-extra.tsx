@@ -830,7 +830,7 @@ function TransportView({
     sheet["!cols"] = TRANSPORT_EXPORT_WIDTHS.map((wch) => ({ wch }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
-    XLSX.writeFile(workbook, "transportes-" + exportDateLabel + ".xlsx");
+    XLSX.writeFile(workbook, "transportes-" + (effectiveDate === "all" ? "todos-os-dias" : effectiveDate) + ".xlsx");
     toast.success(filtered.length + " colaborador(es) exportado(s).");
   }
 
