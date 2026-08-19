@@ -2105,6 +2105,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [transportEmployeeIds, setTransportEmployeeIds] = useState<string[]>([]);
   const draftLoaded = useRef(false);
   const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
+  const entryTimeOptions = ["17:18", ...departureTimeOptions];
   const [form, setForm] = useState({
     activity_id: null as string | null,
     week_id: null as string | null,
