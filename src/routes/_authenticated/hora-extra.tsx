@@ -738,6 +738,7 @@ function ApprovedDailyExport({
                     "Entrada",
                     "Saída",
                     "Solicitante",
+                    "Lançado em",
                     "Ordem",
                     "Serviço",
                     "Transporte",
