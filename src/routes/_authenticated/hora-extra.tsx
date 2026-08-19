@@ -708,6 +708,9 @@ function ApprovedDailyExport({
                   <b>Solicitante:</b> {row.requester_name || row.requester_email}
                 </div>
                 <div className="mt-1 break-words">
+                  <b>Lançado em:</b> {formatDateTime(row.created_at)}
+                </div>
+                <div className="mt-1 break-words">
                   <b>Ordem:</b> {row.order_number || "—"}
                 </div>
                 <div className="mt-1 break-words">
