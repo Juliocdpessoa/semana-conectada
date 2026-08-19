@@ -708,6 +708,9 @@ function ApprovedDailyExport({
                   <b>Solicitante:</b> {row.requester_name || row.requester_email}
                 </div>
                 <div className="mt-1 break-words">
+                  <b>Lançado em:</b> {formatDateTime(row.created_at)}
+                </div>
+                <div className="mt-1 break-words">
                   <b>Ordem:</b> {row.order_number || "—"}
                 </div>
                 <div className="mt-1 break-words">
@@ -735,6 +738,7 @@ function ApprovedDailyExport({
                     "Entrada",
                     "Saída",
                     "Solicitante",
+                    "Lançado em",
                     "Ordem",
                     "Serviço",
                     "Transporte",
@@ -757,6 +761,7 @@ function ApprovedDailyExport({
                     <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
@@ -2105,6 +2110,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [transportEmployeeIds, setTransportEmployeeIds] = useState<string[]>([]);
   const draftLoaded = useRef(false);
   const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
+  const entryTimeOptions = ["17:18", ...departureTimeOptions];
   const [form, setForm] = useState({
     activity_id: null as string | null,
     week_id: null as string | null,
@@ -2432,7 +2438,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
               value={
-                customEntryTime ? "__other__" : departureTimeOptions.includes(form.entry_time) ? form.entry_time : ""
+                customEntryTime ? "__other__" : entryTimeOptions.includes(form.entry_time) ? form.entry_time : ""
               }
               onChange={(e) => {
                 const isOther = e.target.value === "__other__";
@@ -2441,7 +2447,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
               }}
             >
               <option value="">Sem horário de entrada</option>
-              {departureTimeOptions.map((time) => (
+              {entryTimeOptions.map((time) => (
                 <option key={time} value={time}>
                   {time.replace(/^0/, "")}
                 </option>
