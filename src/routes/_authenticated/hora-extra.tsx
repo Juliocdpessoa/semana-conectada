@@ -761,6 +761,7 @@ function ApprovedDailyExport({
                     <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
