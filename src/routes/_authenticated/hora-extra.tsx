@@ -2433,7 +2433,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
               value={
-                customEntryTime ? "__other__" : departureTimeOptions.includes(form.entry_time) ? form.entry_time : ""
+                customEntryTime ? "__other__" : entryTimeOptions.includes(form.entry_time) ? form.entry_time : ""
               }
               onChange={(e) => {
                 const isOther = e.target.value === "__other__";
@@ -2442,7 +2442,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
               }}
             >
               <option value="">Sem horário de entrada</option>
-              {departureTimeOptions.map((time) => (
+              {entryTimeOptions.map((time) => (
                 <option key={time} value={time}>
                   {time.replace(/^0/, "")}
                 </option>
