@@ -371,7 +371,7 @@ function OvertimePage() {
         )}
       </div>
 
-      {(tab === "export" || tab === "list" || tab === "queue") && (
+      {(tab === "list" || tab === "queue") && (
         <PeriodFilter
           period={period}
           onChange={(next) => {
@@ -379,7 +379,7 @@ function OvertimePage() {
             setSummaryDate("");
             setPeriod(next);
           }}
-          loading={tab === "export" ? exportRequests.isFetching : requests.isFetching}
+          loading={requests.isFetching}
         />
       )}
 
