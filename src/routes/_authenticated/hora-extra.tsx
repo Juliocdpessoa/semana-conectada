@@ -372,6 +372,18 @@ function OvertimePage() {
         )}
       </div>
 
+      {(tab === "export" || tab === "list" || tab === "queue") && (
+        <PeriodFilter
+          period={period}
+          onChange={(next) => {
+            setFilteredKpiRows(null);
+            setSummaryDate("");
+            setPeriod(next);
+          }}
+          loading={tab === "export" ? exportRequests.isFetching : requests.isFetching}
+        />
+      )}
+
       {tab === "export" && canExportOvertime && (
         <ApprovedDailyExport
           rows={exportRequests.data ?? []}
