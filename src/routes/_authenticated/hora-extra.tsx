@@ -87,6 +87,113 @@ async function loadEmployees(activeOnly: boolean) {
   return all.map(sanitizeEmployeeRow);
 }
 
+type Period = { from: string; to: string };
+
+function toIsoDate(date: Date) {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+}
+
+function shiftDays(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return toIsoDate(date);
+}
+
+function defaultPeriod(): Period {
+  return { from: shiftDays(-30), to: shiftDays(30) };
+}
+
+const PERIOD_PRESETS: { label: string; build: () => Period }[] = [
+  { label: "Hoje", build: () => ({ from: shiftDays(0), to: shiftDays(0) }) },
+  { label: "Ontem", build: () => ({ from: shiftDays(-1), to: shiftDays(-1) }) },
+  { label: "Últimos 7 dias", build: () => ({ from: shiftDays(-6), to: shiftDays(0) }) },
+  { label: "Últimos 30 dias", build: () => ({ from: shiftDays(-30), to: shiftDays(30) }) },
+  {
+    label: "Este mês",
+    build: () => {
+      const now = new Date();
+      return {
+        from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: toIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+      };
+    },
+  },
+];
+
+function PeriodFilter({
+  period,
+  onChange,
+  loading,
+}: {
+  period: Period;
+  onChange: (period: Period) => void;
+  loading?: boolean;
+}) {
+  const activePreset = PERIOD_PRESETS.find((preset) => {
+    const value = preset.build();
+    return value.from === period.from && value.to === period.to;
+  });
+  return (
+    <div className="mb-3 rounded-md border border-border bg-card p-3">
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="w-full min-w-0 sm:max-w-[170px]">
+          <Field label="Período — de">
+            <input
+              type="date"
+              value={period.from}
+              max={period.to || undefined}
+              onChange={(event) => onChange({ ...period, from: event.target.value })}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            />
+          </Field>
+        </div>
+        <div className="w-full min-w-0 sm:max-w-[170px]">
+          <Field label="Período — até">
+            <input
+              type="date"
+              value={period.to}
+              min={period.from || undefined}
+              onChange={(event) => onChange({ ...period, to: event.target.value })}
+              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+            />
+          </Field>
+        </div>
+        <div className="flex min-w-0 flex-wrap gap-1.5">
+          {PERIOD_PRESETS.map((preset) => (
+            <button
+              key={preset.label}
+              type="button"
+              onClick={() => onChange(preset.build())}
+              className={cn(
+                "min-h-9 rounded-md border px-2.5 text-[12px] transition-colors",
+                activePreset?.label === preset.label
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-card text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {preset.label}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => onChange({ from: "", to: "" })}
+            className="min-h-9 rounded-md border border-border bg-card px-2.5 text-[12px] text-muted-foreground hover:bg-muted"
+          >
+            Todo o histórico
+          </button>
+        </div>
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        {loading
+          ? "Carregando registros do período…"
+          : period.from || period.to
+            ? "Somente os registros do período selecionado são carregados — períodos menores deixam a tela mais rápida."
+            : "Todo o histórico carregado. Selecione um período para acelerar a tela."}
+      </p>
+    </div>
+  );
+}
+
 function OvertimePage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const s = session;
