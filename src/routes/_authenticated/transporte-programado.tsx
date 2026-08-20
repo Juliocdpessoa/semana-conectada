@@ -1026,50 +1026,50 @@ function DaysOffControl({
               ))}
             </div>
             <div className="hidden overflow-x-auto md:block">
-              <table className="data-table min-w-[980px]">
-                <thead>
+              <table className="w-full min-w-[1080px] text-[12px]">
+                <thead className="bg-muted/50 text-left text-[11px] uppercase tracking-wide text-muted-foreground">
                   <tr>
-                    <th>Data da folga</th>
-                    <th>Matrícula</th>
-                    <th>Colaborador</th>
-                    <th>Função</th>
-                    <th>Observação</th>
-                    <th>Responsável pelo lançamento</th>
-                    <th>Registrado em</th>
-                    <th className="text-right">Ações</th>
+                    <th className="px-2 py-2">Data da folga</th>
+                    <th className="px-2 py-2">Matrícula</th>
+                    <th className="px-2 py-2">Colaborador</th>
+                    <th className="px-2 py-2">Função</th>
+                    <th className="px-2 py-2">Observação</th>
+                    <th className="px-2 py-2">Responsável pelo lançamento</th>
+                    <th className="px-2 py-2">Registrado em</th>
+                    <th className="px-2 py-2 text-right">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {paginated.map((row) => (
-                    <tr key={row.id}>
-                      <td className="whitespace-nowrap font-mono font-semibold text-primary">
-                        {formatDate(row.day_off_date)}
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="whitespace-nowrap px-2 py-1.5 font-medium">{formatDate(row.day_off_date)}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5">{row.employee_registration || "—"}</td>
+                      <td className="px-2 py-1.5">{row.employee_name}</td>
+                      <td className="px-2 py-1.5">{row.employee_role || "—"}</td>
+                      <td className="max-w-[280px] truncate px-2 py-1.5" title={row.observation || ""}>
+                        {row.observation || "—"}
                       </td>
-                      <td className="whitespace-nowrap font-mono">{row.employee_registration || "—"}</td>
-                      <td className="font-medium">{row.employee_name}</td>
-                      <td>{row.employee_role || "—"}</td>
-                      <td className="max-w-[320px] whitespace-normal">{row.observation || "—"}</td>
-                      <td>{row.created_by_name || row.created_by_email}</td>
-                      <td className="whitespace-nowrap text-[11px] text-muted-foreground">
+                      <td className="px-2 py-1.5">{row.created_by_name || row.created_by_email}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-muted-foreground">
                         {new Date(row.created_at).toLocaleString("pt-BR")}
                       </td>
-                      <td>
-                        <div className="flex justify-end gap-1">
-                          <button
-                            type="button"
-                            onClick={() => setEditing(row)}
-                            className="btn-ghost min-h-8 px-2 text-[11px]"
-                          >
-                            <Pencil className="h-3.5 w-3.5" /> Editar
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => deleteRow(row)}
-                            className="btn-ghost min-h-8 px-2 text-[11px] text-destructive"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" /> Excluir
-                          </button>
-                        </div>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right">
+                        <button
+                          type="button"
+                          onClick={() => setEditing(row)}
+                          className="rounded p-1 hover:bg-muted"
+                          title="Editar"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => deleteRow(row)}
+                          className="rounded p-1 text-destructive hover:bg-muted"
+                          title="Excluir"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </button>
                       </td>
                     </tr>
                   ))}
