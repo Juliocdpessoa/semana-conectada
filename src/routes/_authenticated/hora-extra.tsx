@@ -102,13 +102,16 @@ function OvertimePage() {
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
+  const [period, setPeriod] = useState<Period>(() => defaultPeriod());
   const exportRequests = useQuery({
-    queryKey: ["overtime-export-rows"],
+    queryKey: ["overtime-export-rows", period.from, period.to],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
-      const result = await loadOvertimeForExport({ data: {} });
+      const result = await loadOvertimeForExport({
+        data: { ...(period.from ? { dateFrom: period.from } : {}), ...(period.to ? { dateTo: period.to } : {}) },
+      });
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
     },
@@ -124,7 +127,7 @@ function OvertimePage() {
 
   const qc = useQueryClient();
   const requests = useQuery({
-    queryKey: ["overtime-requests", s.userId, isManager, tab],
+    queryKey: ["overtime-requests", s.userId, isManager, tab, period.from, period.to],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: !logisticsOnly && (tab === "list" || tab === "queue"),
@@ -143,6 +146,8 @@ function OvertimePage() {
           .order("id", { ascending: false })
           .range(from, from + pageSize - 1);
         if (tab === "list") request = request.eq("requester_user_id", s.userId);
+        if (period.from) request = request.gte("overtime_date", period.from);
+        if (period.to) request = request.lte("overtime_date", period.to);
         const { data, error } = await request;
         if (error) throw error;
 
