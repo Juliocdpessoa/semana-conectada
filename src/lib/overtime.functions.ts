@@ -412,12 +412,19 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
     return { ok: true as const, rows };
   });
 
-const exportListSchema = z.object({});
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+const exportListSchema = z.object({
+  dateFrom: isoDate.optional(),
+  dateTo: isoDate.optional(),
+});
+
+export const OVERTIME_EXPORT_COLUMNS =
+  "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at";
 
 export const listOvertimeForExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => exportListSchema.parse(data))
-  .handler(async ({ context }) => {
+  .handler(async ({ context, data: input }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved") {
@@ -432,13 +439,16 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
     const rows: any[] = [];
     const pageSize = 1000;
     for (let from = 0; ; from += pageSize) {
-      const { data, error } = await db
+      let query = db
         .from("overtime_requests")
-        .select("*")
+        .select(OVERTIME_EXPORT_COLUMNS)
         .neq("status", "cancelled")
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
         .range(from, from + pageSize - 1);
+      if (input.dateFrom) query = query.gte("overtime_date", input.dateFrom);
+      if (input.dateTo) query = query.lte("overtime_date", input.dateTo);
+      const { data, error } = await query;
       if (error) return { ok: false as const, error: error.message };
       if (!data?.length) break;
       rows.push(...data);
