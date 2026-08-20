@@ -206,14 +206,17 @@ function OvertimePage() {
   );
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const [period, setPeriod] = useState<Period>(() => defaultPeriod());
+  // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
+  // o filtro de período global não se aplica a essa aba.
+  const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
   const exportRequests = useQuery({
-    queryKey: ["overtime-export-rows", period.from, period.to],
+    queryKey: ["overtime-export-rows", exportPeriod.from, exportPeriod.to],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const result = await loadOvertimeForExport({
-        data: { ...(period.from ? { dateFrom: period.from } : {}), ...(period.to ? { dateTo: period.to } : {}) },
+        data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
       });
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
