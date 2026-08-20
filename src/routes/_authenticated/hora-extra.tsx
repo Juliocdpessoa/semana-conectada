@@ -183,13 +183,9 @@ function PeriodFilter({
           </button>
         </div>
       </div>
-      <p className="mt-2 text-[11px] text-muted-foreground">
-        {loading
-          ? "Carregando registros do período…"
-          : period.from || period.to
-            ? "Somente os registros do período selecionado são carregados — períodos menores deixam a tela mais rápida."
-            : "Todo o histórico carregado. Selecione um período para acelerar a tela."}
-      </p>
+      {loading && (
+        <p className="mt-2 text-[11px] text-muted-foreground">Carregando registros do período…</p>
+      )}
     </div>
   );
 }
