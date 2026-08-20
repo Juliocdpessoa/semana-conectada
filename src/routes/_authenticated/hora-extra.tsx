@@ -585,11 +585,13 @@ function ApprovedDailyExport({
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
 }) {
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
-  const availableDates = useMemo(
-    () => [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [exportableRows],
-  );
-  const [selectedDate, setSelectedDate] = useState("");
+  const availableDates = useMemo(() => {
+    const dates = [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
+    const today = toIsoDate(new Date());
+    if (!dates.includes(today)) dates.unshift(today);
+    return dates;
+  }, [exportableRows]);
+  const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
