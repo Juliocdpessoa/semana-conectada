@@ -1,32 +1,33 @@
-## Objetivo
-Garantir que o login fique persistido no dispositivo: ao fechar a aba/app e reabrir, o usuário volta direto para `/atividades` sem precisar digitar e-mail e senha. O logoff só acontece quando ele clicar em **Sair**.
+# Hora Extra mais rápido e com filtro de data por período
 
-## Diagnóstico
-- O cliente Supabase já está configurado com `persistSession: true` e `localStorage` (`src/integrations/supabase/client.ts`), então a sessão *já é* salva no navegador.
-- O problema percebido é comportamental: ao reabrir o app o usuário cai na **landing page** (`/`) com botão "Entrar", dando a impressão de que precisa logar de novo. O redirect existente em `src/routes/index.tsx` roda em `beforeLoad`, mas:
-  - Depende de `supabase.auth.getSession()` assíncrono → a landing pisca antes do redirect.
-  - No PWA instalado na tela inicial, o `start_url` do `manifest.webmanifest` também aponta para `/`, reforçando a sensação de "fui deslogado".
-- Não há nenhum `signOut` automático fora do botão Sair (verificado em `redefinir-senha`, `auth.tsx` no fluxo de cadastro e `aguardando-aprovacao`). Ou seja, a sessão realmente persiste — falta só levar o usuário direto para dentro do app.
+## O que está acontecendo hoje
 
-## Mudanças propostas (somente frontend, sem tocar em auth/DB)
+A tela carrega **todas as solicitações já registradas** (hoje 1.279 registros, de 28/07 a 23/08) de uma vez, com todas as colunas, e faz tudo — filtros, KPIs, tabela — na memória do navegador. O filtro de data é uma lista montada a partir dessas linhas, então ele mostra todas as datas existentes (26 hoje) e vai crescendo indefinidamente a cada semana. Ou seja: quanto mais histórico, mais lento fica, e mais poluído fica o seletor de datas.
 
-1. **`src/routes/index.tsx`**
-   - Manter o `beforeLoad` que redireciona para `/atividades` quando há sessão.
-   - Adicionar uma checagem síncrona no componente (`useEffect` com `supabase.auth.getSession()`) que redireciona também quando a sessão só fica disponível após hidratação, evitando o flash da landing.
-   - Enquanto a checagem inicial não termina, renderizar um placeholder neutro (spinner/tela em branco com marca) em vez da landing completa — some assim que a sessão for confirmada ou negada.
+Os índices do banco já estão corretos; o peso está no volume trazido para a tela.
 
-2. **`public/manifest.webmanifest`**
-   - Trocar `start_url` para `/atividades` (com `scope: "/"`), para que o PWA instalado abra direto na área autenticada. Usuários sem sessão continuam sendo mandados para `/auth` pelo gate de `_authenticated`.
+## O que vamos fazer
 
-3. **Confirmar persistência (sem mudanças de código)**
-   - Reforçar no fluxo de cadastro em `src/routes/auth.tsx` que os `signOut()` existentes ali são intencionais (apenas quando o cadastro cria sessão automática antes da aprovação) — nenhum outro caminho desloga o usuário.
-   - Documentar mentalmente: o único `signOut` disparado pelo usuário fica no botão **Sair** do header (`src/routes/_authenticated/route.tsx`) e no botão Sair de `aguardando-aprovacao`.
+### 1. Filtro de data por período (em vez de lista de todas as datas)
+- Substituir o seletor "todas as datas" por um filtro de **período**: atalhos rápidos (Hoje, Ontem, Últimos 7 dias, Este mês) mais um intervalo De/Até.
+- Padrão ao abrir: **últimos 30 dias**.
+- Dentro do período escolhido, um seletor de dia específico continua disponível, mas listando só as datas daquele período.
+- Botão "Limpar período" para quem realmente precisa consultar histórico antigo.
 
-## Fora de escopo
-- Não alterar `supabase/client.ts`, RLS, middlewares, nem fluxo de aprovação.
-- Não mudar o botão Sair — ele continua fazendo logoff imediato e voltando para `/auth`.
+### 2. Carregar só o período selecionado
+- As consultas de Minhas solicitações, Aprovações, Exportação diária e Transportes passam a filtrar por data **no banco**, trazendo apenas o intervalo ativo em vez de toda a tabela.
+- Trocar o `select("*")` das funções de exportação pela lista exata de colunas usadas, reduzindo o tamanho da resposta.
 
-## Verificação após implementar
-- `bunx tsgo --noEmit`.
-- Testar no preview: logar → fechar aba → reabrir `/` → deve cair em `/atividades` sem pedir senha.
-- Testar botão **Sair**: deve voltar para `/auth` e exigir e-mail/senha para entrar de novo.
+### 3. Tabelas mais leves
+- Paginação nas tabelas de Aprovações, Minhas solicitações e Exportação diária (mesmo padrão já usado em Atividades), evitando renderizar centenas de linhas de uma vez.
+- Manter o "Exportar para Excel" gerando o arquivo com **todas** as linhas do período filtrado, sem depender do que está na página visível.
+
+### 4. Menos recarregamentos
+- Cada aba busca apenas seus próprios dados, com cache por período (aba + intervalo na chave de cache), evitando refazer a consulta ao trocar de aba e voltar.
+
+## Detalhes técnicos
+
+- `src/lib/overtime.functions.ts`: adicionar `from`/`to` (datas ISO) ao input de `listOvertimeForExport` e `listApprovedTransportRows`, aplicar `.gte("overtime_date", from).lte("overtime_date", to)`, e trocar `select("*")` por colunas explícitas.
+- `src/routes/_authenticated/hora-extra.tsx`: novo estado de período compartilhado no topo do módulo; `queryKey` inclui `[tab, from, to]`; consulta Supabase da aba lista/fila com filtro de data; componente `PeriodFilter` reutilizado nas abas; paginação local (50 linhas/página) nas tabelas.
+- KPIs continuam derivados do conjunto filtrado atual (período + demais filtros).
+- Sem alteração de schema; os índices `overtime_requests_date_idx` e `idx_overtime_date_times_status` já cobrem os novos filtros.
