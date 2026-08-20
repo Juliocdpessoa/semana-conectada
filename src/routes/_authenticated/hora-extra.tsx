@@ -183,9 +183,7 @@ function PeriodFilter({
           </button>
         </div>
       </div>
-      {loading && (
-        <p className="mt-2 text-[11px] text-muted-foreground">Carregando registros do período…</p>
-      )}
+      {loading && <p className="mt-2 text-[11px] text-muted-foreground">Carregando registros do período…</p>}
     </div>
   );
 }
@@ -246,7 +244,7 @@ function OvertimePage() {
         let request = supabase
           .from("overtime_requests")
           .select(
-            "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at",
+            "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id",
           )
           .order("created_at", { ascending: false })
           .order("id", { ascending: false })
@@ -845,6 +843,9 @@ function ApprovedDailyExport({
                   <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
                 </div>
                 <div className="mt-1 break-words">
+                  <b>Origem:</b> {row.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
+                </div>
+                <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
                 </div>
               </article>
@@ -867,6 +868,7 @@ function ApprovedDailyExport({
                     "Ordem",
                     "Serviço",
                     "Transporte",
+                    "Origem",
                     "Justificativa",
                   ].map((header) => (
                     <th key={header} className="px-3 py-2 text-left font-semibold">
@@ -890,6 +892,9 @@ function ApprovedDailyExport({
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
+                    <td className="whitespace-nowrap px-3 py-2">
+                      {row.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
+                    </td>
                     <td className="max-w-[280px] px-3 py-2">{row.justification}</td>
                   </tr>
                 ))}
@@ -1434,6 +1439,10 @@ function RequestsTable({
                   <dd>{r.needs_transport ? "Sim" : "Não"}</dd>
                 </div>
               )}
+              <div>
+                <dt className="text-[10px] uppercase text-muted-foreground">Origem</dt>
+                <dd>{r.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}</dd>
+              </div>
               <div className="col-span-2">
                 <dt className="text-[10px] uppercase text-muted-foreground">Serviço</dt>
                 <dd className="break-words">{r.service_description}</dd>
@@ -1481,7 +1490,7 @@ function RequestsTable({
                 </div>
               </div>
             )}
-            {r.status === "pending" && (onApprove || onReject || onCancel) && (
+            {r.status === "pending" && (onApprove || onReject || (onCancel && r.source_type !== "scale_change")) && (
               <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
                 {onApprove && (
                   <button onClick={() => onApprove(r)} className="btn-success min-h-10 justify-center text-[12px]">
@@ -1496,7 +1505,7 @@ function RequestsTable({
                     Reprovar
                   </button>
                 )}
-                {onCancel && (
+                {onCancel && r.source_type !== "scale_change" && (
                   <button
                     onClick={() => onCancel(r)}
                     className="col-span-2 min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium"
@@ -1523,6 +1532,7 @@ function RequestsTable({
               <th className="px-3 py-2 text-left font-semibold">Entrada</th>
               <th className="px-3 py-2 text-left font-semibold">Saída</th>
               <th className="px-3 py-2 text-left font-semibold">Lanche</th>
+              <th className="px-3 py-2 text-left font-semibold">Origem</th>
               {showRequester && <th className="px-3 py-2 text-left font-semibold">Solicitante</th>}
               <th className="px-3 py-2 text-left font-semibold">Status</th>
               <th className="px-3 py-2 text-left font-semibold">Decisão</th>
@@ -1547,6 +1557,9 @@ function RequestsTable({
                   <td className="px-3 py-2 tabular whitespace-nowrap">{r.entry_time || "—"}</td>
                   <td className="px-3 py-2 tabular whitespace-nowrap">{r.departure_time}</td>
                   <td className="px-3 py-2">{r.needs_snack ? "Sim" : "Não"}</td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {r.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
+                  </td>
                   {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
                   <td className="px-3 py-2">
                     <OvertimeStatus status={r.status} />
@@ -1579,7 +1592,7 @@ function RequestsTable({
                           Reprovar
                         </button>
                       )}
-                      {onCancel && r.status === "pending" && (
+                      {onCancel && r.status === "pending" && r.source_type !== "scale_change" && (
                         <button
                           onClick={() => onCancel(r)}
                           className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
@@ -2562,9 +2575,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <Field label="Horário de entrada (opcional)">
             <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-              value={
-                customEntryTime ? "__other__" : entryTimeOptions.includes(form.entry_time) ? form.entry_time : ""
-              }
+              value={customEntryTime ? "__other__" : entryTimeOptions.includes(form.entry_time) ? form.entry_time : ""}
               onChange={(e) => {
                 const isOther = e.target.value === "__other__";
                 setCustomEntryTime(isOther);
