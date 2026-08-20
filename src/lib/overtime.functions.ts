@@ -35,6 +35,8 @@ export type OvertimeRow = {
   decided_at: string | null;
   version: number;
   created_at: string;
+  source_type: "manual" | "scale_change";
+  source_scheduled_transport_id: string | null;
 };
 
 export type EmployeeRow = {
@@ -419,7 +421,7 @@ const exportListSchema = z.object({
 });
 
 export const OVERTIME_EXPORT_COLUMNS =
-  "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at";
+  "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id";
 
 export const listOvertimeForExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -564,6 +566,28 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       weekId = activity.week_id;
       orderNumber = activity.order_number;
       serviceDescription = activity.description;
+    }
+
+    if (data.entry_time) {
+      const { data: automaticDuplicates, error: duplicateError } = await db
+        .from("overtime_requests")
+        .select("employee_master_id")
+        .in("employee_master_id", uniqueEmployeeIds)
+        .eq("overtime_date", data.overtime_date)
+        .eq("entry_time", data.entry_time)
+        .eq("departure_time", data.departure_time)
+        .eq("source_type", "scale_change")
+        .neq("status", "cancelled");
+      if (duplicateError) return { ok: false as const, error: "Não foi possível verificar solicitações automáticas." };
+      if (automaticDuplicates?.length) {
+        return {
+          ok: false as const,
+          error:
+            automaticDuplicates.length === 1
+              ? "Este colaborador já possui uma hora extra automática gerada pela Mudança de Escala."
+              : `${automaticDuplicates.length} colaboradores já possuem hora extra automática gerada pela Mudança de Escala.`,
+        };
+      }
     }
 
     const batchId = crypto.randomUUID();
@@ -814,11 +838,17 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
       .update({ status: "cancelled", version: data.expectedVersion + 1 })
       .eq("id", data.id)
       .eq("requester_user_id", userId)
+      .eq("source_type", "manual")
       .eq("status", "pending")
       .eq("version", data.expectedVersion)
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
-    if (!updated) return { ok: false as const, error: "Solicitação não pode mais ser cancelada." };
+    if (!updated) {
+      return {
+        ok: false as const,
+        error: "Solicitações geradas pela Mudança de Escala devem ser canceladas no módulo de Mudança de Escala.",
+      };
+    }
     return { ok: true as const };
   });
