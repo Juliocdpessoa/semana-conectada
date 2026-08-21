@@ -1128,7 +1128,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     [nonExecuted, filters],
   );
   const areaRankingTotal = useMemo(
-    () => nonExecuted.filter((row) => matchesFilters(row, "management")).length,
+    () => sumHoursNe(nonExecuted.filter((row) => matchesFilters(row, "management"))),
     [nonExecuted, filters],
   );
   const specialtyRanking = useMemo(
@@ -1140,7 +1140,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     [nonExecuted, filters],
   );
   const specialtyRankingTotal = useMemo(
-    () => nonExecuted.filter((row) => matchesFilters(row, "specialty")).length,
+    () => sumHoursNe(nonExecuted.filter((row) => matchesFilters(row, "specialty"))),
     [nonExecuted, filters],
   );
 
@@ -1689,11 +1689,11 @@ function ReasonPanel({
   selectedReason: string;
   onSelect: (reason: string) => void;
 }) {
-  const max = Math.max(1, ...rows.map((row) => row.value));
+  const max = Math.max(1, ...rows.map((row) => row.hours));
   return (
     <Panel
       title="Principais motivos"
-      description="Quantidade e HH por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
+      description="Classificação por HH perdido. Clique em um motivo para filtrar as tarefas abaixo."
     >
       <div className="grid gap-2">
         {rows.map((row) => {
@@ -1712,7 +1712,7 @@ function ReasonPanel({
               <span className="h-2 overflow-hidden rounded-full bg-muted">
                 <span
                   className="block h-full rounded-full bg-destructive"
-                  style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
+                  style={{ width: `${Math.max(4, (row.hours / max) * 100)}%` }}
                 />
               </span>
               <span className="text-right text-[12px] tabular-nums text-muted-foreground">
@@ -1749,11 +1749,12 @@ function RankingPanel({
   selected: string[];
   onSelect: (name: string, additive: boolean) => void;
 }) {
+  const maxHours = Math.max(1, ...rows.map((row) => row.hours));
   return (
-    <Panel title={title} description="Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções.">
+    <Panel title={title} description="Classificação por HH perdido. Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções.">
       <div className="space-y-2">
         {rows.map((row, index) => {
-          const percent = total ? Math.round((row.value / total) * 100) : 0;
+          const percent = total ? Math.round((row.hours / total) * 100) : 0;
           const isSelected = selected.includes(row.name);
           return (
             <button
@@ -1769,12 +1770,12 @@ function RankingPanel({
               <div className="mb-1 flex items-center gap-2 text-[12px]">
                 <span className="w-5 text-muted-foreground">{index + 1}.</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
-                <span className="text-muted-foreground">{formatHoursNe(row.hours)}</span>
-                <b>{row.value}</b>
+                <span className="font-semibold text-foreground">{formatHoursNe(row.hours)}</span>
+                <span className="text-muted-foreground">{row.value}</span>
                 <span className="w-10 text-right text-muted-foreground">{percent}%</span>
               </div>
               <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-destructive" style={{ width: `${percent}%` }} />
+                <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.max(4, (row.hours / maxHours) * 100)}%` }} />
               </div>
             </button>
           );
@@ -1865,7 +1866,7 @@ function groupCountsNe(rows: ActivityRow[], label: (row: ActivityRow) => string)
   });
   return [...counts.entries()]
     .map(([name, agg]) => ({ name, value: agg.value, hours: agg.hours }))
-    .sort((a, b) => b.value - a.value || localeSortNe(a.name, b.name));
+    .sort((a, b) => b.hours - a.hours || localeSortNe(a.name, b.name));
 }
 
 function formatDateNe(value: string | null) {
