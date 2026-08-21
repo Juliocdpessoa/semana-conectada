@@ -1172,6 +1172,24 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     setPage(1);
   }
 
+  function toggleArrayFilter(key: "date" | "management" | "specialty", value: string, additive: boolean) {
+    setFilters((current) => {
+      const list = current[key];
+      const has = list.includes(value);
+      const next = additive
+        ? has
+          ? list.filter((item) => item !== value)
+          : [...list, value]
+        : has && list.length === 1
+          ? []
+          : [value];
+      return { ...current, [key]: next };
+    });
+    setPage(1);
+  }
+
+
+
   async function exportExcel() {
     if (filtered.length === 0) return;
     const XLSX = await import("xlsx");
