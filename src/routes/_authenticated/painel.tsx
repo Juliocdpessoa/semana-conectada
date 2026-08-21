@@ -1259,11 +1259,12 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </Field>
           <Field label="Data">
             <select
-              value={filters.date}
-              onChange={(event) => updateFilter("date", event.target.value)}
+              value={filters.date.length === 1 ? filters.date[0] : filters.date.length > 1 ? "__multi" : ""}
+              onChange={(event) => updateFilter("date", event.target.value ? [event.target.value] : [])}
               className="input-base text-[12px]"
             >
               <option value="">Todos os dias</option>
+              {filters.date.length > 1 && <option value="__multi">{filters.date.length} dias selecionados</option>}
               {dateOptions.map((date) => (
                 <option key={date} value={date}>
                   {formatDateNe(date)}
@@ -1273,11 +1274,17 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </Field>
           <Field label="Gerência/Área">
             <select
-              value={filters.management}
-              onChange={(event) => updateFilter("management", event.target.value)}
+              value={
+                filters.management.length === 1 ? filters.management[0] : filters.management.length > 1 ? "__multi" : ""
+              }
+              onChange={(event) => updateFilter("management", event.target.value ? [event.target.value] : [])}
               className="input-base text-[12px]"
             >
               <option value="">Todas</option>
+              {filters.management.length > 1 && (
+                <option value="__multi">{filters.management.length} áreas selecionadas</option>
+              )}
+
               {managementOptions.map((value) => (
                 <option key={value} value={value}>
                   {value}
