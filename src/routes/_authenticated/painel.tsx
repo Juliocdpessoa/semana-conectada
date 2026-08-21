@@ -1736,34 +1736,50 @@ function RankingPanel({
   title,
   rows,
   total,
+  selected,
+  onSelect,
 }: {
   title: string;
-  rows: { name: string; value: number }[];
+  rows: { name: string; value: number; hours: number }[];
   total: number;
+  selected: string[];
+  onSelect: (name: string, additive: boolean) => void;
 }) {
   return (
-    <Panel title={title} description="Ordenação pela quantidade de atividades não executadas.">
-      <div className="space-y-3">
+    <Panel title={title} description="Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções.">
+      <div className="space-y-2">
         {rows.map((row, index) => {
           const percent = total ? Math.round((row.value / total) * 100) : 0;
+          const isSelected = selected.includes(row.name);
           return (
-            <div key={row.name}>
+            <button
+              key={row.name}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={(event) => onSelect(row.name, event.ctrlKey || event.metaKey)}
+              className={cn(
+                "block w-full rounded-md border px-2 py-1.5 text-left transition",
+                isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-transparent hover:bg-muted/50",
+              )}
+            >
               <div className="mb-1 flex items-center gap-2 text-[12px]">
                 <span className="w-5 text-muted-foreground">{index + 1}.</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
+                <span className="text-muted-foreground">{formatHoursNe(row.hours)}</span>
                 <b>{row.value}</b>
                 <span className="w-10 text-right text-muted-foreground">{percent}%</span>
               </div>
               <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-destructive" style={{ width: `${percent}%` }} />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
     </Panel>
   );
 }
+
 
 function DashboardLoading() {
   return (
