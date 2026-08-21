@@ -26,6 +26,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { cn } from "@/lib/utils";
 import {
   Bar,
+  Cell,
+
   BarChart,
   CartesianGrid,
   ComposedChart,
@@ -907,8 +909,8 @@ type ActivityRow = {
 
 type Filters = {
   search: string;
-  date: string;
-  management: string;
+  date: string[];
+  management: string[];
   specialty: string[];
   reason: string;
   responsible: string;
@@ -917,13 +919,14 @@ type Filters = {
 
 const EMPTY_FILTERS: Filters = {
   search: "",
-  date: "",
-  management: "",
+  date: [],
+  management: [],
   specialty: [],
   reason: "",
   responsible: "",
   origin: "all",
 };
+
 
 function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" }) {
   const isUnjustifiedMode = mode === "unjustified";
@@ -981,8 +984,10 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
 
   const matchesFilters = (row: ActivityRow, omitted?: keyof Filters) => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-    if (omitted !== "date" && filters.date && row.scheduled_date !== filters.date) return false;
-    if (omitted !== "management" && filters.management && managementLabelNe(row) !== filters.management) return false;
+    if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
+    if (omitted !== "management" && filters.management.length > 0 && !filters.management.includes(managementLabelNe(row)))
+      return false;
+
     if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
       return false;
     }
@@ -1076,8 +1081,8 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
 
   const denominator = useMemo(() => {
     return rows.filter((row) => {
-      if (filters.date && row.scheduled_date !== filters.date) return false;
-      if (filters.management && managementLabelNe(row) !== filters.management) return false;
+      if (filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
+      if (filters.management.length > 0 && !filters.management.includes(managementLabelNe(row))) return false;
       if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
       if (filters.origin === "programmed" && row.is_immediate) return false;
       if (filters.origin === "immediate" && !row.is_immediate) return false;
@@ -1089,29 +1094,56 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
     const immediate = filtered.filter((row) => row.is_immediate).length;
     const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
+    const hours = sumHoursNe(filtered);
+    const totalHours = sumHoursNe(denominator);
+    const hoursPercent = totalHours > 0 ? Math.round((hours / totalHours) * 1000) / 10 : 0;
     return {
       nonExecuted: filtered.length,
       percent,
       affectedOrders,
       immediate,
+      hours,
+      totalHours,
+      hoursPercent,
     };
   }, [denominator, filtered]);
 
   const reasonChart = useMemo(() => groupCountsNe(filtered, reasonLabelNe).slice(0, 10), [filtered]);
   const dailyChart = useMemo(() => {
-    const dates = uniqueNe(
-      filtered.map((row) => row.scheduled_date).filter((value): value is string => !!value),
-    ).sort();
-    return dates.map((date) => ({
-      date: formatShortDateNe(date),
-      naoExecutadas: filtered.filter((row) => row.scheduled_date === date).length,
-    }));
-  }, [filtered]);
-  const areaRanking = useMemo(() => groupCountsNe(filtered, managementLabelNe).slice(0, 8), [filtered]);
-  const specialtyRanking = useMemo(
-    () => groupCountsNe(filtered, (row) => row.specialty || "Sem especialidade").slice(0, 8),
-    [filtered],
+    const base = nonExecuted.filter((row) => matchesFilters(row, "date"));
+    const dates = uniqueNe(base.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort();
+    return dates.map((date) => {
+      const dayRows = base.filter((row) => row.scheduled_date === date);
+      return {
+        date: formatShortDateNe(date),
+        iso: date,
+        naoExecutadas: dayRows.length,
+        horas: Math.round(sumHoursNe(dayRows) * 10) / 10,
+        selected: filters.date.includes(date),
+      };
+    });
+  }, [nonExecuted, filters]);
+  const areaRanking = useMemo(
+    () => groupCountsNe(nonExecuted.filter((row) => matchesFilters(row, "management")), managementLabelNe).slice(0, 8),
+    [nonExecuted, filters],
   );
+  const areaRankingTotal = useMemo(
+    () => nonExecuted.filter((row) => matchesFilters(row, "management")).length,
+    [nonExecuted, filters],
+  );
+  const specialtyRanking = useMemo(
+    () =>
+      groupCountsNe(
+        nonExecuted.filter((row) => matchesFilters(row, "specialty")),
+        (row) => row.specialty || "Sem especialidade",
+      ).slice(0, 8),
+    [nonExecuted, filters],
+  );
+  const specialtyRankingTotal = useMemo(
+    () => nonExecuted.filter((row) => matchesFilters(row, "specialty")).length,
+    [nonExecuted, filters],
+  );
+
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -1139,6 +1171,24 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     }));
     setPage(1);
   }
+
+  function toggleArrayFilter(key: "date" | "management" | "specialty", value: string, additive: boolean) {
+    setFilters((current) => {
+      const list = current[key];
+      const has = list.includes(value);
+      const next = additive
+        ? has
+          ? list.filter((item) => item !== value)
+          : [...list, value]
+        : has && list.length === 1
+          ? []
+          : [value];
+      return { ...current, [key]: next };
+    });
+    setPage(1);
+  }
+
+
 
   async function exportExcel() {
     if (filtered.length === 0) return;
@@ -1229,11 +1279,12 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </Field>
           <Field label="Data">
             <select
-              value={filters.date}
-              onChange={(event) => updateFilter("date", event.target.value)}
+              value={filters.date.length === 1 ? filters.date[0] : filters.date.length > 1 ? "__multi" : ""}
+              onChange={(event) => updateFilter("date", event.target.value ? [event.target.value] : [])}
               className="input-base text-[12px]"
             >
               <option value="">Todos os dias</option>
+              {filters.date.length > 1 && <option value="__multi">{filters.date.length} dias selecionados</option>}
               {dateOptions.map((date) => (
                 <option key={date} value={date}>
                   {formatDateNe(date)}
@@ -1243,11 +1294,17 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </Field>
           <Field label="Gerência/Área">
             <select
-              value={filters.management}
-              onChange={(event) => updateFilter("management", event.target.value)}
+              value={
+                filters.management.length === 1 ? filters.management[0] : filters.management.length > 1 ? "__multi" : ""
+              }
+              onChange={(event) => updateFilter("management", event.target.value ? [event.target.value] : [])}
               className="input-base text-[12px]"
             >
               <option value="">Todas</option>
+              {filters.management.length > 1 && (
+                <option value="__multi">{filters.management.length} áreas selecionadas</option>
+              )}
+
               {managementOptions.map((value) => (
                 <option key={value} value={value}>
                   {value}
@@ -1388,12 +1445,25 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         </div>
       </Panel>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
           value={kpis.nonExecuted}
           tone={isUnjustifiedMode ? "warning" : "destructive"}
           icon={isUnjustifiedMode ? <FileWarning className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+        />
+        <KpiCard
+          label={isUnjustifiedMode ? "HH não justificado" : "HH não executado"}
+          value={formatHoursNe(kpis.hours)}
+          hint={`de ${formatHoursNe(kpis.totalHours)} no recorte atual`}
+          tone="destructive"
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Taxa de HH perdido"
+          value={`${kpis.hoursPercent}%`}
+          tone="warning"
+          icon={<Percent className="h-4 w-4" />}
         />
         <KpiCard
           label={isUnjustifiedMode ? "Taxa sem definição" : "Taxa de não execução"}
@@ -1404,6 +1474,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
+
 
       {activities.isLoading ? (
         <DashboardLoading />
@@ -1438,33 +1509,62 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           <div className="mb-4">
             <ChartPanel
               title="Evolução diária"
-              description={
-                isUnjustifiedMode
-                  ? "Atividades sem definição por dia, conforme os filtros aplicados."
-                  : "Atividades não executadas por dia, conforme todos os filtros aplicados."
-              }
+              description="Clique em um dia para filtrar. Segure Ctrl (ou ⌘) para selecionar vários dias."
             >
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      name === "HH" ? [`${value} h`, "HH"] : [value, name]
+                    }
+                  />
                   <Bar
                     dataKey="naoExecutadas"
                     name={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
                     fill="#C2413B"
                     radius={[4, 4, 0, 0]}
-                  />
+                    cursor="pointer"
+                    onClick={(entry: unknown, _index: number, event?: { ctrlKey?: boolean; metaKey?: boolean }) => {
+                      const iso = (entry as { iso?: string; payload?: { iso?: string } })?.iso
+                        ?? (entry as { payload?: { iso?: string } })?.payload?.iso;
+                      if (!iso) return;
+                      toggleArrayFilter("date", iso, !!(event?.ctrlKey || event?.metaKey));
+                    }}
+                  >
+                    {dailyChart.map((entry) => (
+                      <Cell
+                        key={entry.iso}
+                        fill={entry.selected ? "#102B46" : "#C2413B"}
+                        opacity={filters.date.length > 0 && !entry.selected ? 0.35 : 1}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="horas" name="HH" fill="#E0A458" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
           </div>
 
           <div className="mb-4 grid gap-4 xl:grid-cols-2">
-            <RankingPanel title="Áreas mais afetadas" rows={areaRanking} total={filtered.length} />
-            <RankingPanel title="Especialidades mais afetadas" rows={specialtyRanking} total={filtered.length} />
+            <RankingPanel
+              title="Áreas mais afetadas"
+              rows={areaRanking}
+              total={areaRankingTotal}
+              selected={filters.management}
+              onSelect={(name, additive) => toggleArrayFilter("management", name, additive)}
+            />
+            <RankingPanel
+              title="Especialidades mais afetadas"
+              rows={specialtyRanking}
+              total={specialtyRankingTotal}
+              selected={filters.specialty}
+              onSelect={(name, additive) => toggleArrayFilter("specialty", name, additive)}
+            />
           </div>
+
 
           <Panel
             title={isUnjustifiedMode ? "Atividades não justificadas" : "Atividades não executadas"}
@@ -1585,7 +1685,7 @@ function ReasonPanel({
   selectedReason,
   onSelect,
 }: {
-  rows: { name: string; value: number }[];
+  rows: { name: string; value: number; hours: number }[];
   selectedReason: string;
   onSelect: (reason: string) => void;
 }) {
@@ -1593,7 +1693,7 @@ function ReasonPanel({
   return (
     <Panel
       title="Principais motivos"
-      description="Quantidade por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
+      description="Quantidade e HH por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
     >
       <div className="grid gap-2">
         {rows.map((row) => {
@@ -1604,7 +1704,7 @@ function ReasonPanel({
               type="button"
               onClick={() => onSelect(row.name)}
               aria-pressed={selected}
-              className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_48px] sm:items-center ${
+              className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_72px_48px] sm:items-center ${
                 selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"
               }`}
             >
@@ -1615,7 +1715,11 @@ function ReasonPanel({
                   style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
                 />
               </span>
+              <span className="text-right text-[12px] tabular-nums text-muted-foreground">
+                {formatHoursNe(row.hours)}
+              </span>
               <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">{row.value}</span>
+
             </button>
           );
         })}
@@ -1636,34 +1740,50 @@ function RankingPanel({
   title,
   rows,
   total,
+  selected,
+  onSelect,
 }: {
   title: string;
-  rows: { name: string; value: number }[];
+  rows: { name: string; value: number; hours: number }[];
   total: number;
+  selected: string[];
+  onSelect: (name: string, additive: boolean) => void;
 }) {
   return (
-    <Panel title={title} description="Ordenação pela quantidade de atividades não executadas.">
-      <div className="space-y-3">
+    <Panel title={title} description="Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções.">
+      <div className="space-y-2">
         {rows.map((row, index) => {
           const percent = total ? Math.round((row.value / total) * 100) : 0;
+          const isSelected = selected.includes(row.name);
           return (
-            <div key={row.name}>
+            <button
+              key={row.name}
+              type="button"
+              aria-pressed={isSelected}
+              onClick={(event) => onSelect(row.name, event.ctrlKey || event.metaKey)}
+              className={cn(
+                "block w-full rounded-md border px-2 py-1.5 text-left transition",
+                isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-transparent hover:bg-muted/50",
+              )}
+            >
               <div className="mb-1 flex items-center gap-2 text-[12px]">
                 <span className="w-5 text-muted-foreground">{index + 1}.</span>
                 <span className="min-w-0 flex-1 truncate font-medium">{row.name}</span>
+                <span className="text-muted-foreground">{formatHoursNe(row.hours)}</span>
                 <b>{row.value}</b>
                 <span className="w-10 text-right text-muted-foreground">{percent}%</span>
               </div>
               <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div className="h-full rounded-full bg-destructive" style={{ width: `${percent}%` }} />
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
     </Panel>
   );
 }
+
 
 function DashboardLoading() {
   return (
@@ -1730,16 +1850,24 @@ function isUnjustifiedActivityNe(row: ActivityRow) {
 function responsibleLabelNe(row: ActivityRow) {
   return row.reported_by_name?.trim() || row.reported_by_email?.trim() || "Sem responsável";
 }
+function sumHoursNe(rows: ActivityRow[]) {
+  return rows.reduce((total, row) => total + hoursOf(row.planning_data), 0);
+}
+function formatHoursNe(value: number) {
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10)} h`;
+}
 function groupCountsNe(rows: ActivityRow[], label: (row: ActivityRow) => string) {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { value: number; hours: number }>();
   rows.forEach((row) => {
     const key = label(row);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? { value: 0, hours: 0 };
+    counts.set(key, { value: current.value + 1, hours: current.hours + hoursOf(row.planning_data) });
   });
   return [...counts.entries()]
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, agg]) => ({ name, value: agg.value, hours: agg.hours }))
     .sort((a, b) => b.value - a.value || localeSortNe(a.name, b.name));
 }
+
 function formatDateNe(value: string | null) {
   if (!value) return "—";
   const [year, month, day] = value.slice(0, 10).split("-");
