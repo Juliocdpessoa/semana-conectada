@@ -1491,33 +1491,62 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           <div className="mb-4">
             <ChartPanel
               title="Evolução diária"
-              description={
-                isUnjustifiedMode
-                  ? "Atividades sem definição por dia, conforme os filtros aplicados."
-                  : "Atividades não executadas por dia, conforme todos os filtros aplicados."
-              }
+              description="Clique em um dia para filtrar. Segure Ctrl (ou ⌘) para selecionar vários dias."
             >
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={dailyChart} margin={{ left: 0, right: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
-                  <Tooltip />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      name === "HH" ? [`${value} h`, "HH"] : [value, name]
+                    }
+                  />
                   <Bar
                     dataKey="naoExecutadas"
                     name={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
                     fill="#C2413B"
                     radius={[4, 4, 0, 0]}
-                  />
+                    cursor="pointer"
+                    onClick={(entry: unknown, _index: number, event?: { ctrlKey?: boolean; metaKey?: boolean }) => {
+                      const iso = (entry as { iso?: string; payload?: { iso?: string } })?.iso
+                        ?? (entry as { payload?: { iso?: string } })?.payload?.iso;
+                      if (!iso) return;
+                      toggleArrayFilter("date", iso, !!(event?.ctrlKey || event?.metaKey));
+                    }}
+                  >
+                    {dailyChart.map((entry) => (
+                      <Cell
+                        key={entry.iso}
+                        fill={entry.selected ? "#102B46" : "#C2413B"}
+                        opacity={filters.date.length > 0 && !entry.selected ? 0.35 : 1}
+                      />
+                    ))}
+                  </Bar>
+                  <Bar dataKey="horas" name="HH" fill="#E0A458" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </ChartPanel>
           </div>
 
           <div className="mb-4 grid gap-4 xl:grid-cols-2">
-            <RankingPanel title="Áreas mais afetadas" rows={areaRanking} total={filtered.length} />
-            <RankingPanel title="Especialidades mais afetadas" rows={specialtyRanking} total={filtered.length} />
+            <RankingPanel
+              title="Áreas mais afetadas"
+              rows={areaRanking}
+              total={areaRankingTotal}
+              selected={filters.management}
+              onSelect={(name, additive) => toggleArrayFilter("management", name, additive)}
+            />
+            <RankingPanel
+              title="Especialidades mais afetadas"
+              rows={specialtyRanking}
+              total={specialtyRankingTotal}
+              selected={filters.specialty}
+              onSelect={(name, additive) => toggleArrayFilter("specialty", name, additive)}
+            />
           </div>
+
 
           <Panel
             title={isUnjustifiedMode ? "Atividades não justificadas" : "Atividades não executadas"}
