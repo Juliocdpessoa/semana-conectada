@@ -1425,12 +1425,25 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         </div>
       </Panel>
 
-      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
           value={kpis.nonExecuted}
           tone={isUnjustifiedMode ? "warning" : "destructive"}
           icon={isUnjustifiedMode ? <FileWarning className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+        />
+        <KpiCard
+          label={isUnjustifiedMode ? "HH não justificado" : "HH não executado"}
+          value={formatHoursNe(kpis.hours)}
+          hint={`de ${formatHoursNe(kpis.totalHours)} no recorte atual`}
+          tone="destructive"
+          icon={<Clock className="h-4 w-4" />}
+        />
+        <KpiCard
+          label="Taxa de HH perdido"
+          value={`${kpis.hoursPercent}%`}
+          tone="warning"
+          icon={<Percent className="h-4 w-4" />}
         />
         <KpiCard
           label={isUnjustifiedMode ? "Taxa sem definição" : "Taxa de não execução"}
@@ -1441,6 +1454,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
+
 
       {activities.isLoading ? (
         <DashboardLoading />
