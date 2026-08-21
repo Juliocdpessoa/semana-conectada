@@ -1610,6 +1610,27 @@ function RequestsTable({
                       className="px-3 pb-3 pt-0"
                     >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
+                        <div className="border-b border-primary/20 bg-primary/[0.06] px-3 py-2.5">
+                          <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-1">
+                            <div className="min-w-0">
+                              <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">
+                                Equipe vinculada à solicitação #{r.request_number}
+                              </p>
+                              <p className="mt-0.5 break-words text-[12px] font-semibold text-foreground">
+                                {r.order_number ? `${r.order_number} · ` : ""}
+                                {r.service_description || "Serviço não informado"}
+                              </p>
+                            </div>
+                            <div className="shrink-0 text-right text-[11px] text-muted-foreground">
+                              <p>
+                                {formatDate(r.overtime_date)} · {r.entry_time || "—"} às {r.departure_time}
+                              </p>
+                              <p className="font-medium text-foreground">
+                                {r.groupMembers.length} {r.groupMembers.length === 1 ? "colaborador" : "colaboradores"}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-[minmax(110px,0.7fr)_minmax(220px,1.3fr)_minmax(200px,1fr)_minmax(110px,0.5fr)] gap-3 border-b border-border bg-muted/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
                           <span>Matrícula</span>
                           <span>Colaborador</span>
