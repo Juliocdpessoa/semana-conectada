@@ -1685,7 +1685,7 @@ function ReasonPanel({
   selectedReason,
   onSelect,
 }: {
-  rows: { name: string; value: number }[];
+  rows: { name: string; value: number; hours: number }[];
   selectedReason: string;
   onSelect: (reason: string) => void;
 }) {
@@ -1693,7 +1693,7 @@ function ReasonPanel({
   return (
     <Panel
       title="Principais motivos"
-      description="Quantidade por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
+      description="Quantidade e HH por justificativa. Clique em um motivo para filtrar as tarefas abaixo."
     >
       <div className="grid gap-2">
         {rows.map((row) => {
@@ -1704,7 +1704,7 @@ function ReasonPanel({
               type="button"
               onClick={() => onSelect(row.name)}
               aria-pressed={selected}
-              className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_48px] sm:items-center ${
+              className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_72px_48px] sm:items-center ${
                 selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"
               }`}
             >
@@ -1715,7 +1715,11 @@ function ReasonPanel({
                   style={{ width: `${Math.max(4, (row.value / max) * 100)}%` }}
                 />
               </span>
+              <span className="text-right text-[12px] tabular-nums text-muted-foreground">
+                {formatHoursNe(row.hours)}
+              </span>
               <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">{row.value}</span>
+
             </button>
           );
         })}
