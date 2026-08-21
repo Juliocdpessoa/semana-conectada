@@ -907,8 +907,8 @@ type ActivityRow = {
 
 type Filters = {
   search: string;
-  date: string;
-  management: string;
+  date: string[];
+  management: string[];
   specialty: string[];
   reason: string;
   responsible: string;
@@ -917,13 +917,14 @@ type Filters = {
 
 const EMPTY_FILTERS: Filters = {
   search: "",
-  date: "",
-  management: "",
+  date: [],
+  management: [],
   specialty: [],
   reason: "",
   responsible: "",
   origin: "all",
 };
+
 
 function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" }) {
   const isUnjustifiedMode = mode === "unjustified";
