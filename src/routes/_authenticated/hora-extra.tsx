@@ -1606,7 +1606,7 @@ function RequestsTable({
                 {groupedTeamView && r.groupMembers && r.groupMembers.length > 0 && (
                   <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
                     <td
-                      colSpan={groupedTeamView ? (showRequester ? 11 : 10) : showRequester ? 14 : 13}
+                      colSpan={groupedTeamView ? (showRequester ? 12 : 11) : showRequester ? 14 : 13}
                       className="px-3 pb-3 pt-0"
                     >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
