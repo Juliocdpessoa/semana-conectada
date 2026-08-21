@@ -982,8 +982,10 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
 
   const matchesFilters = (row: ActivityRow, omitted?: keyof Filters) => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-    if (omitted !== "date" && filters.date && row.scheduled_date !== filters.date) return false;
-    if (omitted !== "management" && filters.management && managementLabelNe(row) !== filters.management) return false;
+    if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
+    if (omitted !== "management" && filters.management.length > 0 && !filters.management.includes(managementLabelNe(row)))
+      return false;
+
     if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
       return false;
     }
