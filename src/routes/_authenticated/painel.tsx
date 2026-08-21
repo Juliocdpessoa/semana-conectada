@@ -1079,8 +1079,8 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
 
   const denominator = useMemo(() => {
     return rows.filter((row) => {
-      if (filters.date && row.scheduled_date !== filters.date) return false;
-      if (filters.management && managementLabelNe(row) !== filters.management) return false;
+      if (filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
+      if (filters.management.length > 0 && !filters.management.includes(managementLabelNe(row))) return false;
       if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
       if (filters.origin === "programmed" && row.is_immediate) return false;
       if (filters.origin === "immediate" && !row.is_immediate) return false;
@@ -1092,29 +1092,56 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
     const immediate = filtered.filter((row) => row.is_immediate).length;
     const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
+    const hours = sumHoursNe(filtered);
+    const totalHours = sumHoursNe(denominator);
+    const hoursPercent = totalHours > 0 ? Math.round((hours / totalHours) * 1000) / 10 : 0;
     return {
       nonExecuted: filtered.length,
       percent,
       affectedOrders,
       immediate,
+      hours,
+      totalHours,
+      hoursPercent,
     };
   }, [denominator, filtered]);
 
   const reasonChart = useMemo(() => groupCountsNe(filtered, reasonLabelNe).slice(0, 10), [filtered]);
   const dailyChart = useMemo(() => {
-    const dates = uniqueNe(
-      filtered.map((row) => row.scheduled_date).filter((value): value is string => !!value),
-    ).sort();
-    return dates.map((date) => ({
-      date: formatShortDateNe(date),
-      naoExecutadas: filtered.filter((row) => row.scheduled_date === date).length,
-    }));
-  }, [filtered]);
-  const areaRanking = useMemo(() => groupCountsNe(filtered, managementLabelNe).slice(0, 8), [filtered]);
-  const specialtyRanking = useMemo(
-    () => groupCountsNe(filtered, (row) => row.specialty || "Sem especialidade").slice(0, 8),
-    [filtered],
+    const base = nonExecuted.filter((row) => matchesFilters(row, "date"));
+    const dates = uniqueNe(base.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort();
+    return dates.map((date) => {
+      const dayRows = base.filter((row) => row.scheduled_date === date);
+      return {
+        date: formatShortDateNe(date),
+        iso: date,
+        naoExecutadas: dayRows.length,
+        horas: Math.round(sumHoursNe(dayRows) * 10) / 10,
+        selected: filters.date.includes(date),
+      };
+    });
+  }, [nonExecuted, filters]);
+  const areaRanking = useMemo(
+    () => groupCountsNe(nonExecuted.filter((row) => matchesFilters(row, "management")), managementLabelNe).slice(0, 8),
+    [nonExecuted, filters],
   );
+  const areaRankingTotal = useMemo(
+    () => nonExecuted.filter((row) => matchesFilters(row, "management")).length,
+    [nonExecuted, filters],
+  );
+  const specialtyRanking = useMemo(
+    () =>
+      groupCountsNe(
+        nonExecuted.filter((row) => matchesFilters(row, "specialty")),
+        (row) => row.specialty || "Sem especialidade",
+      ).slice(0, 8),
+    [nonExecuted, filters],
+  );
+  const specialtyRankingTotal = useMemo(
+    () => nonExecuted.filter((row) => matchesFilters(row, "specialty")).length,
+    [nonExecuted, filters],
+  );
+
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
