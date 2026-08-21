@@ -78,14 +78,18 @@ export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS = [
   "Chapa",
   "Nome",
   "Função",
-  "Endereço completo",
+  "Endereço",
+  "Bairro",
+  "Cidade",
   "Telefone",
   "Contato (recado)",
   "Horário de entrada",
   "Horário de saída",
 ] as const;
 
-export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS = [12, 12, 14, 32, 24, 50, 20, 24, 18, 18] as const;
+export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_WIDTHS = [
+  12, 12, 14, 32, 24, 40, 24, 20, 20, 24, 18, 18,
+] as const;
 
 export function formatScheduledStatus(status: ScheduledTransportRow["status"]) {
   return status === "cancelled" ? "Cancelado" : "Programado";
@@ -235,7 +239,9 @@ export function mapLogisticsScheduledTransportExportRow(group: ConsolidatedTrans
     row.employee_registration || "",
     row.employee_name,
     row.employee_role,
-    fullAddress(row),
+    row.employee_address || "",
+    row.employee_neighborhood || "",
+    row.employee_city || "",
     row.employee_phone || "",
     row.employee_message_contact || "",
     row.entry_time,
