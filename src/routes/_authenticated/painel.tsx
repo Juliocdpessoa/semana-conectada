@@ -1767,16 +1767,24 @@ function isUnjustifiedActivityNe(row: ActivityRow) {
 function responsibleLabelNe(row: ActivityRow) {
   return row.reported_by_name?.trim() || row.reported_by_email?.trim() || "Sem responsável";
 }
+function sumHoursNe(rows: ActivityRow[]) {
+  return rows.reduce((total, row) => total + hoursOf(row.planning_data), 0);
+}
+function formatHoursNe(value: number) {
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10)} h`;
+}
 function groupCountsNe(rows: ActivityRow[], label: (row: ActivityRow) => string) {
-  const counts = new Map<string, number>();
+  const counts = new Map<string, { value: number; hours: number }>();
   rows.forEach((row) => {
     const key = label(row);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    const current = counts.get(key) ?? { value: 0, hours: 0 };
+    counts.set(key, { value: current.value + 1, hours: current.hours + hoursOf(row.planning_data) });
   });
   return [...counts.entries()]
-    .map(([name, value]) => ({ name, value }))
+    .map(([name, agg]) => ({ name, value: agg.value, hours: agg.hours }))
     .sort((a, b) => b.value - a.value || localeSortNe(a.name, b.name));
 }
+
 function formatDateNe(value: string | null) {
   if (!value) return "—";
   const [year, month, day] = value.slice(0, 10).split("-");
