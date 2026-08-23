@@ -27,7 +27,6 @@ import { cn } from "@/lib/utils";
 import {
   Bar,
   Cell,
-
   BarChart,
   CartesianGrid,
   ComposedChart,
@@ -927,7 +926,6 @@ const EMPTY_FILTERS: Filters = {
   origin: "all",
 };
 
-
 function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" }) {
   const isUnjustifiedMode = mode === "unjustified";
   const weeks = useQuery({
@@ -985,7 +983,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const matchesFilters = (row: ActivityRow, omitted?: keyof Filters) => {
     const term = filters.search.trim().toLocaleLowerCase("pt-BR");
     if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
-    if (omitted !== "management" && filters.management.length > 0 && !filters.management.includes(managementLabelNe(row)))
+    if (
+      omitted !== "management" &&
+      filters.management.length > 0 &&
+      !filters.management.includes(managementLabelNe(row))
+    )
       return false;
 
     if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
@@ -1124,7 +1126,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     });
   }, [nonExecuted, filters]);
   const areaRanking = useMemo(
-    () => groupCountsNe(nonExecuted.filter((row) => matchesFilters(row, "management")), managementLabelNe).slice(0, 8),
+    () =>
+      groupCountsNe(
+        nonExecuted.filter((row) => matchesFilters(row, "management")),
+        managementLabelNe,
+      ).slice(0, 8),
     [nonExecuted, filters],
   );
   const areaRankingTotal = useMemo(
@@ -1143,7 +1149,6 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     () => sumHoursNe(nonExecuted.filter((row) => matchesFilters(row, "specialty"))),
     [nonExecuted, filters],
   );
-
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -1187,8 +1192,6 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     });
     setPage(1);
   }
-
-
 
   async function exportExcel() {
     if (filtered.length === 0) return;
@@ -1455,12 +1458,12 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         <KpiCard
           label={isUnjustifiedMode ? "HH não justificado" : "HH não executado"}
           value={formatHoursNe(kpis.hours)}
-          hint={`de ${formatHoursNe(kpis.totalHours)} no recorte atual`}
+          hint={`de ${formatHoursNe(kpis.totalHours)} programadas por data, área, especialidade e origem`}
           tone="destructive"
           icon={<Clock className="h-4 w-4" />}
         />
         <KpiCard
-          label="Taxa de HH perdido"
+          label="HH perdido / HH programado"
           value={`${kpis.hoursPercent}%`}
           tone="warning"
           icon={<Percent className="h-4 w-4" />}
@@ -1474,7 +1477,6 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
-
 
       {activities.isLoading ? (
         <DashboardLoading />
@@ -1517,9 +1519,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip
-                    formatter={(value: number, name: string) =>
-                      name === "HH" ? [`${value} h`, "HH"] : [value, name]
-                    }
+                    formatter={(value: number, name: string) => (name === "HH" ? [`${value} h`, "HH"] : [value, name])}
                   />
                   <Bar
                     dataKey="naoExecutadas"
@@ -1528,8 +1528,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                     radius={[4, 4, 0, 0]}
                     cursor="pointer"
                     onClick={(entry: unknown, _index: number, event?: { ctrlKey?: boolean; metaKey?: boolean }) => {
-                      const iso = (entry as { iso?: string; payload?: { iso?: string } })?.iso
-                        ?? (entry as { payload?: { iso?: string } })?.payload?.iso;
+                      const iso =
+                        (entry as { iso?: string; payload?: { iso?: string } })?.iso ??
+                        (entry as { payload?: { iso?: string } })?.payload?.iso;
                       if (!iso) return;
                       toggleArrayFilter("date", iso, !!(event?.ctrlKey || event?.metaKey));
                     }}
@@ -1564,7 +1565,6 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
               onSelect={(name, additive) => toggleArrayFilter("specialty", name, additive)}
             />
           </div>
-
 
           <Panel
             title={isUnjustifiedMode ? "Atividades não justificadas" : "Atividades não executadas"}
@@ -1719,7 +1719,6 @@ function ReasonPanel({
                 {formatHoursNe(row.hours)}
               </span>
               <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">{row.value}</span>
-
             </button>
           );
         })}
@@ -1751,7 +1750,10 @@ function RankingPanel({
 }) {
   const maxHours = Math.max(1, ...rows.map((row) => row.hours));
   return (
-    <Panel title={title} description="Classificação por HH perdido. Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções.">
+    <Panel
+      title={title}
+      description="Classificação por HH perdido. Clique para filtrar. Segure Ctrl (ou ⌘) para somar seleções."
+    >
       <div className="space-y-2">
         {rows.map((row, index) => {
           const percent = total ? Math.round((row.hours / total) * 100) : 0;
@@ -1775,7 +1777,10 @@ function RankingPanel({
                 <span className="w-10 text-right text-muted-foreground">{percent}%</span>
               </div>
               <div className="ml-7 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-destructive" style={{ width: `${Math.max(4, (row.hours / maxHours) * 100)}%` }} />
+                <div
+                  className="h-full rounded-full bg-destructive"
+                  style={{ width: `${Math.max(4, (row.hours / maxHours) * 100)}%` }}
+                />
               </div>
             </button>
           );
@@ -1784,7 +1789,6 @@ function RankingPanel({
     </Panel>
   );
 }
-
 
 function DashboardLoading() {
   return (
