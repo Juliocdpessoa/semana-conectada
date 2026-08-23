@@ -103,91 +103,6 @@ function defaultPeriod(): Period {
   return { from: shiftDays(-30), to: shiftDays(30) };
 }
 
-const PERIOD_PRESETS: { label: string; build: () => Period }[] = [
-  { label: "Hoje", build: () => ({ from: shiftDays(0), to: shiftDays(0) }) },
-  { label: "Ontem", build: () => ({ from: shiftDays(-1), to: shiftDays(-1) }) },
-  { label: "Últimos 7 dias", build: () => ({ from: shiftDays(-6), to: shiftDays(0) }) },
-  { label: "Últimos 30 dias", build: () => ({ from: shiftDays(-30), to: shiftDays(30) }) },
-  {
-    label: "Este mês",
-    build: () => {
-      const now = new Date();
-      return {
-        from: toIsoDate(new Date(now.getFullYear(), now.getMonth(), 1)),
-        to: toIsoDate(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-      };
-    },
-  },
-];
-
-function PeriodFilter({
-  period,
-  onChange,
-  loading,
-}: {
-  period: Period;
-  onChange: (period: Period) => void;
-  loading?: boolean;
-}) {
-  const activePreset = PERIOD_PRESETS.find((preset) => {
-    const value = preset.build();
-    return value.from === period.from && value.to === period.to;
-  });
-  return (
-    <div className="mb-3 rounded-md border border-border bg-card p-3">
-      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-        <div className="w-full min-w-0 sm:max-w-[170px]">
-          <Field label="Período — de">
-            <input
-              type="date"
-              value={period.from}
-              max={period.to || undefined}
-              onChange={(event) => onChange({ ...period, from: event.target.value })}
-              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-        </div>
-        <div className="w-full min-w-0 sm:max-w-[170px]">
-          <Field label="Período — até">
-            <input
-              type="date"
-              value={period.to}
-              min={period.from || undefined}
-              onChange={(event) => onChange({ ...period, to: event.target.value })}
-              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-            />
-          </Field>
-        </div>
-        <div className="flex min-w-0 flex-wrap gap-1.5">
-          {PERIOD_PRESETS.map((preset) => (
-            <button
-              key={preset.label}
-              type="button"
-              onClick={() => onChange(preset.build())}
-              className={cn(
-                "min-h-9 rounded-md border px-2.5 text-[12px] transition-colors",
-                activePreset?.label === preset.label
-                  ? "border-primary bg-primary text-primary-foreground"
-                  : "border-border bg-card text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {preset.label}
-            </button>
-          ))}
-          <button
-            type="button"
-            onClick={() => onChange({ from: "", to: "" })}
-            className="min-h-9 rounded-md border border-border bg-card px-2.5 text-[12px] text-muted-foreground hover:bg-muted"
-          >
-            Todo o histórico
-          </button>
-        </div>
-      </div>
-      {loading && <p className="mt-2 text-[11px] text-muted-foreground">Carregando registros do período…</p>}
-    </div>
-  );
-}
-
 function OvertimePage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const s = session;
@@ -203,7 +118,7 @@ function OvertimePage() {
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
-  const [period, setPeriod] = useState<Period>(() => defaultPeriod());
+  const [period] = useState<Period>(() => defaultPeriod());
   // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
   // o filtro de período global não se aplica a essa aba.
   const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
@@ -221,7 +136,7 @@ function OvertimePage() {
     },
   });
   const [showNew, setShowNew] = useState(false);
-  const [summaryDate, setSummaryDate] = useState("");
+  const [summaryDate, setSummaryDate] = useState(() => toIsoDate(new Date()));
   const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
 
   function selectTab(nextTab: typeof tab) {
@@ -368,18 +283,6 @@ function OvertimePage() {
           </TabBtn>
         )}
       </div>
-
-      {(tab === "list" || tab === "queue") && (
-        <PeriodFilter
-          period={period}
-          onChange={(next) => {
-            setFilteredKpiRows(null);
-            setSummaryDate("");
-            setPeriod(next);
-          }}
-          loading={requests.isFetching}
-        />
-      )}
 
       {tab === "export" && canExportOvertime && (
         <ApprovedDailyExport
@@ -1132,11 +1035,13 @@ function MyRequests({
   onCancel: (r: OvertimeRow) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
 }) {
-  const [selectedDate, setSelectedDate] = useState("");
-  const availableDates = useMemo(
-    () => [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [rows],
-  );
+  const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
+  const availableDates = useMemo(() => {
+    const dates = [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
+    const today = toIsoDate(new Date());
+    if (!dates.includes(today)) dates.unshift(today);
+    return dates;
+  }, [rows]);
   const filteredRows = useMemo(
     () => (selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows),
     [rows, selectedDate],
@@ -1166,7 +1071,7 @@ function MyRequests({
             onChange={(event) => setSelectedDate(event.target.value)}
             className="input-base block min-w-0 w-full max-w-full text-[12px] sm:max-w-xs"
           >
-            <option value="">Todas as datas</option>
+            <option value="">Todos os dias</option>
             {availableDates.map((date) => (
               <option key={date} value={date}>
                 {formatDate(date)}
@@ -1232,10 +1137,12 @@ function ApprovalQueue({
       };
     });
   }, [rows]);
-  const availableDates = useMemo(
-    () => [...new Set(groupedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a)),
-    [groupedRows],
-  );
+  const availableDates = useMemo(() => {
+    const dates = [...new Set(groupedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
+    const today = toIsoDate(new Date());
+    if (!dates.includes(today)) dates.unshift(today);
+    return dates;
+  }, [groupedRows]);
 
   const filtered = useMemo(() => {
     return groupedRows.filter((r) => {
@@ -1291,7 +1198,7 @@ function ApprovalQueue({
               onChange={(event) => onSelectedDateChange(event.target.value)}
               className="input-base block min-w-0 w-full max-w-full text-[12px]"
             >
-              <option value="">Todas as datas</option>
+              <option value="">Todos os dias</option>
               {availableDates.map((date) => (
                 <option key={date} value={date}>
                   {formatDate(date)}
