@@ -10,6 +10,7 @@ const rowSchema = z.object({
   area: z.string().max(160).nullable().optional(),
   specialty: z.string().max(160).nullable().optional(),
   scheduled_date: z.string().nullable().optional(),
+  pbs: z.string().max(255).nullable().optional(),
   planning_data: z.record(z.string(), z.any()),
   source_row_number: z.number().int().nullable().optional(),
 });
@@ -84,6 +85,7 @@ export const importWeek = createServerFn({ method: "POST" })
       area: r.area ?? null,
       specialty: r.specialty ?? null,
       scheduled_date: r.scheduled_date ?? null,
+      pbs: r.pbs?.trim() || null,
       planning_data: r.planning_data,
       source_row_number: r.source_row_number ?? null,
       status: "Sem apontamento",
