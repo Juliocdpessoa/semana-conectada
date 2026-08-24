@@ -52,7 +52,7 @@ function HistoricoPage() {
   });
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] min-w-0 px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-none min-w-0 px-4 py-6 sm:px-6">
       <PageHeader
         eyebrow="Histórico"
         title="Semanas e auditoria"
