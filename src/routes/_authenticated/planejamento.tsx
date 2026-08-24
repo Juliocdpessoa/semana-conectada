@@ -67,6 +67,7 @@ const WEEKLY_TEMPLATE_COLUMNS = [
   "Trab",
   "Gerência",
   "Local",
+  "PBS",
   "Status",
   "Justificativa",
   "Observações",
@@ -261,7 +262,7 @@ function PlanejamentoPage() {
 
       const RESPONSAVEL = "Responsável pela informação";
       const DATA_INFO = "Data da informação";
-      const EXTRA_HEADERS = ["Ger", "PBS", "Nº PT", "Tipo de Liberação", "Data D-1"];
+      const EXTRA_HEADERS = ["Ger", "Nº PT", "Tipo de Liberação", "Data D-1"];
       const exportHeaders = [...WEEKLY_TEMPLATE_COLUMNS, ...EXTRA_HEADERS, RESPONSAVEL, DATA_INFO];
       const gerByArea: Record<string, string> = {
         "50": "TE",
@@ -328,7 +329,8 @@ function PlanejamentoPage() {
         const planning = (activity.planning_data ?? {}) as Record<string, any>;
         const row: Record<string, any> = {};
         for (const header of WEEKLY_TEMPLATE_COLUMNS) {
-          if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
+          if (header === "PBS") row[header] = activity.pbs ?? planning[header] ?? "";
+          else if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
           else if (header === "Justificativa") row[header] = activity.justification ?? "";
           else if (header === "Observações") row[header] = activity.observation ?? "";
           else if (header === "Data início" || header === "Data fim") row[header] = formatDateOnly(planning[header]);
@@ -339,7 +341,6 @@ function PlanejamentoPage() {
           .trim()
           .toLocaleUpperCase("pt-BR");
         row["Ger"] = gerByArea[operationalArea] ?? "Não mapeado";
-        row["PBS"] = activity.pbs ?? "";
         row["Nº PT"] = activity.pt_number ?? "";
         row["Tipo de Liberação"] = activity.release_type ?? "";
         row["Data D-1"] = formatDateOnly(activity.d1_date);
@@ -671,6 +672,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           area,
           specialty: spec,
           scheduled_date: toISODate(dateRaw),
+          pbs: extractField(r, "PBS"),
           planning_data: r,
           source_row_number: r.__row ?? null,
         };
@@ -704,7 +706,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return (
     <Modal
       title="Importar planilha semanal"
-      description="Colunas A–T viram planejamento (leitura); U–X são preenchidas pelos apontamentos."
+      description="A programação importada inclui o PBS; o planejamento poderá atualizá-lo depois."
       onClose={onClose}
       size="lg"
       footer={
