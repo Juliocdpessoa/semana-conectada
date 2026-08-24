@@ -137,7 +137,7 @@ function AdminUsers() {
   const pending = (users.data ?? []).filter((u) => u.approval_status === "pending").length;
 
   return (
-    <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+    <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
         eyebrow="Administração"
         title="Usuários"
