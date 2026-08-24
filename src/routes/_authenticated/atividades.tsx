@@ -634,7 +634,7 @@ function AtividadesPage() {
   }
 
   return (
-    <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6">
+    <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
         eyebrow="Semana ativa"
         title={activeWeek.data?.label ?? "—"}
