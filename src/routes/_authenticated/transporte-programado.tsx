@@ -327,7 +327,7 @@ function ScheduledTransportPage() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
+    <main className="mx-auto w-full max-w-none overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         title={showDaysOff ? "Controle de Folgas" : "Mudança de Escala"}
         description={
