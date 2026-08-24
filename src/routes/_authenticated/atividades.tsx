@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { updateActivity, bulkUpdateActivities } from "@/lib/activities.functions";
+import { updateActivity, bulkUpdateActivities, bulkUpdateActivityPlanningFields } from "@/lib/activities.functions";
 import { toast } from "sonner";
 import {
   Search,
@@ -43,6 +43,10 @@ type ActivityRow = {
   is_immediate: boolean;
   week_id: string;
   planning_data: Record<string, unknown> | null;
+  pbs: string | null;
+  pt_number: string | null;
+  release_type: "PT" | "PTT" | "ATRE" | "Oficina" | null;
+  d1_date: string | null;
 };
 
 const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
@@ -79,6 +83,20 @@ const JUSTIFICATIONS = [
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
+const RELEASE_TYPES = ["PT", "PTT", "ATRE", "Oficina"] as const;
+const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
+  "3": "SMS",
+  "4": "Oficinas",
+  "5": "TE",
+  "6": "SOP",
+  "10": "CQG",
+  "20": "CRA",
+  "40": "HDT",
+  "60": "UT",
+  LAB: "LAB",
+  SMS: "UTE",
+  PRO: "UTE",
+};
 
 function normalizeKey(value: string | null | undefined): string {
   return (value ?? "").replace(/\s+/g, " ").trim().toLocaleUpperCase("pt-BR");
@@ -108,15 +126,33 @@ function workCenterLabel(r: { planning_data: Record<string, unknown> | null }): 
   return clean ? clean : null;
 }
 
-/** Seleção múltipla de centros de trabalho (mobile-friendly, acessível). */
+function operationalAreaValue(r: { planning_data: Record<string, unknown> | null }): string | null {
+  return (
+    fmtPlan(r.planning_data, "Área op") ?? fmtPlan(r.planning_data, "Área Op") ?? fmtPlan(r.planning_data, "Area Op")
+  );
+}
+
+function gerLabel(r: { planning_data: Record<string, unknown> | null }): string {
+  return GER_BY_OPERATIONAL_AREA[normalizeKey(operationalAreaValue(r))] ?? "Não mapeado";
+}
+
+/** Seleção múltipla pesquisável (mobile-friendly, acessível). */
 function WorkCenterMultiSelect({
   options,
   selected,
   onChange,
+  allLabel = "Todos os centros de trabalho",
+  ariaLabel = "Filtrar por centro de trabalho",
+  searchPlaceholder = "Buscar centro...",
+  selectedPlural = "itens selecionados",
 }: {
   options: string[];
   selected: string[];
   onChange: (next: string[]) => void;
+  allLabel?: string;
+  ariaLabel?: string;
+  searchPlaceholder?: string;
+  selectedPlural?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -127,11 +163,7 @@ function WorkCenterMultiSelect({
   }, [options, query]);
 
   const label =
-    selected.length === 0
-      ? "Todos os centros de trabalho"
-      : selected.length === 1
-        ? selected[0]
-        : `${selected.length} centros selecionados`;
+    selected.length === 0 ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${selectedPlural}`;
 
   function toggle(option: string) {
     const key = normalizeKey(option);
@@ -144,7 +176,7 @@ function WorkCenterMultiSelect({
       <PopoverTrigger asChild>
         <button
           type="button"
-          aria-label="Filtrar por centro de trabalho"
+          aria-label={ariaLabel}
           className="input-base flex w-full items-center justify-between gap-2 py-2 text-left text-xs sm:w-auto sm:min-w-[190px]"
         >
           <span className="truncate">{label}</span>
@@ -161,15 +193,13 @@ function WorkCenterMultiSelect({
             <input
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Buscar centro..."
+              placeholder={searchPlaceholder}
               className="input-base w-full py-1.5 text-xs"
             />
           </div>
         )}
         <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
-          {visible.length === 0 && (
-            <p className="px-2 py-3 text-xs text-muted-foreground">Nenhum centro encontrado.</p>
-          )}
+          {visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">Nenhum centro encontrado.</p>}
           {visible.map((o) => {
             const checked = selected.some((s) => normalizeKey(s) === normalizeKey(o));
             return (
@@ -217,19 +247,21 @@ function WorkCenterMultiSelect({
 }
 
 function AtividadesPage() {
-  const _ctx = Route.useRouteContext() as { session: SessionInfo };
-  void _ctx;
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const canEditPlanningFields = session.roles.includes("planning");
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
+  const [gerFilters, setGerFilters] = useState<string[]>([]);
   const [dateFilter, setDateFilter] = useState<string>("");
   const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [planningFieldsOpen, setPlanningFieldsOpen] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -265,10 +297,9 @@ function AtividadesPage() {
     },
   });
 
-  const workCenterKeys = useMemo(
-    () => new Set(workCenterFilters.map((c) => normalizeKey(c))),
-    [workCenterFilters],
-  );
+  const workCenterKeys = useMemo(() => new Set(workCenterFilters.map((c) => normalizeKey(c))), [workCenterFilters]);
+
+  const gerKeys = useMemo(() => new Set(gerFilters.map(normalizeKey)), [gerFilters]);
 
   const filtered = useMemo(() => {
     const rows = activities.data ?? [];
@@ -277,6 +308,7 @@ function AtividadesPage() {
       if (statusFilter && r.status !== statusFilter) return false;
       if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
       if (workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(r)))) return false;
+      if (gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(r)))) return false;
       if (dateFilter && r.scheduled_date !== dateFilter) return false;
       if (originFilter === "immediate" && !r.is_immediate) return false;
       if (originFilter === "programmed" && r.is_immediate) return false;
@@ -292,7 +324,7 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, workCenterKeys, dateFilter, originFilter]);
+  }, [activities.data, search, statusFilter, areaFilter, workCenterKeys, gerKeys, dateFilter, originFilter]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -321,6 +353,15 @@ function AtividadesPage() {
     return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   }, [activities.data]);
 
+  const gerOptions = useMemo(() => {
+    const values = new Set((activities.data ?? []).map(gerLabel));
+    return Array.from(values).sort((a, b) => {
+      if (a === "Não mapeado") return 1;
+      if (b === "Não mapeado") return -1;
+      return a.localeCompare(b, "pt-BR");
+    });
+  }, [activities.data]);
+
   // Centros de trabalho dependentes da área selecionada
   const workCenters = useMemo(() => {
     const map = new Map<string, string>();
@@ -341,6 +382,7 @@ function AtividadesPage() {
     statusFilter,
     areaFilter,
     workCenterFilters.length > 0 ? "1" : "",
+    gerFilters.length > 0 ? "1" : "",
     dateFilter,
     originFilter,
   ].filter(Boolean).length;
@@ -350,6 +392,7 @@ function AtividadesPage() {
     setStatusFilter("");
     setAreaFilter("");
     setWorkCenterFilters([]);
+    setGerFilters([]);
     setDateFilter("");
     setOriginFilter("");
     setPage(0);
@@ -482,6 +525,18 @@ function AtividadesPage() {
           ))}
         </select>
         <WorkCenterMultiSelect
+          options={gerOptions}
+          selected={gerFilters}
+          onChange={(next) => {
+            setGerFilters(next);
+            setPage(0);
+          }}
+          allLabel="Todas as Ger"
+          ariaLabel="Filtrar por Ger"
+          searchPlaceholder="Buscar Ger..."
+          selectedPlural="Ger selecionadas"
+        />
+        <WorkCenterMultiSelect
           options={workCenters}
           selected={workCenterFilters}
           onChange={(next) => {
@@ -536,6 +591,11 @@ function AtividadesPage() {
             <button onClick={() => setSelected(new Set())} className="btn-ghost py-1 text-xs">
               Cancelar
             </button>
+            {canEditPlanningFields && (
+              <button onClick={() => setPlanningFieldsOpen(true)} className="btn-ghost py-1 text-xs">
+                Preencher liberação
+              </button>
+            )}
             <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
               Apontar em lote
             </button>
@@ -568,7 +628,7 @@ function AtividadesPage() {
           {/* Desktop */}
           <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
             <div className="max-h-[calc(100vh-360px)] overflow-auto">
-              <table className="min-w-[1280px] w-full text-[13px]">
+              <table className="min-w-[1760px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="w-8 px-2 py-2">
@@ -582,6 +642,11 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Operação / Suboperação</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
+                    <th className="px-2 py-2 text-left font-semibold">Ger</th>
+                    <th className="px-2 py-2 text-left font-semibold">PBS</th>
+                    <th className="px-2 py-2 text-left font-semibold">Nº PT</th>
+                    <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
+                    <th className="px-2 py-2 text-left font-semibold">Data D-1</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
@@ -616,6 +681,11 @@ function AtividadesPage() {
                         <div className="text-foreground">{r.area}</div>
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
+                      <td className="px-2 py-2 align-top text-[11px] font-medium">{gerLabel(r)}</td>
+                      <td className="px-2 py-2 align-top text-[11px]">{r.pbs || "—"}</td>
+                      <td className="px-2 py-2 align-top text-[11px]">{r.pt_number || "—"}</td>
+                      <td className="px-2 py-2 align-top text-[11px]">{r.release_type || "—"}</td>
+                      <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.d1_date)}</td>
                       <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.scheduled_date)}</td>
                       <td className="px-2 py-2 align-top">
                         <StatusPill status={r.status} />
@@ -673,7 +743,11 @@ function AtividadesPage() {
                     <div className="mt-1 text-[13px] leading-snug text-foreground">{r.description}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {r.area}
-                      {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
+                      {r.specialty ? ` · ${r.specialty}` : ""} · Ger {gerLabel(r)} · {formatDate(r.scheduled_date)}
+                    </div>
+                    <div className="mt-1 text-[10px] text-muted-foreground">
+                      PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"} · D-1:{" "}
+                      {formatDate(r.d1_date)}
                     </div>
                   </div>
                 </div>
@@ -715,6 +789,18 @@ function AtividadesPage() {
             </div>
           </div>
         </>
+      )}
+
+      {planningFieldsOpen && (
+        <PlanningFieldsModal
+          rows={filtered.filter((row) => selected.has(row.id))}
+          onClose={() => setPlanningFieldsOpen(false)}
+          onSaved={() => {
+            setPlanningFieldsOpen(false);
+            setSelected(new Set());
+            qc.invalidateQueries({ queryKey: ["activities"] });
+          }}
+        />
       )}
 
       {editing && (
@@ -762,6 +848,101 @@ function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null
 function getLinkedImmediateIds(pd: Record<string, unknown> | null): string[] {
   const value = pd?.__linked_immediate_ids;
   return Array.isArray(value) ? value.filter((id): id is string => typeof id === "string") : [];
+}
+
+function PlanningFieldsModal({
+  rows,
+  onClose,
+  onSaved,
+}: {
+  rows: ActivityRow[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const saveFields = useServerFn(bulkUpdateActivityPlanningFields);
+  const [saving, setSaving] = useState(false);
+  const [grid, setGrid] = useState(() =>
+    rows
+      .map((row) => [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.d1_date ?? ""].join("\t"))
+      .join("\n"),
+  );
+
+  async function save() {
+    try {
+      const lines = grid.replace(/\r/g, "").split("\n");
+      if (lines.length !== rows.length)
+        throw new Error(`Cole exatamente ${rows.length} linha(s), uma para cada atividade selecionada.`);
+      const parsed = lines.map((line, index) => {
+        const cells = line.split("\t");
+        if (cells.length > 4) throw new Error(`A linha ${index + 1} possui mais de 4 colunas.`);
+        while (cells.length < 4) cells.push("");
+        const [pbs, ptNumber, releaseType, d1Date] = cells.map((cell) => cell.trim());
+        if (releaseType && !RELEASE_TYPES.includes(releaseType as (typeof RELEASE_TYPES)[number])) {
+          throw new Error(`Tipo de liberação inválido na linha ${index + 1}. Use PT, PTT, ATRE ou Oficina.`);
+        }
+        if (d1Date && !/^\d{4}-\d{2}-\d{2}$/.test(d1Date)) {
+          throw new Error(`Data D-1 inválida na linha ${index + 1}. Use AAAA-MM-DD.`);
+        }
+        return {
+          id: rows[index].id,
+          pbs: pbs || null,
+          ptNumber: ptNumber || null,
+          releaseType: (releaseType || null) as (typeof RELEASE_TYPES)[number] | null,
+          d1Date: d1Date || null,
+        };
+      });
+      setSaving(true);
+      const result = await saveFields({ data: { rows: parsed } });
+      if (!result.ok) throw new Error(result.error);
+      toast.success(`${result.count} atividade(s) atualizada(s).`);
+      onSaved();
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title="Preencher campos de liberação"
+      description="Copie quatro colunas do Excel e cole abaixo. A ordem das linhas segue a tabela filtrada."
+      footer={
+        <>
+          <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
+            Cancelar
+          </button>
+          <button type="button" onClick={save} className="btn-primary" disabled={saving || rows.length === 0}>
+            {saving ? "Salvando…" : `Salvar ${rows.length} atividade(s)`}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-3">
+        <div className="grid grid-cols-4 gap-1 rounded-md bg-muted px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+          <span>PBS</span>
+          <span>Nº PT</span>
+          <span>Tipo de Liberação</span>
+          <span>Data D-1</span>
+        </div>
+        <textarea
+          value={grid}
+          onChange={(event) => setGrid(event.target.value)}
+          rows={Math.min(16, Math.max(5, rows.length))}
+          spellCheck={false}
+          className="input-base min-h-40 w-full resize-y whitespace-pre font-mono text-xs"
+          placeholder={"PBS\tNº PT\tPT\t2026-08-24"}
+          aria-label="Dados de liberação em formato de planilha"
+        />
+        <p className="text-[11px] text-muted-foreground">
+          São necessárias {rows.length} linha(s). Campos vazios apagam o valor atual. Tipos aceitos: PT, PTT, ATRE e
+          Oficina. A data deve estar no formato AAAA-MM-DD.
+        </p>
+      </div>
+    </Modal>
+  );
 }
 
 function ApontarModal({
@@ -972,9 +1153,7 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
                   <span className="tabular font-medium text-foreground">
                     {new Date(h.changed_at).toLocaleString("pt-BR")}
                   </span>
-                  <span className="text-muted-foreground">
-                    {h.changed_by_name || h.changed_by_email || "Sistema"}
-                  </span>
+                  <span className="text-muted-foreground">{h.changed_by_name || h.changed_by_email || "Sistema"}</span>
                   <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
                 </div>
                 <div className="mt-1 space-y-0.5">
