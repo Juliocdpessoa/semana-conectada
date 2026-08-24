@@ -240,7 +240,7 @@ function PlanejamentoPage() {
         const { data, error } = await supabase
           .from("activities")
           .select(
-            "planning_data,status,justification,observation,reported_by_name,reported_by_email,reported_at,source_row_number",
+            "planning_data,status,justification,observation,reported_by_name,reported_by_email,reported_at,source_row_number,pbs,pt_number,release_type,d1_date",
           )
           .eq("week_id", week.id)
           .order("source_row_number", { ascending: true })
@@ -261,7 +261,21 @@ function PlanejamentoPage() {
 
       const RESPONSAVEL = "Responsável pela informação";
       const DATA_INFO = "Data da informação";
-      const exportHeaders = [...WEEKLY_TEMPLATE_COLUMNS, RESPONSAVEL, DATA_INFO];
+      const EXTRA_HEADERS = ["Ger", "PBS", "Nº PT", "Tipo de Liberação", "Data D-1"];
+      const exportHeaders = [...WEEKLY_TEMPLATE_COLUMNS, ...EXTRA_HEADERS, RESPONSAVEL, DATA_INFO];
+      const gerByArea: Record<string, string> = {
+        "3": "SMS",
+        "4": "Oficinas",
+        "5": "TE",
+        "6": "SOP",
+        "10": "CQG",
+        "20": "CRA",
+        "40": "HDT",
+        "60": "UT",
+        LAB: "LAB",
+        SMS: "UTE",
+        PRO: "UTE",
+      };
 
       const formatReportedAt = (value: unknown): string => {
         if (!value) return "";
@@ -319,6 +333,14 @@ function PlanejamentoPage() {
           else row[header] = planning[header] ?? "";
         }
 
+        const operationalArea = String(planning["Área op"] ?? planning["Área Op"] ?? planning["Area Op"] ?? "")
+          .trim()
+          .toLocaleUpperCase("pt-BR");
+        row["Ger"] = gerByArea[operationalArea] ?? "Não mapeado";
+        row["PBS"] = activity.pbs ?? "";
+        row["Nº PT"] = activity.pt_number ?? "";
+        row["Tipo de Liberação"] = activity.release_type ?? "";
+        row["Data D-1"] = formatDateOnly(activity.d1_date);
         row[RESPONSAVEL] = activity.reported_by_name || activity.reported_by_email || "";
         row[DATA_INFO] = formatReportedAt(activity.reported_at);
         return row;
@@ -331,7 +353,7 @@ function PlanejamentoPage() {
             ? 42
             : name === "Justificativa" || name === "Observações" || name === RESPONSAVEL
               ? 34
-              : name === DATA_INFO
+              : name === "Tipo de Liberação" || name === DATA_INFO
                 ? 18
                 : Math.max(11, name.length + 2),
       }));
