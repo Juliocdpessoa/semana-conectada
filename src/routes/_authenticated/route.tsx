@@ -94,7 +94,6 @@ function AuthedLayout() {
     }
   }, [overtimeOnly, pathname, router]);
 
-
   const canScheduledTransport = isPlanning || isManager || isAdmin || isLogistics;
 
   const nav = [
@@ -107,7 +106,6 @@ function AuthedLayout() {
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
 
-
   void isManager;
 
   async function signOut() {
@@ -118,7 +116,7 @@ function AuthedLayout() {
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-primary-foreground shadow-sm">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-4 px-4 py-2 sm:px-6">
+        <div className="mx-auto flex max-w-none items-center gap-4 px-4 py-2 sm:px-6">
           {/* Marca */}
           <Link to={overtimeOnly ? "/hora-extra" : "/atividades"} className="flex items-center gap-2.5">
             <BrandLogo className="h-8 w-auto brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]" />
