@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { updateActivity, bulkUpdateActivities, bulkUpdateActivityPlanningFields } from "@/lib/activities.functions";
 import { toast } from "sonner";
@@ -45,7 +46,7 @@ type ActivityRow = {
   planning_data: Record<string, unknown> | null;
   pbs: string | null;
   pt_number: string | null;
-  release_type: "PT" | "PTT" | "ATRE" | "Oficina" | null;
+  release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
   d1_date: string | null;
 };
 
@@ -83,7 +84,11 @@ const JUSTIFICATIONS = [
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
-const RELEASE_TYPES = ["PT", "PTT", "ATRE", "Oficina"] as const;
+const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
+type PlanningField = "pbs" | "pt_number" | "release_type" | "d1_date";
+type PlanningDraft = Record<PlanningField, string>;
+const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "d1_date"];
+
 const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
   "50": "TE",
   "20": "CRA",
@@ -248,10 +253,92 @@ function WorkCenterMultiSelect({
   );
 }
 
+function PlanningGridCell({
+  value,
+  field,
+  editable,
+  onChange,
+  onCommit,
+  onPaste,
+  onDragStart,
+  onDrop,
+}: {
+  value: string;
+  field: PlanningField;
+  editable: boolean;
+  onChange: (value: string) => void;
+  onCommit: (value: string) => void;
+  onPaste: (event: ClipboardEvent<HTMLElement>) => void;
+  onDragStart: () => void;
+  onDrop: () => void;
+}) {
+  if (!editable) {
+    return field === "d1_date" ? <>{formatDate(value || null)}</> : <>{value || "—"}</>;
+  }
+
+  const sharedClass =
+    "h-7 w-full min-w-[92px] rounded border border-transparent bg-transparent px-1.5 text-[11px] outline-none transition-colors hover:border-border hover:bg-background focus:border-primary focus:bg-background focus:ring-1 focus:ring-primary/30";
+
+  return (
+    <div
+      className="group/cell relative min-w-[96px]"
+      onPaste={onPaste}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event: DragEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        onDrop();
+      }}
+    >
+      {field === "release_type" ? (
+        <select
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+            onCommit(event.target.value);
+          }}
+          className={sharedClass}
+          aria-label="Tipo de liberação"
+        >
+          <option value="">—</option>
+          {RELEASE_TYPES.map((option) => (
+            <option key={option} value={option}>
+              {option}
+            </option>
+          ))}
+        </select>
+      ) : (
+        <input
+          type={field === "d1_date" ? "date" : "text"}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          onBlur={(event) => onCommit(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+          className={sharedClass}
+          aria-label={field === "pbs" ? "PBS" : field === "pt_number" ? "Número da PT" : "Data D-1"}
+        />
+      )}
+      <span
+        draggable
+        title="Arraste para preencher as células abaixo"
+        onDragStart={(event: DragEvent<HTMLSpanElement>) => {
+          event.dataTransfer.effectAllowed = "copy";
+          onDragStart();
+        }}
+        className="absolute -bottom-0.5 -right-0.5 hidden h-2.5 w-2.5 cursor-crosshair rounded-sm border border-background bg-primary group-hover/cell:block"
+      />
+    </div>
+  );
+}
+
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.includes("planning");
   const qc = useQueryClient();
+  const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
+  const [planningDrafts, setPlanningDrafts] = useState<Record<string, Partial<PlanningDraft>>>({});
+  const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
@@ -398,6 +485,139 @@ function AtividadesPage() {
     setDateFilter("");
     setOriginFilter("");
     setPage(0);
+  }
+
+  function planningValue(row: ActivityRow, field: PlanningField): string {
+    const draft = planningDrafts[row.id];
+    if (draft && Object.prototype.hasOwnProperty.call(draft, field)) return draft[field] ?? "";
+    const value = row[field];
+    return value == null ? "" : String(value);
+  }
+
+  function setPlanningValue(rowId: string, field: PlanningField, value: string) {
+    setPlanningDrafts((previous) => ({
+      ...previous,
+      [rowId]: { ...previous[rowId], [field]: value },
+    }));
+  }
+
+  function normalizeGridValue(field: PlanningField, value: string): string {
+    const clean = value.trim();
+    if (field === "release_type") {
+      const normalized = clean.toLocaleUpperCase("pt-BR");
+      if (normalized && !RELEASE_TYPES.includes(normalized as (typeof RELEASE_TYPES)[number])) {
+        throw new Error(`Tipo de liberação inválido: "${clean}". Use PT, PTT, ATRE ou OFICINAS.`);
+      }
+      return normalized;
+    }
+    if (field === "d1_date" && clean) {
+      const br = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      const iso = br
+        ? `${br[3]}-${String(Number(br[2])).padStart(2, "0")}-${String(Number(br[1])).padStart(2, "0")}`
+        : clean;
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error(`Data D-1 inválida: "${clean}".`);
+      return iso;
+    }
+    return clean;
+  }
+
+  function planningPayload(row: ActivityRow, overrides: Partial<PlanningDraft> = {}) {
+    const current = {
+      pbs: planningValue(row, "pbs"),
+      pt_number: planningValue(row, "pt_number"),
+      release_type: planningValue(row, "release_type"),
+      d1_date: planningValue(row, "d1_date"),
+      ...overrides,
+    };
+    return {
+      id: row.id,
+      pbs: current.pbs || null,
+      ptNumber: current.pt_number || null,
+      releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
+      d1Date: current.d1_date || null,
+    };
+  }
+
+  async function persistPlanningRows(payload: ReturnType<typeof planningPayload>[], showSuccess = false) {
+    try {
+      const result = await savePlanningFields({ data: { rows: payload } });
+      if (!result.ok) throw new Error(result.error);
+      if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
+      qc.invalidateQueries({ queryKey: ["activities"] });
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
+    }
+  }
+
+  async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
+    try {
+      const value = normalizeGridValue(field, rawValue);
+      setPlanningValue(row.id, field, value);
+      await persistPlanningRows([planningPayload(row, { [field]: value })]);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Valor inválido.");
+    }
+  }
+
+  async function pastePlanningGrid(event: ClipboardEvent<HTMLElement>, startRow: number, startField: PlanningField) {
+    if (!canEditPlanningFields) return;
+    event.preventDefault();
+    try {
+      const matrix = event.clipboardData
+        .getData("text/plain")
+        .replace(/\r/g, "")
+        .replace(/\n$/, "")
+        .split("\n")
+        .map((line) => line.split("\t"));
+      const startColumn = PLANNING_FIELDS.indexOf(startField);
+      const updates = new Map<string, { row: ActivityRow; values: Partial<PlanningDraft> }>();
+
+      matrix.forEach((cells, rowOffset) => {
+        const row = paged[startRow + rowOffset];
+        if (!row) return;
+        const values: Partial<PlanningDraft> = {};
+        cells.forEach((cell, columnOffset) => {
+          const field = PLANNING_FIELDS[startColumn + columnOffset];
+          if (field) values[field] = normalizeGridValue(field, cell);
+        });
+        if (Object.keys(values).length) updates.set(row.id, { row, values });
+      });
+      if (!updates.size) return;
+
+      setPlanningDrafts((previous) => {
+        const next = { ...previous };
+        for (const [id, update] of updates) next[id] = { ...next[id], ...update.values };
+        return next;
+      });
+      await persistPlanningRows(
+        Array.from(updates.values()).map(({ row, values }) => planningPayload(row, values)),
+        true,
+      );
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível colar os dados.");
+    }
+  }
+
+  async function fillPlanningByDrag(targetRow: number, targetField: PlanningField) {
+    const source = dragSource.current;
+    dragSource.current = null;
+    if (!source || source.field !== targetField || source.rowIndex === targetRow) return;
+    const sourceRow = paged[source.rowIndex];
+    if (!sourceRow) return;
+    const value = planningValue(sourceRow, targetField);
+    const first = Math.min(source.rowIndex, targetRow);
+    const last = Math.max(source.rowIndex, targetRow);
+    const rows = paged.slice(first, last + 1);
+
+    setPlanningDrafts((previous) => {
+      const next = { ...previous };
+      for (const row of rows) next[row.id] = { ...next[row.id], [targetField]: value };
+      return next;
+    });
+    await persistPlanningRows(
+      rows.map((row) => planningPayload(row, { [targetField]: value })),
+      true,
+    );
   }
 
   function toggleSelect(id: string) {
@@ -684,10 +904,25 @@ function AtividadesPage() {
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
                       <td className="px-2 py-2 align-top text-[11px] font-medium">{gerLabel(r)}</td>
-                      <td className="px-2 py-2 align-top text-[11px]">{r.pbs || "—"}</td>
-                      <td className="px-2 py-2 align-top text-[11px]">{r.pt_number || "—"}</td>
-                      <td className="px-2 py-2 align-top text-[11px]">{r.release_type || "—"}</td>
-                      <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.d1_date)}</td>
+                      {(["pbs", "pt_number", "release_type", "d1_date"] as PlanningField[]).map((field) => {
+                        const rowIndex = paged.findIndex((row) => row.id === r.id);
+                        return (
+                          <td key={field} className="px-1 py-1.5 align-top text-[11px]">
+                            <PlanningGridCell
+                              value={planningValue(r, field)}
+                              field={field}
+                              editable={canEditPlanningFields}
+                              onChange={(value) => setPlanningValue(r.id, field, value)}
+                              onCommit={(value) => commitPlanningCell(r, field, value)}
+                              onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
+                              onDragStart={() => {
+                                dragSource.current = { rowIndex, field };
+                              }}
+                              onDrop={() => fillPlanningByDrag(rowIndex, field)}
+                            />
+                          </td>
+                        );
+                      })}
                       <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.scheduled_date)}</td>
                       <td className="px-2 py-2 align-top">
                         <StatusPill status={r.status} />
