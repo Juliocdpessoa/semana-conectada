@@ -145,7 +145,7 @@ const activityPlanningFieldsSchema = z.object({
         id: z.string().uuid(),
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
-        releaseType: z.enum(["PT", "PTT", "ATRE", "Oficina"]).nullable(),
+        releaseType: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable(),
         d1Date: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
