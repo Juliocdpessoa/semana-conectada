@@ -202,7 +202,7 @@ function OvertimePage() {
   }, [summaryRows]);
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
+    <main className="mx-auto w-full max-w-none overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         eyebrow="Operação"
         title="Hora Extra"
