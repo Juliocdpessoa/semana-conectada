@@ -60,7 +60,7 @@ function PainelPage() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto w-full max-w-none overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
         <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
           <PanelTabBtn active={view === "geral"} onClick={() => changeView("geral")}>
             Visão geral
@@ -198,7 +198,7 @@ function OverviewPanel() {
   }, [rows]);
   if (activeWeek.isLoading || activities.isLoading) {
     return (
-      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
         <div className="mb-5 space-y-2">
           <Skeleton className="h-6 w-64" />
           <Skeleton className="h-4 w-96" />
@@ -218,7 +218,7 @@ function OverviewPanel() {
   }
   if (!activeWeek.data) {
     return (
-      <main className="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
+      <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
         <PageHeader title="Painel gerencial" description="Indicadores da semana ativa." />
         <EmptyState title="Nenhuma semana ativa" description="Importe ou ative uma semana no menu Planejamento." />
       </main>
@@ -226,7 +226,7 @@ function OverviewPanel() {
   }
 
   return (
-    <main className="mx-auto w-full max-w-[1400px] px-4 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-none px-4 py-6 sm:px-6">
       <PageHeader
         eyebrow="Painel gerencial"
         title={activeWeek.data.label}
@@ -1239,7 +1239,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   if (weeks.isLoading) return <DashboardLoading />;
 
   return (
-    <main className="mx-auto w-full max-w-[1500px] overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
+    <main className="mx-auto w-full max-w-none overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         eyebrow="Gestão de desvios"
         title={isUnjustifiedMode ? "Análise de Atividades Não Justificadas" : "Análise de Não Execução"}
@@ -1792,7 +1792,7 @@ function RankingPanel({
 
 function DashboardLoading() {
   return (
-    <main className="mx-auto w-full max-w-[1500px] px-3 py-6 sm:px-6">
+    <main className="mx-auto w-full max-w-none px-3 py-6 sm:px-6">
       <Skeleton className="mb-4 h-20" />
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         {Array.from({ length: 6 }).map((_, index) => (
