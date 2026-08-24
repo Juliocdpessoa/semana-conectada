@@ -850,7 +850,7 @@ function AtividadesPage() {
           {/* Desktop */}
           <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
             <div className="max-h-[calc(100vh-360px)] overflow-auto">
-              <table className="min-w-[1760px] w-full text-[13px]">
+              <table className="min-w-[1640px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="w-8 px-2 py-2">
@@ -864,7 +864,6 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Operação / Suboperação</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
-                    <th className="px-2 py-2 text-left font-semibold">Ger</th>
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
                     <th className="px-2 py-2 text-left font-semibold">Nº PT</th>
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
@@ -903,7 +902,6 @@ function AtividadesPage() {
                         <div className="text-foreground">{r.area}</div>
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
-                      <td className="px-2 py-2 align-top text-[11px] font-medium">{gerLabel(r)}</td>
                       {(["pbs", "pt_number", "release_type", "d1_date"] as PlanningField[]).map((field) => {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
@@ -980,7 +978,7 @@ function AtividadesPage() {
                     <div className="mt-1 text-[13px] leading-snug text-foreground">{r.description}</div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {r.area}
-                      {r.specialty ? ` · ${r.specialty}` : ""} · Ger {gerLabel(r)} · {formatDate(r.scheduled_date)}
+                      {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
                     </div>
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"} · D-1:{" "}
