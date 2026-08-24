@@ -138,6 +138,49 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     return { ok: true as const, count: Number(updatedCount ?? data.ids.length) };
   });
 
+const activityPlanningFieldsSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        id: z.string().uuid(),
+        pbs: z.string().max(120).nullable(),
+        ptNumber: z.string().max(120).nullable(),
+        releaseType: z.enum(["PT", "PTT", "ATRE", "Oficina"]).nullable(),
+        d1Date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .nullable(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => activityPlanningFieldsSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    if (rolesError) return { ok: false as const, error: rolesError.message };
+    if (!roles?.some((row) => row.role === "planning")) {
+      return { ok: false as const, error: "Apenas o perfil Planejamento pode editar estes campos." };
+    }
+
+    const payload = data.rows.map((row) => ({
+      id: row.id,
+      pbs: row.pbs,
+      pt_number: row.ptNumber,
+      release_type: row.releaseType,
+      d1_date: row.d1Date,
+    }));
+    const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_planning_fields", {
+      p_rows: payload,
+    });
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, count: Number(updatedCount ?? 0) };
+  });
+
 const immediateSchema = z.object({
   weekId: z.string().uuid(),
   order_number: z.string().min(1).max(64),
