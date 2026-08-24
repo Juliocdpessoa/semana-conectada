@@ -907,7 +907,6 @@ function PlanningFieldsModal({
 
   return (
     <Modal
-      open
       onClose={onClose}
       title="Preencher campos de liberação"
       description="Copie quatro colunas do Excel e cole abaixo. A ordem das linhas segue a tabela filtrada."
