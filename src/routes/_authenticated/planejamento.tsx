@@ -264,17 +264,19 @@ function PlanejamentoPage() {
       const EXTRA_HEADERS = ["Ger", "PBS", "Nº PT", "Tipo de Liberação", "Data D-1"];
       const exportHeaders = [...WEEKLY_TEMPLATE_COLUMNS, ...EXTRA_HEADERS, RESPONSAVEL, DATA_INFO];
       const gerByArea: Record<string, string> = {
-        "3": "SMS",
-        "4": "Oficinas",
-        "5": "TE",
-        "6": "SOP",
-        "10": "CQG",
+        "50": "TE",
         "20": "CRA",
         "40": "HDT",
+        "30": "DE",
+        "10": "CQG",
         "60": "UT",
+        "70": "SMS",
+        "4": "OFICINAS",
+        "6": "INFRA",
         LAB: "LAB",
-        SMS: "UTE",
         PRO: "UTE",
+        MAN: "UTE",
+        SMS: "UTE",
       };
 
       const formatReportedAt = (value: unknown): string => {
