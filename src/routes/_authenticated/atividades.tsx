@@ -85,17 +85,19 @@ const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "Oficina"] as const;
 const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
-  "3": "SMS",
-  "4": "Oficinas",
-  "5": "TE",
-  "6": "SOP",
-  "10": "CQG",
+  "50": "TE",
   "20": "CRA",
   "40": "HDT",
+  "30": "DE",
+  "10": "CQG",
   "60": "UT",
+  "70": "SMS",
+  "4": "OFICINAS",
+  "6": "INFRA",
   LAB: "LAB",
-  SMS: "UTE",
   PRO: "UTE",
+  MAN: "UTE",
+  SMS: "UTE",
 };
 
 function normalizeKey(value: string | null | undefined): string {
