@@ -300,6 +300,8 @@ function PlanningGridCell({
   onDragStart: () => void;
   onDrop: () => void;
 }) {
+  const [isDragOver, setIsDragOver] = useState(false);
+
   if (!editable) {
     return field === "scheduled_date" ? <>{formatDate(value || null)}</> : <>{value || "—"}</>;
   }
@@ -309,11 +311,22 @@ function PlanningGridCell({
 
   return (
     <div
-      className="group/cell relative min-w-[96px]"
+      className={cn(
+        "group/cell relative min-w-[96px] rounded transition",
+        isDragOver && "bg-primary/10 ring-2 ring-inset ring-primary/50",
+      )}
       onPaste={onPaste}
-      onDragOver={(event) => event.preventDefault()}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setIsDragOver(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node)) setIsDragOver(false);
+      }}
       onDrop={(event: DragEvent<HTMLDivElement>) => {
         event.preventDefault();
+        setIsDragOver(false);
         onDrop();
       }}
     >
@@ -349,13 +362,17 @@ function PlanningGridCell({
       )}
       <span
         draggable
-        title="Arraste para preencher as células abaixo"
+        title="Segure e arraste para copiar o valor às células abaixo"
         onDragStart={(event: DragEvent<HTMLSpanElement>) => {
           event.dataTransfer.effectAllowed = "copy";
+          event.dataTransfer.setData("text/plain", value);
           onDragStart();
         }}
-        className="absolute -bottom-0.5 -right-0.5 hidden h-2.5 w-2.5 cursor-crosshair rounded-sm border border-background bg-primary group-hover/cell:block"
-      />
+        className="absolute -bottom-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-copy select-none items-center justify-center rounded-sm border-2 border-background bg-primary text-[9px] font-bold leading-none text-primary-foreground opacity-40 shadow-sm transition-opacity hover:opacity-100 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100"
+        aria-hidden="true"
+      >
+        +
+      </span>
     </div>
   );
 }
