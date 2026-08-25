@@ -1060,6 +1060,7 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
                     <th className="px-2 py-2 text-left font-semibold">Operação / Suboperação</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
+                    {canEditPlanningFields && <th className="px-2 py-2 text-left font-semibold">Localização</th>}
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
                     <th className="px-2 py-2 text-left font-semibold">Nº PT</th>
@@ -1094,6 +1095,11 @@ function AtividadesPage() {
                           <div className="text-foreground">{r.description}</div>
                         </div>
                       </td>
+                      {canEditPlanningFields && (
+                        <td className="px-2 py-2 align-top text-[11px]">
+                          {fmtPlan(r.planning_data, "Localização") ?? "—"}
+                        </td>
+                      )}
                       <td className="px-2 py-2 align-top text-[11px]">
                         <div className="text-foreground">{r.area}</div>
                         <div className="text-muted-foreground">{r.specialty}</div>
@@ -1175,6 +1181,11 @@ function AtividadesPage() {
                       {r.area}
                       {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
                     </div>
+                    {canEditPlanningFields && (
+                      <div className="mt-1 text-[10px] text-muted-foreground">
+                        Localização: {fmtPlan(r.planning_data, "Localização") ?? "—"}
+                      </div>
+                    )}
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"}
                     </div>
