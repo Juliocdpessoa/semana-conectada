@@ -97,6 +97,7 @@ const CANCELLATION_JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
+const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 const ACTIVITY_EXPORT_COLUMNS = [
   "Tipo de Nota",
   "Nota",
@@ -482,7 +483,26 @@ function AtividadesPage() {
     );
   }
 
-  const filtered = allRows.filter((row) => matchesActiveFilters(row));
+  const filtered = allRows
+    .filter((row) => matchesActiveFilters(row))
+    .sort((a, b) => {
+      const fields: Array<[string | null | undefined, string | null | undefined]> = [
+        [a.order_number, b.order_number],
+        [fmtPlan(a.planning_data, "Op"), fmtPlan(b.planning_data, "Op")],
+        [fmtPlan(a.planning_data, "Subop"), fmtPlan(b.planning_data, "Subop")],
+      ];
+
+      for (const [leftValue, rightValue] of fields) {
+        const left = leftValue?.trim() ?? "";
+        const right = rightValue?.trim() ?? "";
+        if (!left && right) return 1;
+        if (left && !right) return -1;
+        const comparison = ACTIVITY_SORT_COLLATOR.compare(left, right);
+        if (comparison !== 0) return comparison;
+      }
+
+      return (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER);
+    });
 
   const statusOptions = STATUSES.filter(
     (status) =>
