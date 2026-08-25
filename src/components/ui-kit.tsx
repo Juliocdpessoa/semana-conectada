@@ -23,15 +23,11 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 className="truncate text-[19px] font-semibold leading-tight text-foreground sm:text-xl">
-          {title}
-        </h1>
-        {description && (
-          <p className="mt-1 max-w-2xl truncate text-[13px] text-muted-foreground">
-            {description}
-          </p>
+        <h1 className="truncate text-[19px] font-semibold leading-tight text-foreground sm:text-xl">{title}</h1>
+        {description && <p className="mt-1 max-w-2xl truncate text-[13px] text-muted-foreground">{description}</p>}
+        {meta && (
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">{meta}</div>
         )}
-        {meta && <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">{meta}</div>}
       </div>
       {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
     </header>
@@ -64,19 +60,11 @@ export function KpiCard({
     <div className="surface-card px-3.5 py-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-            {label}
-          </div>
-          <div className="mt-1 text-[22px] font-semibold leading-none text-foreground tabular">
-            {value}
-          </div>
+          <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
+          <div className="mt-1 text-[22px] font-semibold leading-none text-foreground tabular">{value}</div>
           {hint && <div className="mt-1.5 truncate text-[11px] text-muted-foreground">{hint}</div>}
         </div>
-        {icon && (
-          <div className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md", iconTone)}>
-            {icon}
-          </div>
-        )}
+        {icon && <div className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md", iconTone)}>{icon}</div>}
       </div>
     </div>
   );
@@ -115,10 +103,22 @@ export function Panel({
 }
 
 /* ---------- Empty / Loading ---------- */
-export function EmptyState({ icon, title, description, action }: { icon?: ReactNode; title: string; description?: string; action?: ReactNode }) {
+export function EmptyState({
+  icon,
+  title,
+  description,
+  action,
+}: {
+  icon?: ReactNode;
+  title: string;
+  description?: string;
+  action?: ReactNode;
+}) {
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
-      {icon && <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-muted-foreground">{icon}</div>}
+      {icon && (
+        <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-muted-foreground">{icon}</div>
+      )}
       <div className="text-sm font-medium text-foreground">{title}</div>
       {description && <div className="max-w-md text-xs text-muted-foreground">{description}</div>}
       {action && <div className="mt-2">{action}</div>}
@@ -133,13 +133,15 @@ export function Skeleton({ className }: { className?: string }) {
 /* ---------- Status / Sync pills ---------- */
 export function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
-    "EXECUTADO": "border-success/40 bg-success/10 text-success",
+    EXECUTADO: "border-success/40 bg-success/10 text-success",
     "NÃO EXECUTADO": "border-destructive/40 bg-destructive/10 text-destructive",
+    CANCELADA: "border-warning/50 bg-warning/15 text-warning-foreground",
     "Sem apontamento": "border-border bg-muted text-muted-foreground",
   };
   const dotMap: Record<string, string> = {
-    "EXECUTADO": "bg-success",
+    EXECUTADO: "bg-success",
     "NÃO EXECUTADO": "bg-destructive",
+    CANCELADA: "bg-warning",
     "Sem apontamento": "bg-muted-foreground/50",
   };
   return (
@@ -153,19 +155,17 @@ export function StatusPill({ status }: { status: string }) {
 export function SyncPill({ status }: { status: "synced" | "pending" | "error" }) {
   const label = status === "synced" ? "OK" : status === "pending" ? "Pendente" : "Erro";
   const style =
-    status === "synced" ? "border-success/40 bg-success/10 text-success"
-    : status === "pending" ? "border-warning/40 bg-warning/10 text-warning-foreground"
-    : "border-destructive/40 bg-destructive/10 text-destructive";
+    status === "synced"
+      ? "border-success/40 bg-success/10 text-success"
+      : status === "pending"
+        ? "border-warning/40 bg-warning/10 text-warning-foreground"
+        : "border-destructive/40 bg-destructive/10 text-destructive";
   return <span className={cn("status-pill", style)}>{label}</span>;
 }
 
 /* ---------- Toolbar container ---------- */
 export function Toolbar({ children, className }: { children: ReactNode; className?: string }) {
-  return (
-    <div className={cn("surface-card flex flex-wrap items-center gap-2 px-3 py-2.5", className)}>
-      {children}
-    </div>
-  );
+  return <div className={cn("surface-card flex flex-wrap items-center gap-2 px-3 py-2.5", className)}>{children}</div>;
 }
 
 /* ---------- Modal ---------- */
@@ -210,14 +210,28 @@ export function Modal({
           </button>
         </header>
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
-        {footer && <footer className="flex items-center justify-end gap-2 border-t border-border bg-muted/40 px-5 py-3">{footer}</footer>}
+        {footer && (
+          <footer className="flex items-center justify-end gap-2 border-t border-border bg-muted/40 px-5 py-3">
+            {footer}
+          </footer>
+        )}
       </div>
     </div>
   );
 }
 
 /* ---------- Field ---------- */
-export function Field({ label, required, hint, children }: { label: string; required?: boolean; hint?: string; children: ReactNode }) {
+export function Field({
+  label,
+  required,
+  hint,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  children: ReactNode;
+}) {
   return (
     <label className="block">
       <span className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
