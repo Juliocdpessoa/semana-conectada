@@ -340,6 +340,7 @@ function AtividadesPage() {
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
+  const [releaseTypeFilter, setReleaseTypeFilter] = useState<string>("");
   const [areaFilter, setAreaFilter] = useState<string>("");
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
   const [gerFilters, setGerFilters] = useState<string[]>([]);
@@ -394,6 +395,14 @@ function AtividadesPage() {
     const q = search.trim().toLowerCase();
     return rows.filter((r) => {
       if (statusFilter && r.status !== statusFilter) return false;
+      if (canEditPlanningFields && releaseTypeFilter === "__EMPTY__" && r.release_type) return false;
+      if (
+        canEditPlanningFields &&
+        releaseTypeFilter &&
+        releaseTypeFilter !== "__EMPTY__" &&
+        r.release_type !== releaseTypeFilter
+      )
+        return false;
       if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
       if (workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(r)))) return false;
       if (gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(r)))) return false;
@@ -412,7 +421,18 @@ function AtividadesPage() {
         r.reported_by_name?.toLowerCase().includes(q)
       );
     });
-  }, [activities.data, search, statusFilter, areaFilter, workCenterKeys, gerKeys, dateFilter, originFilter]);
+  }, [
+    activities.data,
+    search,
+    statusFilter,
+    releaseTypeFilter,
+    areaFilter,
+    workCenterKeys,
+    gerKeys,
+    dateFilter,
+    originFilter,
+    canEditPlanningFields,
+  ]);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -468,6 +488,7 @@ function AtividadesPage() {
   const activeFilters = [
     search,
     statusFilter,
+    canEditPlanningFields ? releaseTypeFilter : "",
     areaFilter,
     workCenterFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
@@ -478,6 +499,7 @@ function AtividadesPage() {
   function clearFilters() {
     setSearch("");
     setStatusFilter("");
+    setReleaseTypeFilter("");
     setAreaFilter("");
     setWorkCenterFilters([]);
     setGerFilters([]);
@@ -720,6 +742,25 @@ function AtividadesPage() {
             </option>
           ))}
         </select>
+        {canEditPlanningFields && (
+          <select
+            value={releaseTypeFilter}
+            onChange={(e) => {
+              setReleaseTypeFilter(e.target.value);
+              setPage(0);
+            }}
+            className="input-base w-auto py-2 text-xs"
+            aria-label="Filtrar por tipo de liberação"
+          >
+            <option value="">Todos os tipos de liberação</option>
+            {RELEASE_TYPES.map((type) => (
+              <option key={type} value={type}>
+                {type}
+              </option>
+            ))}
+            <option value="__EMPTY__">Sem tipo de liberação</option>
+          </select>
+        )}
         <select
           value={areaFilter}
           onChange={(e) => {
