@@ -94,7 +94,7 @@ function AuthedLayout() {
     }
   }, [overtimeOnly, pathname, router]);
 
-  const canScheduledTransport = isPlanning || isManager || isAdmin || isLogistics;
+  const canScheduledTransport = isManager || isAdmin || isLogistics;
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
