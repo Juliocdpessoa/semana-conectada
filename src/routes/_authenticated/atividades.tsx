@@ -386,53 +386,107 @@ function AtividadesPage() {
     },
   });
 
-  const workCenterKeys = useMemo(() => new Set(workCenterFilters.map((c) => normalizeKey(c))), [workCenterFilters]);
+  type FilterDimension = "status" | "releaseType" | "area" | "workCenter" | "ger" | "date" | "origin";
+  const allRows = activities.data ?? [];
+  const workCenterKeys = new Set(workCenterFilters.map((value) => normalizeKey(value)));
+  const gerKeys = new Set(gerFilters.map((value) => normalizeKey(value)));
 
-  const gerKeys = useMemo(() => new Set(gerFilters.map(normalizeKey)), [gerFilters]);
-
-  const filtered = useMemo(() => {
-    const rows = activities.data ?? [];
-    const q = search.trim().toLowerCase();
-    return rows.filter((r) => {
-      if (statusFilter && r.status !== statusFilter) return false;
-      if (canEditPlanningFields && releaseTypeFilter === "__EMPTY__" && r.release_type) return false;
-      if (
-        canEditPlanningFields &&
-        releaseTypeFilter &&
-        releaseTypeFilter !== "__EMPTY__" &&
-        r.release_type !== releaseTypeFilter
-      )
+  function matchesActiveFilters(row: ActivityRow, omitted?: FilterDimension) {
+    const query = search.trim().toLowerCase();
+    if (omitted !== "status" && statusFilter && row.status !== statusFilter) return false;
+    if (canEditPlanningFields && omitted !== "releaseType") {
+      if (releaseTypeFilter === "__EMPTY__" && row.release_type) return false;
+      if (releaseTypeFilter && releaseTypeFilter !== "__EMPTY__" && row.release_type !== releaseTypeFilter)
         return false;
-      if (areaFilter && normalizeKey(areaLabel(r)) !== normalizeKey(areaFilter)) return false;
-      if (workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(r)))) return false;
-      if (gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(r)))) return false;
-      if (dateFilter && r.scheduled_date !== dateFilter) return false;
-      if (originFilter === "immediate" && !r.is_immediate) return false;
-      if (originFilter === "programmed" && r.is_immediate) return false;
-      if (!q) return true;
-      return (
-        r.order_number?.toLowerCase().includes(q) ||
-        r.note_number?.toLowerCase().includes(q) ||
-        r.description.toLowerCase().includes(q) ||
-        r.area?.toLowerCase().includes(q) ||
-        r.specialty?.toLowerCase().includes(q) ||
-        fmtPlan(r.planning_data, "Op")?.toLowerCase().includes(q) ||
-        fmtPlan(r.planning_data, "Subop")?.toLowerCase().includes(q) ||
-        r.reported_by_name?.toLowerCase().includes(q)
-      );
+    }
+    if (omitted !== "area" && areaFilter && normalizeKey(areaLabel(row)) !== normalizeKey(areaFilter)) return false;
+    if (omitted !== "workCenter" && workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(row))))
+      return false;
+    if (omitted !== "ger" && gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(row)))) return false;
+    if (omitted !== "date" && dateFilter && row.scheduled_date !== dateFilter) return false;
+    if (omitted !== "origin") {
+      if (originFilter === "immediate" && !row.is_immediate) return false;
+      if (originFilter === "programmed" && row.is_immediate) return false;
+    }
+    if (!query) return true;
+    return (
+      row.order_number?.toLowerCase().includes(query) ||
+      row.note_number?.toLowerCase().includes(query) ||
+      row.description.toLowerCase().includes(query) ||
+      row.area?.toLowerCase().includes(query) ||
+      row.specialty?.toLowerCase().includes(query) ||
+      fmtPlan(row.planning_data, "Op")?.toLowerCase().includes(query) ||
+      fmtPlan(row.planning_data, "Subop")?.toLowerCase().includes(query) ||
+      row.reported_by_name?.toLowerCase().includes(query)
+    );
+  }
+
+  const filtered = allRows.filter((row) => matchesActiveFilters(row));
+
+  const statusOptions = STATUSES.filter(
+    (status) =>
+      status === statusFilter || allRows.some((row) => row.status === status && matchesActiveFilters(row, "status")),
+  );
+
+  const releaseTypeOptions = RELEASE_TYPES.filter(
+    (type) =>
+      type === releaseTypeFilter ||
+      allRows.some((row) => row.release_type === type && matchesActiveFilters(row, "releaseType")),
+  );
+  const hasEmptyReleaseType =
+    releaseTypeFilter === "__EMPTY__" ||
+    allRows.some((row) => !row.release_type && matchesActiveFilters(row, "releaseType"));
+
+  const areas = (() => {
+    const values = new Map<string, string>();
+    for (const row of allRows) {
+      if (!matchesActiveFilters(row, "area")) continue;
+      const label = areaLabel(row);
+      if (!label || isNumericOnly(label)) continue;
+      const key = normalizeKey(label);
+      if (key && !values.has(key)) values.set(key, label);
+    }
+    if (areaFilter) values.set(normalizeKey(areaFilter), areaFilter);
+    return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  })();
+
+  const gerOptions = (() => {
+    const values = new Set<string>();
+    for (const row of allRows) if (matchesActiveFilters(row, "ger")) values.add(gerLabel(row));
+    for (const selected of gerFilters) values.add(selected);
+    return Array.from(values).sort((a, b) => {
+      if (a === "Não mapeado") return 1;
+      if (b === "Não mapeado") return -1;
+      return a.localeCompare(b, "pt-BR");
     });
-  }, [
-    activities.data,
-    search,
-    statusFilter,
-    releaseTypeFilter,
-    areaFilter,
-    workCenterKeys,
-    gerKeys,
-    dateFilter,
-    originFilter,
-    canEditPlanningFields,
-  ]);
+  })();
+
+  const workCenters = (() => {
+    const values = new Map<string, string>();
+    for (const row of allRows) {
+      if (!matchesActiveFilters(row, "workCenter")) continue;
+      const label = workCenterLabel(row);
+      if (!label) continue;
+      const key = normalizeKey(label);
+      if (key && !values.has(key)) values.set(key, label);
+    }
+    for (const selected of workCenterFilters) values.set(normalizeKey(selected), selected);
+    return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  })();
+
+  const dateOptions = Array.from(
+    new Set(
+      allRows
+        .filter((row) => matchesActiveFilters(row, "date"))
+        .map((row) => row.scheduled_date)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ).sort();
+  if (dateFilter && !dateOptions.includes(dateFilter)) dateOptions.push(dateFilter);
+
+  const originRows = allRows.filter((row) => matchesActiveFilters(row, "origin"));
+  const hasProgrammed = originFilter === "programmed" || originRows.some((row) => !row.is_immediate);
+  const hasImmediate = originFilter === "immediate" || originRows.some((row) => row.is_immediate);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -448,42 +502,6 @@ function AtividadesPage() {
     const percent = total > 0 ? Math.round((concluded / total) * 100) : 0;
     return { total, concluded, impeded, noReport, immediates, percent };
   }, [filtered]);
-
-  const areas = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const r of activities.data ?? []) {
-      const label = areaLabel(r);
-      if (!label) continue;
-      const key = normalizeKey(label);
-      if (!key || isNumericOnly(label)) continue;
-      if (!map.has(key)) map.set(key, label);
-    }
-    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [activities.data]);
-
-  const gerOptions = useMemo(() => {
-    const values = new Set((activities.data ?? []).map(gerLabel));
-    return Array.from(values).sort((a, b) => {
-      if (a === "Não mapeado") return 1;
-      if (b === "Não mapeado") return -1;
-      return a.localeCompare(b, "pt-BR");
-    });
-  }, [activities.data]);
-
-  // Centros de trabalho dependentes da área selecionada
-  const workCenters = useMemo(() => {
-    const map = new Map<string, string>();
-    const areaKey = normalizeKey(areaFilter);
-    for (const r of activities.data ?? []) {
-      if (areaKey && normalizeKey(areaLabel(r)) !== areaKey) continue;
-      const label = workCenterLabel(r);
-      if (!label) continue;
-      const key = normalizeKey(label);
-      if (!key) continue;
-      if (!map.has(key)) map.set(key, label);
-    }
-    return Array.from(map.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  }, [activities.data, areaFilter]);
 
   const activeFilters = [
     search,
@@ -736,7 +754,7 @@ function AtividadesPage() {
           className="input-base w-auto py-2 text-xs"
         >
           <option value="">Todos os status</option>
-          {STATUSES.map((s) => (
+          {statusOptions.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
@@ -753,12 +771,12 @@ function AtividadesPage() {
             aria-label="Filtrar por tipo de liberação"
           >
             <option value="">Todos os tipos de liberação</option>
-            {RELEASE_TYPES.map((type) => (
+            {releaseTypeOptions.map((type) => (
               <option key={type} value={type}>
                 {type}
               </option>
             ))}
-            <option value="__EMPTY__">Sem tipo de liberação</option>
+            {hasEmptyReleaseType && <option value="__EMPTY__">Sem tipo de liberação</option>}
           </select>
         )}
         <select
@@ -817,21 +835,25 @@ function AtividadesPage() {
           aria-label="Filtrar por origem da atividade"
         >
           <option value="">Todas as atividades</option>
-          <option value="programmed">Somente programadas</option>
-          <option value="immediate">Somente imediatas</option>
+          {hasProgrammed && <option value="programmed">Somente programadas</option>}
+          {hasImmediate && <option value="immediate">Somente imediatas</option>}
         </select>
-        <label className="input-base flex w-auto min-w-[150px] items-center gap-2 py-2 text-xs">
-          <span className="whitespace-nowrap text-muted-foreground">Data:</span>
-          <input
-            type="date"
-            value={dateFilter}
-            onChange={(e) => {
-              setDateFilter(e.target.value);
-              setPage(0);
-            }}
-            className="flex-1 min-w-0 bg-transparent outline-none text-xs"
-          />
-        </label>
+        <select
+          value={dateFilter}
+          onChange={(e) => {
+            setDateFilter(e.target.value);
+            setPage(0);
+          }}
+          className="input-base w-auto min-w-[150px] py-2 text-xs"
+          aria-label="Filtrar por data"
+        >
+          <option value="">Todas as datas</option>
+          {dateOptions.map((date) => (
+            <option key={date} value={date}>
+              {formatDate(date)}
+            </option>
+          ))}
+        </select>
         {activeFilters > 0 && (
           <button onClick={clearFilters} className="btn-ghost py-1.5 text-xs">
             <X className="h-3 w-3" /> Limpar {activeFilters}
