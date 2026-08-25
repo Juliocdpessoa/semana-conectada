@@ -47,7 +47,6 @@ type ActivityRow = {
   pbs: string | null;
   pt_number: string | null;
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
-  d1_date: string | null;
 };
 
 const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
@@ -85,9 +84,9 @@ const JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
-type PlanningField = "pbs" | "pt_number" | "release_type" | "d1_date";
+type PlanningField = "pbs" | "pt_number" | "release_type" | "scheduled_date";
 type PlanningDraft = Record<PlanningField, string>;
-const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "d1_date"];
+const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "scheduled_date"];
 
 const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
   "50": "TE",
@@ -273,7 +272,7 @@ function PlanningGridCell({
   onDrop: () => void;
 }) {
   if (!editable) {
-    return field === "d1_date" ? <>{formatDate(value || null)}</> : <>{value || "—"}</>;
+    return field === "scheduled_date" ? <>{formatDate(value || null)}</> : <>{value || "—"}</>;
   }
 
   const sharedClass =
@@ -308,7 +307,7 @@ function PlanningGridCell({
         </select>
       ) : (
         <input
-          type={field === "d1_date" ? "date" : "text"}
+          type={field === "scheduled_date" ? "date" : "text"}
           value={value}
           onChange={(event) => onChange(event.target.value)}
           onBlur={(event) => onCommit(event.target.value)}
@@ -316,7 +315,7 @@ function PlanningGridCell({
             if (event.key === "Enter") event.currentTarget.blur();
           }}
           className={sharedClass}
-          aria-label={field === "pbs" ? "PBS" : field === "pt_number" ? "Número da PT" : "Data D-1"}
+          aria-label={field === "pbs" ? "PBS" : field === "pt_number" ? "Número da PT" : "Data"}
         />
       )}
       <span
@@ -510,12 +509,12 @@ function AtividadesPage() {
       }
       return normalized;
     }
-    if (field === "d1_date" && clean) {
+    if (field === "scheduled_date" && clean) {
       const br = clean.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
       const iso = br
         ? `${br[3]}-${String(Number(br[2])).padStart(2, "0")}-${String(Number(br[1])).padStart(2, "0")}`
         : clean;
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error(`Data D-1 inválida: "${clean}".`);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) throw new Error(`Data inválida: "${clean}".`);
       return iso;
     }
     return clean;
@@ -526,7 +525,7 @@ function AtividadesPage() {
       pbs: planningValue(row, "pbs"),
       pt_number: planningValue(row, "pt_number"),
       release_type: planningValue(row, "release_type"),
-      d1_date: planningValue(row, "d1_date"),
+      scheduled_date: planningValue(row, "scheduled_date"),
       ...overrides,
     };
     return {
@@ -534,7 +533,7 @@ function AtividadesPage() {
       pbs: current.pbs || null,
       ptNumber: current.pt_number || null,
       releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
-      d1Date: current.d1_date || null,
+      scheduledDate: current.scheduled_date || null,
     };
   }
 
@@ -867,7 +866,6 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
                     <th className="px-2 py-2 text-left font-semibold">Nº PT</th>
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
-                    <th className="px-2 py-2 text-left font-semibold">Data D-1</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
@@ -902,7 +900,7 @@ function AtividadesPage() {
                         <div className="text-foreground">{r.area}</div>
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
-                      {(["pbs", "pt_number", "release_type", "d1_date"] as PlanningField[]).map((field) => {
+                      {(["pbs", "pt_number", "release_type", "scheduled_date"] as PlanningField[]).map((field) => {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
                           <td key={field} className="px-1 py-1.5 align-top text-[11px]">
@@ -921,7 +919,6 @@ function AtividadesPage() {
                           </td>
                         );
                       })}
-                      <td className="px-2 py-2 align-top text-[11px] tabular">{formatDate(r.scheduled_date)}</td>
                       <td className="px-2 py-2 align-top">
                         <StatusPill status={r.status} />
                       </td>
@@ -981,8 +978,7 @@ function AtividadesPage() {
                       {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
                     </div>
                     <div className="mt-1 text-[10px] text-muted-foreground">
-                      PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"} · D-1:{" "}
-                      {formatDate(r.d1_date)}
+                      PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"}
                     </div>
                   </div>
                 </div>
@@ -1098,7 +1094,7 @@ function PlanningFieldsModal({
   const [saving, setSaving] = useState(false);
   const [grid, setGrid] = useState(() =>
     rows
-      .map((row) => [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.d1_date ?? ""].join("\t"))
+      .map((row) => [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.scheduled_date ?? ""].join("\t"))
       .join("\n"),
   );
 
@@ -1111,19 +1107,19 @@ function PlanningFieldsModal({
         const cells = line.split("\t");
         if (cells.length > 4) throw new Error(`A linha ${index + 1} possui mais de 4 colunas.`);
         while (cells.length < 4) cells.push("");
-        const [pbs, ptNumber, releaseType, d1Date] = cells.map((cell) => cell.trim());
+        const [pbs, ptNumber, releaseType, scheduledDate] = cells.map((cell) => cell.trim());
         if (releaseType && !RELEASE_TYPES.includes(releaseType as (typeof RELEASE_TYPES)[number])) {
           throw new Error(`Tipo de liberação inválido na linha ${index + 1}. Use PT, PTT, ATRE ou Oficina.`);
         }
-        if (d1Date && !/^\d{4}-\d{2}-\d{2}$/.test(d1Date)) {
-          throw new Error(`Data D-1 inválida na linha ${index + 1}. Use AAAA-MM-DD.`);
+        if (scheduledDate && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
+          throw new Error(`Data inválida na linha ${index + 1}. Use AAAA-MM-DD.`);
         }
         return {
           id: rows[index].id,
           pbs: pbs || null,
           ptNumber: ptNumber || null,
           releaseType: (releaseType || null) as (typeof RELEASE_TYPES)[number] | null,
-          d1Date: d1Date || null,
+          scheduledDate: scheduledDate || null,
         };
       });
       setSaving(true);
@@ -1159,7 +1155,7 @@ function PlanningFieldsModal({
           <span>PBS</span>
           <span>Nº PT</span>
           <span>Tipo de Liberação</span>
-          <span>Data D-1</span>
+          <span>Data</span>
         </div>
         <textarea
           value={grid}
