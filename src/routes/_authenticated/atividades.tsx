@@ -874,6 +874,9 @@ function AtividadesPage() {
       worksheet.mergeCells("D1:Q1");
       worksheet.mergeCells("D2:Q2");
       worksheet.mergeCells("D3:Q3");
+      worksheet.mergeCells("S1:T1");
+      worksheet.mergeCells("S2:T2");
+      worksheet.mergeCells("S3:T3");
       worksheet.mergeCells("F7:G7");
       worksheet.mergeCells("H7:J7");
 
