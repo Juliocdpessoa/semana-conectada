@@ -14,6 +14,7 @@ import {
   AlertTriangle,
   Clock,
   RefreshCw,
+  Download,
   ListChecks,
   Percent,
   ChevronDown,
@@ -43,6 +44,7 @@ type ActivityRow = {
   reported_at: string | null;
   is_immediate: boolean;
   week_id: string;
+  source_row_number: number | null;
   planning_data: Record<string, unknown> | null;
   pbs: string | null;
   pt_number: string | null;
@@ -84,6 +86,33 @@ const JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
+const ACTIVITY_EXPORT_COLUMNS = [
+  "Tipo de Nota",
+  "Nota",
+  "Confirmação",
+  "Ordem",
+  "Op",
+  "Subop",
+  "Data início",
+  "Hora início",
+  "Data fim",
+  "Hora fim",
+  "Gr pl",
+  "Área op",
+  "CenTrab",
+  "TxtDesc.Oper.",
+  "Localização",
+  "Nº",
+  "Dur n",
+  "Trab",
+  "Gerência",
+  "Local",
+  "PBS",
+  "Tipo de Liberação",
+  "Status",
+  "Justificativa",
+  "Observações",
+] as const;
 type PlanningField = "pbs" | "pt_number" | "release_type" | "scheduled_date";
 type PlanningDraft = Record<PlanningField, string>;
 const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "scheduled_date"];
@@ -351,6 +380,7 @@ function AtividadesPage() {
   const [editing, setEditing] = useState<ActivityRow | null>(null);
   const [bulkOpen, setBulkOpen] = useState(false);
   const [planningFieldsOpen, setPlanningFieldsOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -672,6 +702,100 @@ function AtividadesPage() {
     else setSelected(new Set(paged.map((r) => r.id)));
   }
 
+  async function exportFilteredActivities() {
+    if (isExporting) return;
+    if (!activeWeek.data || filtered.length === 0) {
+      toast.error("Não há atividades nos filtros atuais para exportar.");
+      return;
+    }
+    setIsExporting(true);
+    try {
+      const XLSX = await import("xlsx");
+      const responsibleHeader = "Responsável pela informação";
+      const reportedAtHeader = "Data da informação";
+      const extraHeaders = ["Ger", "Nº PT"];
+      const exportHeaders = [...ACTIVITY_EXPORT_COLUMNS, ...extraHeaders, responsibleHeader, reportedAtHeader];
+      const pad2 = (value: number) => String(value).padStart(2, "0");
+      const formatDateOnly = (value: unknown): string => {
+        if (value === null || value === undefined || value === "") return "";
+        if (value instanceof Date) {
+          if (isNaN(value.getTime())) return "";
+          return `${pad2(value.getDate())}/${pad2(value.getMonth() + 1)}/${value.getFullYear()}`;
+        }
+        if (typeof value === "number" && isFinite(value)) {
+          const date = new Date(Math.round((value - 25569) * 86400 * 1000));
+          if (isNaN(date.getTime())) return "";
+          return `${pad2(date.getUTCDate())}/${pad2(date.getUTCMonth() + 1)}/${date.getUTCFullYear()}`;
+        }
+        const text = String(value).trim();
+        if (!text) return "";
+        const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (iso) return `${iso[3]}/${iso[2]}/${iso[1]}`;
+        const br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+        if (br) return `${pad2(Number(br[1]))}/${pad2(Number(br[2]))}/${br[3]}`;
+        const date = new Date(text);
+        return isNaN(date.getTime())
+          ? ""
+          : `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()}`;
+      };
+      const formatReportedAt = (value: string | null): string => {
+        if (!value) return "";
+        const date = new Date(value);
+        if (isNaN(date.getTime())) return "";
+        return `${pad2(date.getDate())}/${pad2(date.getMonth() + 1)}/${date.getFullYear()} ${pad2(
+          date.getHours(),
+        )}:${pad2(date.getMinutes())}`;
+      };
+
+      const rows = filtered
+        .slice()
+        .sort(
+          (a, b) => (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
+        )
+        .map((activity) => {
+          const planning = activity.planning_data ?? {};
+          const row: Record<string, unknown> = {};
+          for (const header of ACTIVITY_EXPORT_COLUMNS) {
+            if (header === "PBS") row[header] = activity.pbs ?? planning[header] ?? "";
+            else if (header === "Tipo de Liberação") row[header] = activity.release_type ?? planning[header] ?? "";
+            else if (header === "Data início")
+              row[header] = formatDateOnly(activity.scheduled_date ?? planning[header]);
+            else if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
+            else if (header === "Justificativa") row[header] = activity.justification ?? "";
+            else if (header === "Observações") row[header] = activity.observation ?? "";
+            else if (header === "Data fim") row[header] = formatDateOnly(planning[header]);
+            else row[header] = planning[header] ?? "";
+          }
+          row["Ger"] = gerLabel(activity);
+          row["Nº PT"] = activity.pt_number ?? "";
+          row[responsibleHeader] = activity.reported_by_name || activity.reported_by_email || "";
+          row[reportedAtHeader] = formatReportedAt(activity.reported_at);
+          return row;
+        });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: exportHeaders });
+      worksheet["!cols"] = exportHeaders.map((name) => ({
+        wch:
+          name === "TxtDesc.Oper."
+            ? 42
+            : name === "Justificativa" || name === "Observações" || name === responsibleHeader
+              ? 34
+              : name === "Tipo de Liberação" || name === reportedAtHeader
+                ? 18
+                : Math.max(11, name.length + 2),
+      }));
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Acompanhamento");
+      const code = String(activeWeek.data.code ?? "semana").replace(/\//g, "-");
+      XLSX.writeFile(workbook, `${code}-apontamentos-filtrados.xlsx`);
+      toast.success(`${rows.length.toLocaleString("pt-BR")} atividade(s) exportada(s) com os filtros atuais.`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Falha ao exportar as atividades filtradas.");
+    } finally {
+      setIsExporting(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
@@ -688,6 +812,17 @@ function AtividadesPage() {
               <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
               <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
             </div>
+            {canEditPlanningFields && (
+              <button
+                onClick={exportFilteredActivities}
+                disabled={isExporting || filtered.length === 0}
+                className="btn-ghost"
+                title="Exportar as atividades com os filtros atuais"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {isExporting ? "Exportando…" : "Exportar"}
+              </button>
+            )}
             <button onClick={() => activities.refetch()} className="btn-ghost" title="Recarregar">
               <RefreshCw className="h-3.5 w-3.5" /> Atualizar
             </button>
