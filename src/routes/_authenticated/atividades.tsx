@@ -1058,7 +1058,7 @@ function AtividadesPage() {
                       />
                     </th>
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
-                    <th className="px-2 py-2 text-left font-semibold">Operação / Suboperação</th>
+                    <th className="px-2 py-2 text-left font-semibold">Oper / Sub</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
                     {canEditPlanningFields && <th className="px-2 py-2 text-left font-semibold">Localização</th>}
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
