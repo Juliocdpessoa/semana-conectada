@@ -29,7 +29,8 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
-    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
+    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
+    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
 
     const { data: currentActivity, error: currentError } = await supabase
       .from("activities")
@@ -43,11 +44,11 @@ export const updateActivity = createServerFn({ method: "POST" })
       if (rolesError) return { ok: false as const, error: rolesError.message };
       const isPlanning = roles?.some((row) => row.role === "planning");
       const preservesExistingCancellation =
-        currentActivity.status === "CANCELADA" && currentActivity.justification === data.justification;
+        currentActivity.status === "CANCELADA" && currentActivity.justification === normalizedJustification;
       if (!isPlanning && !preservesExistingCancellation) {
         return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
       }
-      if (!data.justification || !CANCELLATION_JUSTIFICATIONS.has(data.justification)) {
+      if (!normalizedJustification || !CANCELLATION_JUSTIFICATIONS.has(normalizedJustification)) {
         return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
       }
     }
@@ -84,7 +85,7 @@ export const updateActivity = createServerFn({ method: "POST" })
       .from("activities")
       .update({
         status: data.status,
-        justification: data.justification,
+        justification: normalizedJustification,
         observation: data.observation,
         planning_data: nextPlanningData as never,
         reported_by_user_id: userId,
@@ -138,13 +139,14 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .inputValidator((data: unknown) => bulkSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!roles?.some((row) => row.role === "planning")) {
         return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
       }
-      if (!data.justification || !CANCELLATION_JUSTIFICATIONS.has(data.justification)) {
+      if (!normalizedJustification || !CANCELLATION_JUSTIFICATIONS.has(normalizedJustification)) {
         return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
       }
     }
@@ -152,7 +154,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
 
-    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && data.justification?.startsWith("08 -");
+    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
     const linkedIds = Array.from(new Set(data.immediateActivityIds));
     if (requiresImmediateLink && linkedIds.length === 0) {
       return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
@@ -161,7 +163,7 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_reports", {
       p_ids: Array.from(new Set(data.ids)),
       p_status: data.status,
-      p_justification: data.justification,
+      p_justification: normalizedJustification,
       p_observation: data.observation,
       p_linked_ids: requiresImmediateLink ? linkedIds : [],
     });
