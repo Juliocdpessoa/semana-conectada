@@ -36,7 +36,7 @@ import type { ScheduledTransportRow, ScheduledTransportBatch } from "@/lib/trans
 import { formatDate, filterEmployees, sanitizeEmployeeRow } from "@/lib/overtime.functions";
 import type { EmployeeRow } from "@/lib/overtime.functions";
 
-const ALLOWED_ROLES = ["admin", "manager", "logistics", "planning"];
+const ALLOWED_ROLES = ["admin", "manager", "logistics"];
 
 export const Route = createFileRoute("/_authenticated/transporte-programado")({
   beforeLoad: ({ context }) => {
