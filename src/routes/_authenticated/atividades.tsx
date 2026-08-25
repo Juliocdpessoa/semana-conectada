@@ -22,6 +22,7 @@ import {
 import type { SessionInfo } from "./route";
 import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
