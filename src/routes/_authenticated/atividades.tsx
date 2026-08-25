@@ -15,10 +15,12 @@ import {
   Clock,
   RefreshCw,
   Download,
+  Printer,
   ListChecks,
   Percent,
   ChevronDown,
 } from "lucide-react";
+import logoAsset from "@/assets/normatel-logo.png.asset.json";
 import type { SessionInfo } from "./route";
 import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -409,6 +411,7 @@ function AtividadesPage() {
   const [bulkOpen, setBulkOpen] = useState(false);
   const [planningFieldsOpen, setPlanningFieldsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -839,6 +842,219 @@ function AtividadesPage() {
     }
   }
 
+  async function exportPrintableSchedule() {
+    if (isPrinting) return;
+    if (planningSavesPendingRef.current > 0) {
+      toast.info("Aguarde o término do salvamento antes de gerar a impressão.");
+      return;
+    }
+    if (!activeWeek.data || filtered.length === 0) {
+      toast.error("Não há atividades nos filtros atuais para imprimir.");
+      return;
+    }
+
+    setIsPrinting(true);
+    try {
+      const ExcelJS = (await import("exceljs")).default;
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = "NEXO";
+      workbook.created = new Date();
+      const worksheet = workbook.addWorksheet("Impressão", {
+        views: [{ showGridLines: false }],
+        pageSetup: {
+          orientation: "landscape",
+          paperSize: 9,
+          fitToPage: true,
+          fitToWidth: 1,
+          fitToHeight: 0,
+          margins: { left: 0, right: 0, top: 0, bottom: 0, header: 0, footer: 0 },
+        },
+      });
+
+      worksheet.mergeCells("D1:Q1");
+      worksheet.mergeCells("D2:Q2");
+      worksheet.mergeCells("D3:Q3");
+      worksheet.mergeCells("F7:G7");
+      worksheet.mergeCells("H7:J7");
+
+      worksheet.getCell("D1").value = "SISTEMA DE GESTÃO INTEGRADO";
+      worksheet.getCell("D2").value = "FORMULÁRIO DE GESTÃO";
+      worksheet.getCell("D3").value = "PROGRAMAÇÃO DE EXECUÇÃO SEMANAL";
+      worksheet.getCell("S1").value = "FG-ENG-068-751";
+      worksheet.getCell("S2").value = "REV.: 00";
+      worksheet.getCell("S3").value = new Date(2023, 3, 25);
+      worksheet.getCell("S3").numFmt = "dd/mm/yyyy";
+
+      worksheet.getCell("A5").value = "Período de execução:";
+      worksheet.getCell("B5").value = new Date(`${activeWeek.data.start_date}T12:00:00`);
+      worksheet.getCell("B5").numFmt = "dd/mm/yyyy";
+      worksheet.getCell("D5").value = "à";
+      worksheet.getCell("E5").value = new Date(`${activeWeek.data.end_date}T12:00:00`);
+      worksheet.getCell("E5").numFmt = "dd/mm/yyyy";
+      worksheet.getCell("I5").value = "SEMANA:";
+      worksheet.getCell("J5").value = activeWeek.data.label || activeWeek.data.code;
+
+      worksheet.getCell("A7").value = "Contrat.:";
+      worksheet.getCell("B7").value = "Petróleo Brasileiro S.A/RPBC";
+      worksheet.getCell("F7").value = "Contratada:";
+      worksheet.getCell("H7").value = "Normatel Engenharia Ltda.";
+
+      const headerFill = "D9EAF7";
+      const thinBorder = {
+        top: { style: "thin" as const, color: { argb: "FF7F8C99" } },
+        left: { style: "thin" as const, color: { argb: "FF7F8C99" } },
+        bottom: { style: "thin" as const, color: { argb: "FF7F8C99" } },
+        right: { style: "thin" as const, color: { argb: "FF7F8C99" } },
+      };
+      for (let row = 1; row <= 3; row += 1) {
+        worksheet.getRow(row).height = 18;
+        for (let column = 1; column <= 19; column += 1) {
+          const cell = worksheet.getRow(row).getCell(column);
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
+          cell.border = thinBorder;
+          cell.font = { name: "Arial", size: 10, bold: true };
+          cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        }
+      }
+
+      try {
+        const logoResponse = await fetch(logoAsset.url);
+        if (logoResponse.ok) {
+          const logoId = workbook.addImage({
+            buffer: (await logoResponse.arrayBuffer()) as any,
+            extension: "png",
+          });
+          worksheet.addImage(logoId, "A1:C3");
+        }
+      } catch {
+        // A geração continua mesmo se o logotipo estiver temporariamente indisponível.
+      }
+
+      worksheet.getRow(4).height = 6;
+      worksheet.getRow(5).height = 18;
+      worksheet.getRow(6).height = 6;
+      worksheet.getRow(7).height = 18;
+      worksheet.getRow(8).height = 11.4;
+      for (const rowNumber of [5, 7]) {
+        const row = worksheet.getRow(rowNumber);
+        row.font = { name: "Arial", size: 10, bold: true };
+        row.alignment = { vertical: "middle" };
+        for (let column = 1; column <= 19; column += 1) {
+          row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
+        }
+      }
+
+      const printHeaders = [
+        "Ger",
+        "Localização",
+        "Nota",
+        "Tipo de Lib",
+        "Ordem",
+        "Op",
+        "Sub",
+        "Data",
+        "Gr pl",
+        "Área Op",
+        "CenTrab",
+        "TxtDesc.Oper.",
+        "Nº",
+        "Dur n",
+        "Trab",
+        "EXE.",
+        "AND",
+        "N.EXE",
+        "Observação",
+      ];
+      const rows = filtered
+        .slice()
+        .sort(
+          (a, b) => (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
+        )
+        .map((activity) => {
+          const planning = activity.planning_data ?? {};
+          return [
+            gerLabel(activity),
+            planning["Localização"] ?? "",
+            activity.note_number ?? planning["Nota"] ?? "",
+            planningValue(activity, "release_type"),
+            activity.order_number ?? planning["Ordem"] ?? "",
+            planning["Op"] ?? "",
+            planning["Subop"] ?? "",
+            activity.scheduled_date ? new Date(`${activity.scheduled_date}T12:00:00`) : "",
+            planning["Gr pl"] ?? "",
+            planning["Área op"] ?? "",
+            planning["CenTrab"] ?? "",
+            activity.description || planning["TxtDesc.Oper."] || "",
+            planning["Nº"] ?? "",
+            planning["Dur n"] ?? "",
+            planning["Trab"] ?? "",
+            "",
+            "",
+            "",
+            "",
+          ];
+        });
+
+      worksheet.addTable({
+        name: "ProgramacaoImpressao",
+        ref: "A9",
+        headerRow: true,
+        totalsRow: false,
+        style: {
+          theme: "TableStyleMedium2",
+          showFirstColumn: false,
+          showLastColumn: false,
+          showRowStripes: false,
+          showColumnStripes: false,
+        },
+        columns: printHeaders.map((name) => ({ name, filterButton: false })),
+        rows,
+      });
+
+      worksheet.getRow(9).height = 18;
+      worksheet.getRow(9).font = { name: "Arial", size: 9, bold: true };
+      worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      for (let rowNumber = 10; rowNumber <= rows.length + 9; rowNumber += 1) {
+        const row = worksheet.getRow(rowNumber);
+        row.height = 21;
+        row.font = { name: "Arial", size: 8 };
+        row.alignment = { vertical: "middle", wrapText: true };
+        for (let column = 1; column <= 19; column += 1) row.getCell(column).border = thinBorder;
+        row.getCell(8).numFmt = "dd/mm/yyyy";
+        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18]) {
+          row.getCell(column).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+        }
+      }
+
+      [11, 13, 13, 13, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
+        worksheet.getColumn(index + 1).width = width;
+      });
+
+      const lastRow = rows.length + 9;
+      worksheet.pageSetup.printArea = `A1:S${lastRow}`;
+      worksheet.pageSetup.printTitlesRow = "1:9";
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer as BlobPart], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      const code = String(activeWeek.data.code ?? "semana").replace(/\//g, "-");
+      anchor.href = url;
+      anchor.download = `programacao-impressao-${code}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`${rows.length.toLocaleString("pt-BR")} atividade(s) preparadas no modelo de impressão.`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o modelo de impressão.");
+    } finally {
+      setIsPrinting(false);
+    }
+  }
+
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
@@ -856,15 +1072,26 @@ function AtividadesPage() {
               <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
             </div>
             {canEditPlanningFields && (
-              <button
-                onClick={exportFilteredActivities}
-                disabled={isExporting || planningSavePending || filtered.length === 0}
-                className="btn-ghost"
-                title="Exportar as atividades com os filtros atuais"
-              >
-                <Download className="h-3.5 w-3.5" />
-                {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
-              </button>
+              <>
+                <button
+                  onClick={exportPrintableSchedule}
+                  disabled={isPrinting || planningSavePending || filtered.length === 0}
+                  className="btn-ghost"
+                  title="Gerar o modelo de impressão com os filtros atuais"
+                >
+                  <Printer className="h-3.5 w-3.5" />
+                  {planningSavePending ? "Salvando…" : isPrinting ? "Gerando…" : "Imprimir programação"}
+                </button>
+                <button
+                  onClick={exportFilteredActivities}
+                  disabled={isExporting || planningSavePending || filtered.length === 0}
+                  className="btn-ghost"
+                  title="Exportar as atividades com os filtros atuais"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
+                </button>
+              </>
             )}
             <button onClick={() => activities.refetch()} className="btn-ghost" title="Recarregar">
               <RefreshCw className="h-3.5 w-3.5" /> Atualizar
