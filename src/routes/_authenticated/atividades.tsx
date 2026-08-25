@@ -52,7 +52,7 @@ type ActivityRow = {
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
 };
 
-const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"];
+const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"];
 const JUSTIFICATIONS = [
   "01 - ATRASO NA EXECUÇÃO",
   "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
@@ -84,7 +84,15 @@ const JUSTIFICATIONS = [
   "28 - PENDENCIA DE MATERIAL",
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
-const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
+const CANCELLATION_JUSTIFICATIONS = [
+  "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
+  "12 - SERVIÇO CANCELADO",
+  "15 - PROGRAMAÇÃO INDEVIDA",
+  "17 - TAREFA ELIMINADA EQUIVOCADAMENTE DO SAP",
+  "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
+  "29 - OUTROS TIPOS DE PENDENCIAS",
+];
+const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const ACTIVITY_EXPORT_COLUMNS = [
@@ -1160,6 +1168,11 @@ function AtividadesPage() {
                       })}
                       <td className="px-2 py-2 align-top">
                         <StatusPill status={r.status} />
+                        {r.status === "CANCELADA" && r.justification && (
+                          <div className="mt-1 max-w-44 text-[10px] leading-tight text-muted-foreground">
+                            {r.justification}
+                          </div>
+                        )}
                       </td>
                       <td className="px-2 py-2 align-top text-[11px]">
                         {r.reported_by_name || <span className="text-muted-foreground">—</span>}
@@ -1232,6 +1245,11 @@ function AtividadesPage() {
                     {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
                   </button>
                 </div>
+                {r.status === "CANCELADA" && r.justification && (
+                  <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] text-warning-foreground">
+                    <span className="font-semibold">Motivo do cancelamento:</span> {r.justification}
+                  </div>
+                )}
                 {r.reported_by_name && (
                   <div className="mt-2 border-t border-border pt-1.5 text-[10px] text-muted-foreground">
                     Últ.: {r.reported_by_name} · {formatDateTime(r.reported_at)}
@@ -1281,6 +1299,7 @@ function AtividadesPage() {
       {editing && (
         <ApontarModal
           activity={editing}
+          canCancel={canEditPlanningFields}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -1293,6 +1312,7 @@ function AtividadesPage() {
           count={selected.size}
           ids={Array.from(selected)}
           weekId={activeWeek.data!.id}
+          canCancel={canEditPlanningFields}
           onClose={() => setBulkOpen(false)}
           onSaved={() => {
             setBulkOpen(false);
@@ -1421,10 +1441,12 @@ function PlanningFieldsModal({
 
 function ApontarModal({
   activity,
+  canCancel,
   onClose,
   onSaved,
 }: {
   activity: ActivityRow;
+  canCancel: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1503,9 +1525,19 @@ function ApontarModal({
 
       <div className="mt-4 space-y-3">
         <Field label="Status" required>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
-            {STATUSES.map((s) => (
-              <option key={s} value={s}>
+          <select
+            value={status}
+            onChange={(e) => {
+              const nextStatus = e.target.value;
+              if (status === "CANCELADA" && nextStatus !== "CANCELADA") setJustification("");
+              if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
+                setJustification("");
+              setStatus(nextStatus);
+            }}
+            className="input-base"
+          >
+            {STATUSES.filter((s) => s !== "CANCELADA" || canCancel || activity.status === "CANCELADA").map((s) => (
+              <option key={s} value={s} disabled={s === "CANCELADA" && !canCancel}>
                 {s}
               </option>
             ))}
@@ -1523,7 +1555,7 @@ function ApontarModal({
             className="input-base"
           >
             <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.map((j) => (
+            {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
               <option key={j} value={j}>
                 {j}
               </option>
@@ -1824,12 +1856,14 @@ function BulkModal({
   count,
   ids,
   weekId,
+  canCancel,
   onClose,
   onSaved,
 }: {
   count: number;
   ids: string[];
   weekId: string;
+  canCancel: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1897,8 +1931,18 @@ function BulkModal({
       </div>
       <div className="mt-4 space-y-3">
         <Field label="Status" required>
-          <select value={status} onChange={(e) => setStatus(e.target.value)} className="input-base">
-            {STATUSES.map((s) => (
+          <select
+            value={status}
+            onChange={(e) => {
+              const nextStatus = e.target.value;
+              if (status === "CANCELADA" && nextStatus !== "CANCELADA") setJustification("");
+              if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
+                setJustification("");
+              setStatus(nextStatus);
+            }}
+            className="input-base"
+          >
+            {STATUSES.filter((s) => s !== "CANCELADA" || canCancel).map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -1916,7 +1960,7 @@ function BulkModal({
             className="input-base"
           >
             <option value="">— Selecione —</option>
-            {JUSTIFICATIONS.map((j) => (
+            {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
               <option key={j} value={j}>
                 {j}
               </option>
