@@ -5,13 +5,21 @@ import { z } from "zod";
 const updateSchema = z.object({
   activityId: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
-  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
+  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
   immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
 });
 
-const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO"]);
+const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
+const CANCELLATION_JUSTIFICATIONS = new Set([
+  "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
+  "12 - SERVIÇO CANCELADO",
+  "15 - PROGRAMAÇÃO INDEVIDA",
+  "17 - TAREFA ELIMINADA EQUIVOCADAMENTE DO SAP",
+  "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
+  "29 - OUTROS TIPOS DE PENDENCIAS",
+]);
 
 export const updateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -25,11 +33,24 @@ export const updateActivity = createServerFn({ method: "POST" })
 
     const { data: currentActivity, error: currentError } = await supabase
       .from("activities")
-      .select("id, week_id, is_immediate, planning_data")
+      .select("id, week_id, is_immediate, planning_data, status, justification")
       .eq("id", data.activityId)
       .maybeSingle();
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!currentActivity) return { ok: false as const, error: "Atividade não encontrada." };
+    if (data.status === "CANCELADA") {
+      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (rolesError) return { ok: false as const, error: rolesError.message };
+      const isPlanning = roles?.some((row) => row.role === "planning");
+      const preservesExistingCancellation =
+        currentActivity.status === "CANCELADA" && currentActivity.justification === data.justification;
+      if (!isPlanning && !preservesExistingCancellation) {
+        return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
+      }
+      if (!data.justification || !CANCELLATION_JUSTIFICATIONS.has(data.justification)) {
+        return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
+      }
+    }
     if (requiresImmediateLink && currentActivity.is_immediate) {
       return { ok: false as const, error: "Uma atividade imediata não pode ser vinculada a ela mesma." };
     }
@@ -106,7 +127,7 @@ export const updateActivity = createServerFn({ method: "POST" })
 
 const bulkSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
-  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO"]),
+  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
   immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
@@ -116,7 +137,17 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => bulkSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { supabase } = context;
+    const { supabase, userId } = context;
+    if (data.status === "CANCELADA") {
+      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (rolesError) return { ok: false as const, error: rolesError.message };
+      if (!roles?.some((row) => row.role === "planning")) {
+        return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
+      }
+      if (!data.justification || !CANCELLATION_JUSTIFICATIONS.has(data.justification)) {
+        return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
+      }
+    }
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
