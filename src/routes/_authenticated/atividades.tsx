@@ -384,6 +384,8 @@ function AtividadesPage() {
   const qc = useQueryClient();
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const [planningDrafts, setPlanningDrafts] = useState<Record<string, Partial<PlanningDraft>>>({});
+  const planningSavesPendingRef = useRef(0);
+  const [planningSavePending, setPlanningSavePending] = useState(false);
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -626,13 +628,23 @@ function AtividadesPage() {
   }
 
   async function persistPlanningRows(payload: ReturnType<typeof planningPayload>[], showSuccess = false) {
+    planningSavesPendingRef.current += 1;
+    setPlanningSavePending(true);
     try {
       const result = await savePlanningFields({ data: { rows: payload } });
       if (!result.ok) throw new Error(result.error);
       if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
       qc.invalidateQueries({ queryKey: ["activities"] });
     } catch (error: any) {
+      const failedIds = new Set(payload.map((row) => row.id));
+      setPlanningDrafts((previous) =>
+        Object.fromEntries(Object.entries(previous).filter(([id]) => !failedIds.has(id))),
+      );
+      qc.invalidateQueries({ queryKey: ["activities"] });
       toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
+    } finally {
+      planningSavesPendingRef.current = Math.max(0, planningSavesPendingRef.current - 1);
+      if (planningSavesPendingRef.current === 0) setPlanningSavePending(false);
     }
   }
 
@@ -722,6 +734,10 @@ function AtividadesPage() {
 
   async function exportFilteredActivities() {
     if (isExporting) return;
+    if (planningSavesPendingRef.current > 0) {
+      toast.info("Aguarde o término do salvamento antes de exportar.");
+      return;
+    }
     if (!activeWeek.data || filtered.length === 0) {
       toast.error("Não há atividades nos filtros atuais para exportar.");
       return;
@@ -774,10 +790,11 @@ function AtividadesPage() {
           const planning = activity.planning_data ?? {};
           const row: Record<string, unknown> = {};
           for (const header of ACTIVITY_EXPORT_COLUMNS) {
-            if (header === "PBS") row[header] = activity.pbs ?? planning[header] ?? "";
-            else if (header === "Tipo de Liberação") row[header] = activity.release_type ?? planning[header] ?? "";
+            if (header === "PBS") row[header] = planningValue(activity, "pbs") || planning[header] || "";
+            else if (header === "Tipo de Liberação")
+              row[header] = planningValue(activity, "release_type") || planning[header] || "";
             else if (header === "Data início")
-              row[header] = formatDateOnly(activity.scheduled_date ?? planning[header]);
+              row[header] = formatDateOnly(planningValue(activity, "scheduled_date") || planning[header]);
             else if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
             else if (header === "Justificativa") row[header] = activity.justification ?? "";
             else if (header === "Observações") row[header] = activity.observation ?? "";
@@ -785,7 +802,7 @@ function AtividadesPage() {
             else row[header] = planning[header] ?? "";
           }
           row["Ger"] = gerLabel(activity);
-          row["Nº PT"] = activity.pt_number ?? "";
+          row["Nº PT"] = planningValue(activity, "pt_number");
           row[responsibleHeader] = activity.reported_by_name || activity.reported_by_email || "";
           row[reportedAtHeader] = formatReportedAt(activity.reported_at);
           return row;
@@ -833,12 +850,12 @@ function AtividadesPage() {
             {canEditPlanningFields && (
               <button
                 onClick={exportFilteredActivities}
-                disabled={isExporting || filtered.length === 0}
+                disabled={isExporting || planningSavePending || filtered.length === 0}
                 className="btn-ghost"
                 title="Exportar as atividades com os filtros atuais"
               >
                 <Download className="h-3.5 w-3.5" />
-                {isExporting ? "Exportando…" : "Exportar"}
+                {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
               </button>
             )}
             <button onClick={() => activities.refetch()} className="btn-ghost" title="Recarregar">
