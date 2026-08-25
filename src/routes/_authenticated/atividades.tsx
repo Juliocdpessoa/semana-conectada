@@ -1565,15 +1565,22 @@ const HISTORY_LABELS: Record<string, string> = {
   status: "Status",
   justification: "Justificativa",
   observation: "Observações",
+  order_number: "Ordem",
+  note_number: "Nota",
+  description: "Descrição",
+  area: "Área",
+  specialty: "Especialidade",
+  scheduled_date: "Data",
   pbs: "PBS",
   pt_number: "Nº PT",
   release_type: "Tipo de Liberação",
-  scheduled_date: "Data",
+  d1_date: "Data D-1",
+  is_immediate: "Atividade imediata",
 };
 
 function historyValue(v: unknown, key?: string): string {
   if (v === null || v === undefined || v === "") return "—";
-  if (key === "scheduled_date" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+  if ((key === "scheduled_date" || key === "d1_date") && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [year, month, day] = v.split("-");
     return `${day}/${month}/${year}`;
   }
