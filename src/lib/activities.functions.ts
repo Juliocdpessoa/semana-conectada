@@ -146,7 +146,7 @@ const activityPlanningFieldsSchema = z.object({
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
         releaseType: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable(),
-        d1Date: z
+        scheduledDate: z
           .string()
           .regex(/^\d{4}-\d{2}-\d{2}$/)
           .nullable(),
@@ -172,7 +172,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       pbs: row.pbs,
       pt_number: row.ptNumber,
       release_type: row.releaseType,
-      d1_date: row.d1Date,
+      scheduled_date: row.scheduledDate,
     }));
     const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_planning_fields", {
       p_rows: payload,
