@@ -899,7 +899,8 @@ function AtividadesPage() {
       worksheet.getCell("F7").value = "Contratada:";
       worksheet.getCell("H7").value = "Normatel Engenharia Ltda.";
 
-      const headerFill = "D9EAF7";
+      const headerFill = "385723";
+      const tableStripeFill = "E2F0D9";
       const thinBorder = {
         top: { style: "thin" as const, color: { argb: "FF7F8C99" } },
         left: { style: "thin" as const, color: { argb: "FF7F8C99" } },
@@ -908,11 +909,11 @@ function AtividadesPage() {
       };
       for (let row = 1; row <= 3; row += 1) {
         worksheet.getRow(row).height = 18;
-        for (let column = 1; column <= 19; column += 1) {
+        for (let column = 1; column <= 20; column += 1) {
           const cell = worksheet.getRow(row).getCell(column);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
           cell.border = thinBorder;
-          cell.font = { name: "Arial", size: 10, bold: true };
+          cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
           cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         }
       }
@@ -939,8 +940,9 @@ function AtividadesPage() {
         const row = worksheet.getRow(rowNumber);
         row.font = { name: "Arial", size: 10, bold: true };
         row.alignment = { vertical: "middle" };
-        for (let column = 1; column <= 19; column += 1) {
+        for (let column = 1; column <= 20; column += 1) {
           row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
+          row.getCell(column).font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
         }
       }
 
@@ -949,6 +951,7 @@ function AtividadesPage() {
         "Localização",
         "Nota",
         "Tipo de Lib",
+        "Nº PT",
         "Ordem",
         "Op",
         "Sub",
@@ -977,6 +980,7 @@ function AtividadesPage() {
             planning["Localização"] ?? "",
             activity.note_number ?? planning["Nota"] ?? "",
             planningValue(activity, "release_type"),
+            planningValue(activity, "pt_number"),
             activity.order_number ?? planning["Ordem"] ?? "",
             planning["Op"] ?? "",
             planning["Subop"] ?? "",
@@ -995,43 +999,41 @@ function AtividadesPage() {
           ];
         });
 
-      worksheet.addTable({
-        name: "ProgramacaoImpressao",
-        ref: "A9",
-        headerRow: true,
-        totalsRow: false,
-        style: {
-          theme: "TableStyleMedium2",
-          showFirstColumn: false,
-          showLastColumn: false,
-          showRowStripes: false,
-          showColumnStripes: false,
-        },
-        columns: printHeaders.map((name) => ({ name, filterButton: false })),
-        rows,
-      });
+      worksheet.getRow(9).values = printHeaders;
+      rows.forEach((values) => worksheet.addRow(values));
 
       worksheet.getRow(9).height = 18;
-      worksheet.getRow(9).font = { name: "Arial", size: 9, bold: true };
+      worksheet.getRow(9).font = { name: "Arial", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
       worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+      for (let column = 1; column <= 20; column += 1) {
+        const cell = worksheet.getRow(9).getCell(column);
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
+        cell.border = thinBorder;
+      }
       for (let rowNumber = 10; rowNumber <= rows.length + 9; rowNumber += 1) {
         const row = worksheet.getRow(rowNumber);
         row.height = 21;
         row.font = { name: "Arial", size: 8 };
         row.alignment = { vertical: "middle", wrapText: true };
-        for (let column = 1; column <= 19; column += 1) row.getCell(column).border = thinBorder;
-        row.getCell(8).numFmt = "dd/mm/yyyy";
-        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18]) {
+        for (let column = 1; column <= 20; column += 1) {
+          const cell = row.getCell(column);
+          cell.border = thinBorder;
+          if (rowNumber % 2 === 0) {
+            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${tableStripeFill}` } };
+          }
+        }
+        row.getCell(9).numFmt = "dd/mm/yyyy";
+        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19]) {
           row.getCell(column).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         }
       }
 
-      [11, 13, 13, 13, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
+      [11, 13, 13, 13, 13, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
 
       const lastRow = rows.length + 9;
-      worksheet.pageSetup.printArea = `A1:S${lastRow}`;
+      worksheet.pageSetup.printArea = `A1:T${lastRow}`;
       worksheet.pageSetup.printTitlesRow = "1:9";
 
       const buffer = await workbook.xlsx.writeBuffer();
