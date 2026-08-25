@@ -1565,10 +1565,18 @@ const HISTORY_LABELS: Record<string, string> = {
   status: "Status",
   justification: "Justificativa",
   observation: "Observações",
+  pbs: "PBS",
+  pt_number: "Nº PT",
+  release_type: "Tipo de Liberação",
+  scheduled_date: "Data",
 };
 
-function historyValue(v: unknown): string {
+function historyValue(v: unknown, key?: string): string {
   if (v === null || v === undefined || v === "") return "—";
+  if (key === "scheduled_date" && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [year, month, day] = v.split("-");
+    return `${day}/${month}/${year}`;
+  }
   return String(v);
 }
 
@@ -1601,7 +1609,7 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
             const prev = (h.previous_values ?? {}) as Record<string, unknown>;
             const next = (h.new_values ?? {}) as Record<string, unknown>;
             const keys = Object.keys(HISTORY_LABELS).filter(
-              (k) => k in next && historyValue(prev[k]) !== historyValue(next[k]),
+              (k) => k in next && historyValue(prev[k], k) !== historyValue(next[k], k),
             );
             return (
               <li key={h.id} className="relative border-l border-border pl-3">
@@ -1611,7 +1619,9 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
                     {new Date(h.changed_at).toLocaleString("pt-BR")}
                   </span>
                   <span className="text-muted-foreground">{h.changed_by_name || h.changed_by_email || "Sistema"}</span>
-                  <span className="status-pill border-border bg-muted text-muted-foreground">{h.change_source}</span>
+                  <span className="status-pill border-border bg-muted text-muted-foreground">
+                    {h.change_source === "planning" ? "Planejamento" : h.change_source}
+                  </span>
                 </div>
                 <div className="mt-1 space-y-0.5">
                   {keys.length === 0 ? (
@@ -1620,9 +1630,9 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
                     keys.map((k) => (
                       <div key={k} className="text-[11px]">
                         <span className="font-medium text-foreground">{HISTORY_LABELS[k]}: </span>
-                        <span className="text-muted-foreground line-through">{historyValue(prev[k])}</span>
+                        <span className="text-muted-foreground line-through">{historyValue(prev[k], k)}</span>
                         <span className="text-muted-foreground"> → </span>
-                        <span className="text-foreground">{historyValue(next[k])}</span>
+                        <span className="text-foreground">{historyValue(next[k], k)}</span>
                       </div>
                     ))
                   )}
