@@ -1529,7 +1529,7 @@ function ApontarModal({
             value={status}
             onChange={(e) => {
               const nextStatus = e.target.value;
-              if (status === "CANCELADA" && nextStatus !== "CANCELADA") setJustification("");
+              if (!REQUIRES_JUSTIFICATION.has(nextStatus)) setJustification("");
               if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
                 setJustification("");
               setStatus(nextStatus);
@@ -1546,13 +1546,14 @@ function ApontarModal({
 
         <Field label="Justificativa" required={needsJust}>
           <select
-            value={justification}
+            value={needsJust ? justification : ""}
             onChange={(e) => {
               const value = e.target.value;
               setJustification(value);
               if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
             }}
             className="input-base"
+            disabled={!needsJust}
           >
             <option value="">— Selecione —</option>
             {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
@@ -1935,7 +1936,7 @@ function BulkModal({
             value={status}
             onChange={(e) => {
               const nextStatus = e.target.value;
-              if (status === "CANCELADA" && nextStatus !== "CANCELADA") setJustification("");
+              if (!REQUIRES_JUSTIFICATION.has(nextStatus)) setJustification("");
               if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
                 setJustification("");
               setStatus(nextStatus);
@@ -1951,13 +1952,14 @@ function BulkModal({
         </Field>
         <Field label="Justificativa" required={needsJust}>
           <select
-            value={justification}
+            value={needsJust ? justification : ""}
             onChange={(e) => {
               const value = e.target.value;
               setJustification(value);
               if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
             }}
             className="input-base"
+            disabled={!needsJust}
           >
             <option value="">— Selecione —</option>
             {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
