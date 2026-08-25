@@ -912,7 +912,6 @@ function AtividadesPage() {
         for (let column = 1; column <= 20; column += 1) {
           const cell = worksheet.getRow(row).getCell(column);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
-          cell.border = thinBorder;
           cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
           cell.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         }
