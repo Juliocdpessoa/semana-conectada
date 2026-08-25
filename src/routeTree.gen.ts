@@ -20,6 +20,7 @@ import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authent
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedHoraExtraRouteImport } from './routes/_authenticated/hora-extra'
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
+import { Route as AuthenticatedAtividadesRouteImport } from './routes/_authenticated/atividades'
 import { Route as AuthenticatedAdminUsuariosRouteImport } from './routes/_authenticated/admin/usuarios'
 
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -78,6 +79,11 @@ const AuthenticatedHistoricoRoute = AuthenticatedHistoricoRouteImport.update({
   path: '/historico',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedAtividadesRoute = AuthenticatedAtividadesRouteImport.update({
+  id: '/atividades',
+  path: '/atividades',
+  getParentRoute: () => AuthenticatedRouteRoute,
+} as any)
 const AuthenticatedAdminUsuariosRoute =
   AuthenticatedAdminUsuariosRouteImport.update({
     id: '/admin/usuarios',
@@ -91,6 +97,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/hora-extra': typeof AuthenticatedHoraExtraRoute
   '/painel': typeof AuthenticatedPainelRoute
@@ -104,6 +111,7 @@ export interface FileRoutesByTo {
   '/auth': typeof AuthRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/hora-extra': typeof AuthenticatedHoraExtraRoute
   '/painel': typeof AuthenticatedPainelRoute
@@ -119,6 +127,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRoute
   '/redefinir-senha': typeof RedefinirSenhaRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/_authenticated/atividades': typeof AuthenticatedAtividadesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/hora-extra': typeof AuthenticatedHoraExtraRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
@@ -134,6 +143,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/redefinir-senha'
     | '/sitemap.xml'
+    | '/atividades'
     | '/historico'
     | '/hora-extra'
     | '/painel'
@@ -147,6 +157,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/redefinir-senha'
     | '/sitemap.xml'
+    | '/atividades'
     | '/historico'
     | '/hora-extra'
     | '/painel'
@@ -161,6 +172,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/redefinir-senha'
     | '/sitemap.xml'
+    | '/_authenticated/atividades'
     | '/_authenticated/historico'
     | '/_authenticated/hora-extra'
     | '/_authenticated/painel'
@@ -257,6 +269,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedHistoricoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/atividades': {
+      id: '/_authenticated/atividades'
+      path: '/atividades'
+      fullPath: '/atividades'
+      preLoaderRoute: typeof AuthenticatedAtividadesRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/usuarios': {
       id: '/_authenticated/admin/usuarios'
       path: '/admin/usuarios'
@@ -268,6 +287,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedRouteRouteChildren {
+  AuthenticatedAtividadesRoute: typeof AuthenticatedAtividadesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedHoraExtraRoute: typeof AuthenticatedHoraExtraRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
@@ -277,6 +297,7 @@ interface AuthenticatedRouteRouteChildren {
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
+  AuthenticatedAtividadesRoute: AuthenticatedAtividadesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedHoraExtraRoute: AuthenticatedHoraExtraRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
