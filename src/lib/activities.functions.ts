@@ -5,13 +5,21 @@ import { z } from "zod";
 const updateSchema = z.object({
   activityId: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
-  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"]),
+  status: z.enum([
+    "Sem apontamento",
+    "EXECUTADO",
+    "NÃO EXECUTADO",
+    "AGUARDANDO PRÉ-EMISSÃO DE PT",
+    "PT EM ASSINATURA",
+    "CANCELADA",
+  ]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
   immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
 });
 
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
+const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA"]);
 const CANCELLATION_JUSTIFICATIONS = new Set([
   "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
   "12 - SERVIÇO CANCELADO",
@@ -39,6 +47,13 @@ export const updateActivity = createServerFn({ method: "POST" })
       .maybeSingle();
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!currentActivity) return { ok: false as const, error: "Atividade não encontrada." };
+    if (PLANNING_WORKFLOW_STATUSES.has(data.status) && currentActivity.status !== data.status) {
+      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (rolesError) return { ok: false as const, error: rolesError.message };
+      if (!roles?.some((row) => row.role === "planning")) {
+        return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
+      }
+    }
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
@@ -128,7 +143,14 @@ export const updateActivity = createServerFn({ method: "POST" })
 
 const bulkSchema = z.object({
   ids: z.array(z.string().uuid()).min(1).max(500),
-  status: z.enum(["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"]),
+  status: z.enum([
+    "Sem apontamento",
+    "EXECUTADO",
+    "NÃO EXECUTADO",
+    "AGUARDANDO PRÉ-EMISSÃO DE PT",
+    "PT EM ASSINATURA",
+    "CANCELADA",
+  ]),
   justification: z.string().max(200).nullable(),
   observation: z.string().max(2000).nullable(),
   immediateActivityIds: z.array(z.string().uuid()).max(100).optional().default([]),
@@ -140,6 +162,13 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
+    if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
+      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      if (rolesError) return { ok: false as const, error: rolesError.message };
+      if (!roles?.some((row) => row.role === "planning")) {
+        return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
+      }
+    }
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
