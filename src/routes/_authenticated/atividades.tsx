@@ -309,6 +309,8 @@ function PlanningGridCell({
   onCommit,
   onPaste,
   onDragStart,
+  onDragEnter,
+  onDragEnd,
   onDrop,
 }: {
   value: string;
@@ -318,6 +320,8 @@ function PlanningGridCell({
   onCommit: (value: string) => void;
   onPaste: (event: ClipboardEvent<HTMLElement>) => void;
   onDragStart: () => void;
+  onDragEnter: () => void;
+  onDragEnd: () => void;
   onDrop: () => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
@@ -336,6 +340,10 @@ function PlanningGridCell({
         isDragOver && "bg-primary/10 ring-2 ring-inset ring-primary/50",
       )}
       onPaste={onPaste}
+      onDragEnter={() => {
+        setIsDragOver(true);
+        onDragEnter();
+      }}
       onDragOver={(event) => {
         event.preventDefault();
         event.dataTransfer.dropEffect = "copy";
@@ -388,6 +396,7 @@ function PlanningGridCell({
           event.dataTransfer.setData("text/plain", value);
           onDragStart();
         }}
+        onDragEnd={onDragEnd}
         className="absolute -bottom-1 -right-1 z-10 flex h-3.5 w-3.5 cursor-copy select-none items-center justify-center rounded-sm border-2 border-background bg-primary text-[9px] font-bold leading-none text-primary-foreground opacity-40 shadow-sm transition-opacity hover:opacity-100 group-hover/cell:opacity-100 group-focus-within/cell:opacity-100"
         aria-hidden="true"
       >
@@ -406,6 +415,7 @@ function AtividadesPage() {
   const planningSavesPendingRef = useRef(0);
   const [planningSavePending, setPlanningSavePending] = useState(false);
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
+  const dragTarget = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [releaseTypeFilter, setReleaseTypeFilter] = useState<string>("");
@@ -739,6 +749,7 @@ function AtividadesPage() {
   async function fillPlanningByDrag(targetRow: number, targetField: PlanningField) {
     const source = dragSource.current;
     dragSource.current = null;
+    dragTarget.current = null;
     if (!source || source.field !== targetField || source.rowIndex === targetRow) return;
     const sourceRow = paged[source.rowIndex];
     if (!sourceRow) return;
@@ -1419,6 +1430,16 @@ function AtividadesPage() {
                               onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
                               onDragStart={() => {
                                 dragSource.current = { rowIndex, field };
+                                dragTarget.current = { rowIndex, field };
+                              }}
+                              onDragEnter={() => {
+                                if (dragSource.current?.field === field) {
+                                  dragTarget.current = { rowIndex, field };
+                                }
+                              }}
+                              onDragEnd={() => {
+                                const target = dragTarget.current;
+                                if (target) void fillPlanningByDrag(target.rowIndex, target.field);
                               }}
                               onDrop={() => fillPlanningByDrag(rowIndex, field)}
                             />
