@@ -416,7 +416,8 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.includes("planning");
-  const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin");
+  const isDateEditAdmin = session.email.split("@")[0].trim().toLowerCase() === "juliocdpessoa";
+  const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
   const qc = useQueryClient();
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
