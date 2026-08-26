@@ -222,7 +222,7 @@ const activityPlanningFieldsSchema = z.object({
 
 const DATE_EDIT_TIMEZONE = "America/Sao_Paulo";
 const DEFAULT_DATE_EDIT_CUTOFF = "15:00";
-const DATE_EDIT_ADMIN_LOGIN = "juliocdpessoa";
+const DATE_EDIT_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
 
 function currentMinutesInSaoPaulo() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -247,14 +247,13 @@ async function getDateEditAccess(supabase: any, userId: string) {
     supabase.from("activity_edit_settings").select("date_edit_cutoff").eq("id", true).maybeSingle(),
   ]);
   const cutoffTime = String(setting?.date_edit_cutoff ?? DEFAULT_DATE_EDIT_CUTOFF).slice(0, 5);
-  const login = String(profile?.email ?? "")
-    .split("@")[0]
+  const email = String(profile?.email ?? "")
     .trim()
     .toLowerCase();
   return {
     cutoffTime,
     locked: isPastDateEditCutoff(cutoffTime),
-    canConfigure: login === DATE_EDIT_ADMIN_LOGIN,
+    canConfigure: email === DATE_EDIT_ADMIN_EMAIL,
   };
 }
 
@@ -275,7 +274,10 @@ export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const access = await getDateEditAccess(context.supabase, context.userId);
     if (!access.canConfigure) {
-      return { ok: false as const, error: "Somente o administrador juliocdpessoa pode alterar o horário de corte." };
+      return {
+        ok: false as const,
+        error: "Somente o administrador julio.pessoa@normatel.com.br pode alterar o horário de corte.",
+      };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { error } = await (supabaseAdmin as any).from("activity_edit_settings").upsert({
@@ -312,7 +314,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       if (changesDate) {
         return {
           ok: false as const,
-          error: `A alteração de datas está bloqueada após ${access.cutoffTime}. Procure o administrador juliocdpessoa.`,
+          error: `A alteração de datas está bloqueada após ${access.cutoffTime}. Procure o administrador julio.pessoa@normatel.com.br.`,
         };
       }
     }
