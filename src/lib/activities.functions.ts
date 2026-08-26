@@ -11,6 +11,7 @@ const updateSchema = z.object({
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
     "PT EM ASSINATURA",
+    "PT ENVIADA P/ CAMPO",
     "CANCELADA",
   ]),
   justification: z.string().max(200).nullable(),
@@ -19,7 +20,7 @@ const updateSchema = z.object({
 });
 
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
-const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA"]);
+const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA", "PT ENVIADA P/ CAMPO"]);
 const CANCELLATION_JUSTIFICATIONS = new Set([
   "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
   "12 - SERVIÇO CANCELADO",
@@ -149,6 +150,7 @@ const bulkSchema = z.object({
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
     "PT EM ASSINATURA",
+    "PT ENVIADA P/ CAMPO",
     "CANCELADA",
   ]),
   justification: z.string().max(200).nullable(),
@@ -218,6 +220,76 @@ const activityPlanningFieldsSchema = z.object({
     .max(500),
 });
 
+const DATE_EDIT_TIMEZONE = "America/Sao_Paulo";
+const DEFAULT_DATE_EDIT_CUTOFF = "15:00";
+const DATE_EDIT_ADMIN_LOGIN = "juliocdpessoa";
+
+function currentMinutesInSaoPaulo() {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: DATE_EDIT_TIMEZONE,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const hour = Number(parts.find((part) => part.type === "hour")?.value ?? 0);
+  const minute = Number(parts.find((part) => part.type === "minute")?.value ?? 0);
+  return hour * 60 + minute;
+}
+
+function isPastDateEditCutoff(cutoffTime: string) {
+  const [hour, minute] = cutoffTime.slice(0, 5).split(":").map(Number);
+  return currentMinutesInSaoPaulo() >= hour * 60 + minute;
+}
+
+async function getDateEditAccess(supabase: any, userId: string) {
+  const [{ data: roles }, { data: profile }, { data: setting }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("profiles").select("email").eq("id", userId).maybeSingle(),
+    supabase.from("activity_edit_settings").select("date_edit_cutoff").eq("id", true).maybeSingle(),
+  ]);
+  const cutoffTime = String(setting?.date_edit_cutoff ?? DEFAULT_DATE_EDIT_CUTOFF).slice(0, 5);
+  const login = String(profile?.email ?? "")
+    .split("@")[0]
+    .trim()
+    .toLowerCase();
+  const isAdmin = roles?.some((row: { role: string }) => row.role === "admin") ?? false;
+  return {
+    cutoffTime,
+    locked: isPastDateEditCutoff(cutoffTime),
+    canConfigure: isAdmin && login === DATE_EDIT_ADMIN_LOGIN,
+  };
+}
+
+export const getActivityDateEditSettings = createServerFn({ method: "GET" })
+  .middleware([requireSupabaseAuth])
+  .handler(async ({ context }) => {
+    const access = await getDateEditAccess(context.supabase, context.userId);
+    return { ok: true as const, ...access, timezone: DATE_EDIT_TIMEZONE };
+  });
+
+const dateEditCutoffSchema = z.object({
+  cutoffTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
+});
+
+export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => dateEditCutoffSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const access = await getDateEditAccess(context.supabase, context.userId);
+    if (!access.canConfigure) {
+      return { ok: false as const, error: "Somente o administrador juliocdpessoa pode alterar o horário de corte." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { error } = await (supabaseAdmin as any).from("activity_edit_settings").upsert({
+      id: true,
+      date_edit_cutoff: `${data.cutoffTime}:00`,
+      updated_by: context.userId,
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const, cutoffTime: data.cutoffTime };
+  });
+
 export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) => activityPlanningFieldsSchema.parse(data))
@@ -227,6 +299,24 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
     if (rolesError) return { ok: false as const, error: rolesError.message };
     if (!roles?.some((row) => row.role === "planning")) {
       return { ok: false as const, error: "Apenas o perfil Planejamento pode editar estes campos." };
+    }
+
+    const access = await getDateEditAccess(supabase, userId);
+    if (access.locked) {
+      const ids = data.rows.map((row) => row.id);
+      const { data: currentRows, error: currentRowsError } = await supabase
+        .from("activities")
+        .select("id, scheduled_date")
+        .in("id", ids);
+      if (currentRowsError) return { ok: false as const, error: currentRowsError.message };
+      const currentDates = new Map((currentRows ?? []).map((row) => [row.id, row.scheduled_date]));
+      const changesDate = data.rows.some((row) => (currentDates.get(row.id) ?? null) !== row.scheduledDate);
+      if (changesDate) {
+        return {
+          ok: false as const,
+          error: `A alteração de datas está bloqueada após ${access.cutoffTime}. Procure o administrador juliocdpessoa.`,
+        };
+      }
     }
 
     const payload = data.rows.map((row) => ({
