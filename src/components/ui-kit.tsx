@@ -135,12 +135,16 @@ export function StatusPill({ status }: { status: string }) {
   const map: Record<string, string> = {
     EXECUTADO: "border-success/40 bg-success/10 text-success",
     "NÃO EXECUTADO": "border-destructive/40 bg-destructive/10 text-destructive",
+    "AGUARDANDO PRÉ-EMISSÃO DE PT": "border-warning/50 bg-warning/15 text-warning-foreground",
+    "PT EM ASSINATURA": "border-primary/40 bg-primary/10 text-primary",
     CANCELADA: "border-warning/50 bg-warning/15 text-warning-foreground",
     "Sem apontamento": "border-border bg-muted text-muted-foreground",
   };
   const dotMap: Record<string, string> = {
     EXECUTADO: "bg-success",
     "NÃO EXECUTADO": "bg-destructive",
+    "AGUARDANDO PRÉ-EMISSÃO DE PT": "bg-warning",
+    "PT EM ASSINATURA": "bg-primary",
     CANCELADA: "bg-warning",
     "Sem apontamento": "bg-muted-foreground/50",
   };

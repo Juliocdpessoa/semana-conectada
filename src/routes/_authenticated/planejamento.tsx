@@ -74,7 +74,14 @@ const WEEKLY_TEMPLATE_COLUMNS = [
   "Observações",
 ] as const;
 
-const TEMPLATE_STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"];
+const TEMPLATE_STATUSES = [
+  "Sem apontamento",
+  "EXECUTADO",
+  "NÃO EXECUTADO",
+  "AGUARDANDO PRÉ-EMISSÃO DE PT",
+  "PT EM ASSINATURA",
+  "CANCELADA",
+];
 const TEMPLATE_JUSTIFICATIONS = [
   "01 - ATRASO NA EXECUÇÃO",
   "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
