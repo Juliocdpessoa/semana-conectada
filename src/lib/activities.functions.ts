@@ -242,8 +242,7 @@ function isPastDateEditCutoff(cutoffTime: string) {
 }
 
 async function getDateEditAccess(supabase: any, userId: string) {
-  const [{ data: roles }, { data: profile }, { data: setting }] = await Promise.all([
-    supabase.from("user_roles").select("role").eq("user_id", userId),
+  const [{ data: profile }, { data: setting }] = await Promise.all([
     supabase.from("profiles").select("email").eq("id", userId).maybeSingle(),
     supabase.from("activity_edit_settings").select("date_edit_cutoff").eq("id", true).maybeSingle(),
   ]);
@@ -252,11 +251,10 @@ async function getDateEditAccess(supabase: any, userId: string) {
     .split("@")[0]
     .trim()
     .toLowerCase();
-  const isAdmin = roles?.some((row: { role: string }) => row.role === "admin") ?? false;
   return {
     cutoffTime,
     locked: isPastDateEditCutoff(cutoffTime),
-    canConfigure: isAdmin && login === DATE_EDIT_ADMIN_LOGIN,
+    canConfigure: login === DATE_EDIT_ADMIN_LOGIN,
   };
 }
 
