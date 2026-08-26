@@ -110,6 +110,13 @@ const CANCELLATION_JUSTIFICATIONS = [
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA", "PT ENVIADA P/ CAMPO"]);
+const PENDING_REPORT_FILTER = "__PENDING_REPORT__";
+const PENDING_REPORT_STATUSES = new Set([
+  "Sem apontamento",
+  "AGUARDANDO PRÉ-EMISSÃO DE PT",
+  "PT EM ASSINATURA",
+  "PT ENVIADA P/ CAMPO",
+]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -499,7 +506,10 @@ function AtividadesPage() {
 
   function matchesActiveFilters(row: ActivityRow, omitted?: FilterDimension) {
     const query = search.trim().toLowerCase();
-    if (omitted !== "status" && statusFilter && row.status !== statusFilter) return false;
+    if (omitted !== "status" && statusFilter) {
+      if (statusFilter === PENDING_REPORT_FILTER && !PENDING_REPORT_STATUSES.has(row.status)) return false;
+      if (statusFilter !== PENDING_REPORT_FILTER && row.status !== statusFilter) return false;
+    }
     if (canEditPlanningFields && omitted !== "releaseType") {
       if (releaseTypeFilter === "__EMPTY__" && row.release_type) return false;
       if (releaseTypeFilter && releaseTypeFilter !== "__EMPTY__" && row.release_type !== releaseTypeFilter)
@@ -622,11 +632,17 @@ function AtividadesPage() {
     const total = rows.length;
     const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
     const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
-    const noReport = rows.filter((r) => r.status === "Sem apontamento").length;
-    const immediates = rows.filter((r) => r.is_immediate).length;
-    const percent = total > 0 ? Math.round((concluded / total) * 100) : 0;
-    return { total, concluded, impeded, noReport, immediates, percent };
+    const noReport = rows.filter((r) => PENDING_REPORT_STATUSES.has(r.status)).length;
+    const cancelled = rows.filter((r) => r.status === "CANCELADA").length;
+    const validTotal = total - cancelled;
+    const percent = validTotal > 0 ? Math.round((concluded / validTotal) * 100) : 0;
+    return { total, concluded, impeded, noReport, cancelled, percent };
   }, [filtered]);
+
+  function toggleKpiStatus(nextStatus: string) {
+    setStatusFilter((current) => (current === nextStatus ? "" : nextStatus));
+    setPage(0);
+  }
 
   const activeFilters = [
     search,
@@ -1244,21 +1260,69 @@ function AtividadesPage() {
 
       {/* KPIs */}
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-        <KpiCard
-          label="Executadas"
-          value={kpis.concluded}
-          tone="success"
-          icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-        />
-        <KpiCard
-          label="Não executadas"
-          value={kpis.impeded}
-          tone="destructive"
-          icon={<AlertTriangle className="h-3.5 w-3.5" />}
-        />
-        <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
-        <KpiCard label="Imediatas" value={kpis.immediates} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
+        <button
+          type="button"
+          onClick={() => toggleKpiStatus("")}
+          className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+          title="Mostrar todos os status dentro dos demais filtros"
+        >
+          <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleKpiStatus("EXECUTADO")}
+          className={cn(
+            "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            statusFilter === "EXECUTADO" && "ring-2 ring-success/50",
+          )}
+          aria-pressed={statusFilter === "EXECUTADO"}
+        >
+          <KpiCard
+            label="Executadas"
+            value={kpis.concluded}
+            tone="success"
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleKpiStatus("NÃO EXECUTADO")}
+          className={cn(
+            "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            statusFilter === "NÃO EXECUTADO" && "ring-2 ring-destructive/50",
+          )}
+          aria-pressed={statusFilter === "NÃO EXECUTADO"}
+        >
+          <KpiCard
+            label="Não executadas"
+            value={kpis.impeded}
+            tone="destructive"
+            icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          />
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleKpiStatus(PENDING_REPORT_FILTER)}
+          className={cn(
+            "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            statusFilter === PENDING_REPORT_FILTER && "ring-2 ring-border",
+          )}
+          aria-pressed={statusFilter === PENDING_REPORT_FILTER}
+          title="Inclui Sem apontamento e os três status do fluxo de PT"
+        >
+          <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
+        </button>
+        <button
+          type="button"
+          onClick={() => toggleKpiStatus("CANCELADA")}
+          className={cn(
+            "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+            statusFilter === "CANCELADA" && "ring-2 ring-warning/50",
+          )}
+          aria-pressed={statusFilter === "CANCELADA"}
+        >
+          <KpiCard label="Canceladas" value={kpis.cancelled} tone="warning" icon={<X className="h-3.5 w-3.5" />} />
+        </button>
         <KpiCard
           label="Conclusão"
           value={`${kpis.percent}%`}
@@ -1290,6 +1354,7 @@ function AtividadesPage() {
           className="input-base w-auto py-2 text-xs"
         >
           <option value="">Todos os status</option>
+          <option value={PENDING_REPORT_FILTER}>Sem apontamento + fluxo de PT</option>
           {statusOptions.map((s) => (
             <option key={s} value={s}>
               {s}
