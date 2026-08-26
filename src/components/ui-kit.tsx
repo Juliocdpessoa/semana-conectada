@@ -136,8 +136,8 @@ export function StatusPill({ status }: { status: string }) {
     EXECUTADO: "border-success/40 bg-success/10 text-success",
     "NÃO EXECUTADO": "border-destructive/40 bg-destructive/10 text-destructive",
     "AGUARDANDO PRÉ-EMISSÃO DE PT": "border-warning/50 bg-warning/15 text-warning-foreground",
-    "PT EM ASSINATURA": "border-primary/40 bg-primary/10 text-primary",
-    "PT ENVIADA P/ CAMPO": "border-success/40 bg-success/10 text-success",
+    "PT EM ASSINATURA": "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    "PT ENVIADA P/ CAMPO": "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300",
     CANCELADA: "border-warning/50 bg-warning/15 text-warning-foreground",
     "Sem apontamento": "border-border bg-muted text-muted-foreground",
   };
@@ -145,8 +145,8 @@ export function StatusPill({ status }: { status: string }) {
     EXECUTADO: "bg-success",
     "NÃO EXECUTADO": "bg-destructive",
     "AGUARDANDO PRÉ-EMISSÃO DE PT": "bg-warning",
-    "PT EM ASSINATURA": "bg-primary",
-    "PT ENVIADA P/ CAMPO": "bg-success",
+    "PT EM ASSINATURA": "bg-sky-500",
+    "PT ENVIADA P/ CAMPO": "bg-violet-500",
     CANCELADA: "bg-warning",
     "Sem apontamento": "bg-muted-foreground/50",
   };
