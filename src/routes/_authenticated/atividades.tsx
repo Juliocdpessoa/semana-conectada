@@ -4,7 +4,13 @@ import { useServerFn } from "@tanstack/react-start";
 import { useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { updateActivity, bulkUpdateActivities, bulkUpdateActivityPlanningFields } from "@/lib/activities.functions";
+import {
+  updateActivity,
+  bulkUpdateActivities,
+  bulkUpdateActivityPlanningFields,
+  getActivityDateEditSettings,
+  updateActivityDateEditCutoff,
+} from "@/lib/activities.functions";
 import { toast } from "sonner";
 import {
   Search,
@@ -60,6 +66,7 @@ const STATUSES = [
   "NÃO EXECUTADO",
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
   "PT EM ASSINATURA",
+  "PT ENVIADA P/ CAMPO",
   "CANCELADA",
 ];
 const JUSTIFICATIONS = [
@@ -102,7 +109,7 @@ const CANCELLATION_JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
-const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA"]);
+const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA", "PT ENVIADA P/ CAMPO"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -409,8 +416,12 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.includes("planning");
+  const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin");
   const qc = useQueryClient();
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
+  const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
+  const saveDateEditCutoff = useServerFn(updateActivityDateEditCutoff);
+  const [cutoffDraft, setCutoffDraft] = useState("15:00");
   const [planningDrafts, setPlanningDrafts] = useState<Record<string, Partial<PlanningDraft>>>({});
   const planningSavesPendingRef = useRef(0);
   const [planningSavePending, setPlanningSavePending] = useState(false);
@@ -465,6 +476,20 @@ function AtividadesPage() {
       return all as ActivityRow[];
     },
   });
+
+  const dateEditSettings = useQuery({
+    queryKey: ["activity-date-edit-settings"],
+    enabled: canLoadDateEditSettings,
+    queryFn: async () => {
+      const result = await loadDateEditSettings();
+      setCutoffDraft(result.cutoffTime);
+      return result;
+    },
+    refetchInterval: 60_000,
+  });
+  const dateEditLocked = dateEditSettings.data?.locked ?? false;
+  const canConfigureDateCutoff = dateEditSettings.data?.canConfigure ?? false;
+  const canEditPlanningDate = canEditPlanningFields && !dateEditLocked;
 
   type FilterDimension = "status" | "releaseType" | "area" | "workCenter" | "ger" | "date" | "origin";
   const allRows = activities.data ?? [];
@@ -698,6 +723,10 @@ function AtividadesPage() {
   }
 
   async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
+    if (field === "scheduled_date" && !canEditPlanningDate) {
+      toast.error(`A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`);
+      return;
+    }
     try {
       const value = normalizeGridValue(field, rawValue);
       setPlanningValue(row.id, field, value);
@@ -726,7 +755,9 @@ function AtividadesPage() {
         const values: Partial<PlanningDraft> = {};
         cells.forEach((cell, columnOffset) => {
           const field = PLANNING_FIELDS[startColumn + columnOffset];
-          if (field) values[field] = normalizeGridValue(field, cell);
+          if (field && (field !== "scheduled_date" || canEditPlanningDate)) {
+            values[field] = normalizeGridValue(field, cell);
+          }
         });
         if (Object.keys(values).length) updates.set(row.id, { row, values });
       });
@@ -751,6 +782,10 @@ function AtividadesPage() {
     dragSource.current = null;
     dragTarget.current = null;
     if (!source || source.field !== targetField || source.rowIndex === targetRow) return;
+    if (targetField === "scheduled_date" && !canEditPlanningDate) {
+      toast.error(`A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`);
+      return;
+    }
     const sourceRow = paged[source.rowIndex];
     if (!sourceRow) return;
     const value = planningValue(sourceRow, targetField);
@@ -969,7 +1004,7 @@ function AtividadesPage() {
           worksheet.addImage(logoId, {
             tl: { col: 0.2, row: 0.2 },
             br: { col: 2.8, row: 2.8 },
-          });
+          } as any);
         }
       } catch {
         // A geração continua mesmo se o logotipo estiver temporariamente indisponível.
@@ -1156,6 +1191,55 @@ function AtividadesPage() {
       >
         <div className="h-full bg-success transition-all" style={{ width: `${kpis.percent}%` }} />
       </div>
+
+      {canLoadDateEditSettings && (
+        <div
+          className={cn(
+            "mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs",
+            dateEditLocked
+              ? "border-destructive/30 bg-destructive/5 text-destructive"
+              : "border-success/30 bg-success/5 text-foreground",
+          )}
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="h-4 w-4" />
+            <span>
+              Alteração de datas {dateEditLocked ? "bloqueada" : "liberada"}. Corte diário às{" "}
+              <strong>{dateEditSettings.data?.cutoffTime ?? "15:00"}</strong> (horário de Brasília).
+            </span>
+          </div>
+          {canConfigureDateCutoff && (
+            <form
+              className="flex items-center gap-2"
+              onSubmit={async (event) => {
+                event.preventDefault();
+                const result = await saveDateEditCutoff({ data: { cutoffTime: cutoffDraft } });
+                if (!result.ok) {
+                  toast.error(result.error);
+                  return;
+                }
+                toast.success(`Horário de corte alterado para ${result.cutoffTime}.`);
+                dateEditSettings.refetch();
+              }}
+            >
+              <label htmlFor="date-edit-cutoff" className="font-medium">
+                Horário de corte
+              </label>
+              <input
+                id="date-edit-cutoff"
+                type="time"
+                value={cutoffDraft}
+                onChange={(event) => setCutoffDraft(event.target.value)}
+                className="input-base w-[110px] py-1.5 text-xs"
+                required
+              />
+              <button type="submit" className="btn-primary py-1.5 text-xs">
+                Salvar
+              </button>
+            </form>
+          )}
+        </div>
+      )}
 
       {/* KPIs */}
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -1427,7 +1511,7 @@ function AtividadesPage() {
                             <PlanningGridCell
                               value={planningValue(r, field)}
                               field={field}
-                              editable={canEditPlanningFields}
+                              editable={canEditPlanningFields && (field !== "scheduled_date" || canEditPlanningDate)}
                               onChange={(value) => setPlanningValue(r.id, field, value)}
                               onCommit={(value) => commitPlanningCell(r, field, value)}
                               onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
