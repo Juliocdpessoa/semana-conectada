@@ -966,7 +966,10 @@ function AtividadesPage() {
             buffer: (await logoResponse.arrayBuffer()) as any,
             extension: "png",
           });
-          worksheet.addImage(logoId, "A1:C3");
+          worksheet.addImage(logoId, {
+            tl: { col: 0.2, row: 0.2 },
+            br: { col: 2.8, row: 2.8 },
+          });
         }
       } catch {
         // A geração continua mesmo se o logotipo estiver temporariamente indisponível.
