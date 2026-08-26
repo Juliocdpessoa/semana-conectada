@@ -54,7 +54,14 @@ type ActivityRow = {
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
 };
 
-const STATUSES = ["Sem apontamento", "EXECUTADO", "NÃO EXECUTADO", "CANCELADA"];
+const STATUSES = [
+  "Sem apontamento",
+  "EXECUTADO",
+  "NÃO EXECUTADO",
+  "AGUARDANDO PRÉ-EMISSÃO DE PT",
+  "PT EM ASSINATURA",
+  "CANCELADA",
+];
 const JUSTIFICATIONS = [
   "01 - ATRASO NA EXECUÇÃO",
   "02 - ATRASO NA LIBERAÇÃO OPERACIONAL",
@@ -95,6 +102,7 @@ const CANCELLATION_JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
+const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA"]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
@@ -1787,8 +1795,14 @@ function ApontarModal({
             }}
             className="input-base"
           >
-            {STATUSES.filter((s) => s !== "CANCELADA" || canCancel || activity.status === "CANCELADA").map((s) => (
-              <option key={s} value={s} disabled={s === "CANCELADA" && !canCancel}>
+            {STATUSES.filter(
+              (s) => (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") || canCancel || activity.status === s,
+            ).map((s) => (
+              <option
+                key={s}
+                value={s}
+                disabled={(s === "CANCELADA" || PLANNING_WORKFLOW_STATUSES.has(s)) && !canCancel}
+              >
                 {s}
               </option>
             ))}
@@ -2194,7 +2208,7 @@ function BulkModal({
             }}
             className="input-base"
           >
-            {STATUSES.filter((s) => s !== "CANCELADA" || canCancel).map((s) => (
+            {STATUSES.filter((s) => canCancel || (s !== "CANCELADA" && !PLANNING_WORKFLOW_STATUSES.has(s))).map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
