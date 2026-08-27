@@ -1231,7 +1231,7 @@ function AtividadesPage() {
             : "Nenhuma semana operacional."
         }
         actions={
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {canAccessPreparation && (availableWeeks.data?.length ?? 0) > 0 && (
               <select
                 value={selectedWeekId || activeWeek.data?.id || ""}
@@ -1240,7 +1240,7 @@ function AtividadesPage() {
                   setSelected(new Set());
                   setPage(0);
                 }}
-                className="input-base min-w-[220px] py-2 text-xs"
+                className="input-base h-10 min-h-10 min-w-[220px] py-0 text-xs"
                 aria-label="Selecionar semana de trabalho"
               >
                 {(availableWeeks.data ?? []).map((week: any) => (
@@ -1259,7 +1259,7 @@ function AtividadesPage() {
                 <button
                   onClick={exportPrintableSchedule}
                   disabled={isPrinting || planningSavePending || filtered.length === 0}
-                  className="btn-ghost"
+                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title="Gerar o modelo de impressão com os filtros atuais"
                 >
                   <Printer className="h-3.5 w-3.5" />
@@ -1268,7 +1268,7 @@ function AtividadesPage() {
                 <button
                   onClick={exportFilteredActivities}
                   disabled={isExporting || planningSavePending || filtered.length === 0}
-                  className="btn-ghost"
+                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title="Exportar as atividades com os filtros atuais"
                 >
                   <Download className="h-3.5 w-3.5" />
@@ -1276,7 +1276,11 @@ function AtividadesPage() {
                 </button>
               </>
             )}
-            <button onClick={() => activities.refetch()} className="btn-ghost" title="Recarregar">
+            <button
+              onClick={() => activities.refetch()}
+              className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+              title="Recarregar"
+            >
               <RefreshCw className="h-3.5 w-3.5" /> Atualizar
             </button>
           </div>
