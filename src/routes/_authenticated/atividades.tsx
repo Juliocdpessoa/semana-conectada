@@ -445,7 +445,8 @@ function PlanningGridCell({
 
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
-  const canEditPlanningFields = session.roles.includes("planning");
+  const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
+  const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
   const qc = useQueryClient();
@@ -468,6 +469,7 @@ function AtividadesPage() {
   const [gerFilters, setGerFilters] = useState<string[]>([]);
   const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [originFilters, setOriginFilters] = useState<string[]>([]);
+  const [selectedWeekId, setSelectedWeekId] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<ActivityRow | null>(null);
@@ -478,10 +480,27 @@ function AtividadesPage() {
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
-  const activeWeek = useQuery({
-    queryKey: ["active-week"],
+  const availableWeeks = useQuery({
+    queryKey: ["activity-working-weeks"],
+    enabled: canAccessPreparation,
     queryFn: async () => {
-      const { data, error } = await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle();
+      const { data, error } = await (supabase as any)
+        .from("weeks")
+        .select("id,code,label,start_date,end_date,is_active,lifecycle_status")
+        .in("lifecycle_status", ["operational", "preparation"])
+        .order("start_date", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const activeWeek = useQuery({
+    queryKey: ["active-week", canAccessPreparation ? selectedWeekId : "operational"],
+    queryFn: async () => {
+      let request = (supabase as any).from("weeks").select("*");
+      request =
+        canAccessPreparation && selectedWeekId ? request.eq("id", selectedWeekId) : request.eq("is_active", true);
+      const { data, error } = await request.maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -1204,15 +1223,33 @@ function AtividadesPage() {
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
-        eyebrow="Semana ativa"
+        eyebrow={activeWeek.data?.lifecycle_status === "preparation" ? "Semana em preparação" : "Semana operacional"}
         title={activeWeek.data?.label ?? "—"}
         description={
           activeWeek.data
             ? `${formatDate(activeWeek.data.start_date)} a ${formatDate(activeWeek.data.end_date)} · ${kpis.total} atividades programadas`
-            : "Nenhuma semana ativa."
+            : "Nenhuma semana operacional."
         }
         actions={
           <div className="flex items-center gap-2">
+            {canAccessPreparation && (availableWeeks.data?.length ?? 0) > 0 && (
+              <select
+                value={selectedWeekId || activeWeek.data?.id || ""}
+                onChange={(event) => {
+                  setSelectedWeekId(event.target.value);
+                  setSelected(new Set());
+                  setPage(0);
+                }}
+                className="input-base min-w-[220px] py-2 text-xs"
+                aria-label="Selecionar semana de trabalho"
+              >
+                {(availableWeeks.data ?? []).map((week: any) => (
+                  <option key={week.id} value={week.id}>
+                    {week.label} — {week.lifecycle_status === "preparation" ? "Em preparação" : "Operacional"}
+                  </option>
+                ))}
+              </select>
+            )}
             <div className="hidden text-right sm:block">
               <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
               <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
