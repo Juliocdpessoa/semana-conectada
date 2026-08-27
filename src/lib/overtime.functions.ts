@@ -763,6 +763,32 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+export const deleteEmployee = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+      return { ok: false as const, error: "Somente gerente, logística ou administrador pode excluir colaboradores." };
+    }
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: deleted, error } = await db.from("employees").delete().eq("id", data.id).select("id").maybeSingle();
+    if (error) {
+      if (error.code === "23503") {
+        return {
+          ok: false as const,
+          error:
+            "Este colaborador possui registros vinculados e não pode ser excluído. Use Inativar para preservar o histórico.",
+        };
+      }
+      return { ok: false as const, error: error.message };
+    }
+    if (!deleted) return { ok: false as const, error: "Colaborador não encontrado." };
+    return { ok: true as const };
+  });
+
 const decideSchema = z.object({
   id: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
