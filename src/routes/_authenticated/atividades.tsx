@@ -1240,7 +1240,7 @@ function AtividadesPage() {
                   setSelected(new Set());
                   setPage(0);
                 }}
-                className="input-base h-10 min-h-10 min-w-[220px] py-0 text-xs"
+                className="input-base h-10 min-h-10 w-[190px] max-w-full py-0 text-xs sm:w-[210px]"
                 aria-label="Selecionar semana de trabalho"
               >
                 {(availableWeeks.data ?? []).map((week: any) => (
