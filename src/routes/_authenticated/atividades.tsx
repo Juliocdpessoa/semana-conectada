@@ -432,6 +432,8 @@ function AtividadesPage() {
   const [cutoffDraft, setCutoffDraft] = useState("15:00");
   const [planningDrafts, setPlanningDrafts] = useState<Record<string, Partial<PlanningDraft>>>({});
   const planningSavesPendingRef = useRef(0);
+  const planningSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const planningVersionsRef = useRef(new Map<string, number>());
   const [planningSavePending, setPlanningSavePending] = useState(false);
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const dragTarget = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
@@ -711,6 +713,7 @@ function AtividadesPage() {
     };
     return {
       id: row.id,
+      expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.version),
       pbs: current.pbs || null,
       ptNumber: current.pt_number || null,
       releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
@@ -721,22 +724,31 @@ function AtividadesPage() {
   async function persistPlanningRows(payload: ReturnType<typeof planningPayload>[], showSuccess = false) {
     planningSavesPendingRef.current += 1;
     setPlanningSavePending(true);
-    try {
-      const result = await savePlanningFields({ data: { rows: payload } });
-      if (!result.ok) throw new Error(result.error);
-      if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
-      qc.invalidateQueries({ queryKey: ["activities"] });
-    } catch (error: any) {
-      const failedIds = new Set(payload.map((row) => row.id));
-      setPlanningDrafts((previous) =>
-        Object.fromEntries(Object.entries(previous).filter(([id]) => !failedIds.has(id))),
-      );
-      qc.invalidateQueries({ queryKey: ["activities"] });
-      toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
-    } finally {
-      planningSavesPendingRef.current = Math.max(0, planningSavesPendingRef.current - 1);
-      if (planningSavesPendingRef.current === 0) setPlanningSavePending(false);
-    }
+    const run = planningSaveQueueRef.current.then(async () => {
+      const versionedPayload = payload.map((row) => ({
+        ...row,
+        expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.expectedVersion),
+      }));
+      try {
+        const result = await savePlanningFields({ data: { rows: versionedPayload } });
+        if (!result.ok) throw new Error(result.error);
+        for (const row of versionedPayload) planningVersionsRef.current.set(row.id, row.expectedVersion + 1);
+        if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
+        qc.invalidateQueries({ queryKey: ["activities"] });
+      } catch (error: any) {
+        const failedIds = new Set(payload.map((row) => row.id));
+        setPlanningDrafts((previous) =>
+          Object.fromEntries(Object.entries(previous).filter(([id]) => !failedIds.has(id))),
+        );
+        qc.invalidateQueries({ queryKey: ["activities"] });
+        toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
+      } finally {
+        planningSavesPendingRef.current = Math.max(0, planningSavesPendingRef.current - 1);
+        if (planningSavesPendingRef.current === 0) setPlanningSavePending(false);
+      }
+    });
+    planningSaveQueueRef.current = run.catch(() => undefined);
+    await run;
   }
 
   async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
@@ -1743,7 +1755,9 @@ function AtividadesPage() {
       {bulkOpen && (
         <BulkModal
           count={selected.size}
-          ids={Array.from(selected)}
+          rows={allRows
+            .filter((row) => selected.has(row.id))
+            .map((row) => ({ id: row.id, expectedVersion: row.version }))}
           weekId={activeWeek.data!.id}
           canCancel={canEditPlanningFields}
           onClose={() => setBulkOpen(false)}
@@ -2294,14 +2308,14 @@ function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
 
 function BulkModal({
   count,
-  ids,
+  rows,
   weekId,
   canCancel,
   onClose,
   onSaved,
 }: {
   count: number;
-  ids: string[];
+  rows: { id: string; expectedVersion: number }[];
   weekId: string;
   canCancel: boolean;
   onClose: () => void;
@@ -2331,7 +2345,7 @@ function BulkModal({
     try {
       const res = await call({
         data: {
-          ids,
+          rows,
           status,
           justification: justification.trim() || null,
           observation: observation.trim() || null,
