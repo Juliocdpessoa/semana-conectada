@@ -19,6 +19,7 @@ import {
   Bus,
   UserX,
   Pencil,
+  Trash2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
@@ -30,6 +31,7 @@ import {
   cancelOvertimeRequest,
   upsertEmployees,
   setEmployeeActive,
+  deleteEmployee,
   updateEmployee,
   listOvertimeForExport,
   WEEKLY_ACTIVITY_EXPORT_COLUMNS,
@@ -1635,10 +1637,12 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const pageSize = 30;
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
+  const removeEmployee = useServerFn(deleteEmployee);
   const [search, setSearch] = useState("");
   const [showImport, setShowImport] = useState(false);
   const [changingId, setChangingId] = useState<string | null>(null);
   const [editing, setEditing] = useState<EmployeeRow | null>(null);
+  const [deleting, setDeleting] = useState<EmployeeRow | null>(null);
   const [page, setPage] = useState(1);
   const employees = useQuery({
     queryKey: ["employees"],
@@ -1667,6 +1671,25 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
       qc.invalidateQueries({ queryKey: ["active-employees"] });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível alterar o colaborador.");
+    } finally {
+      setChangingId(null);
+    }
+  }
+
+  async function confirmDelete() {
+    if (!deleting) return;
+    setChangingId(deleting.id);
+    try {
+      const res = await removeEmployee({ data: { id: deleting.id } });
+      if (!res.ok) return toast.error(res.error);
+      toast.success("Colaborador excluído.");
+      setDeleting(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["employees"] }),
+        qc.invalidateQueries({ queryKey: ["active-employees"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir o colaborador.");
     } finally {
       setChangingId(null);
     }
@@ -1771,7 +1794,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   </div>
                 </div>
                 {!readOnly && (
-                  <div className="mt-3 flex gap-2">
+                  <div className="mt-3 grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setEditing(employee)}
                       className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted"
@@ -1785,6 +1808,13 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     >
                       {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
                       {employee.is_active ? "Inativar" : "Reativar"}
+                    </button>
+                    <button
+                      disabled={changingId === employee.id}
+                      onClick={() => setDeleting(employee)}
+                      className="flex min-h-9 items-center justify-center gap-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" /> Excluir
                     </button>
                   </div>
                 )}
@@ -1838,6 +1868,13 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                             className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted disabled:opacity-60"
                           >
                             {employee.is_active ? "Inativar" : "Reativar"}
+                          </button>
+                          <button
+                            disabled={changingId === employee.id}
+                            onClick={() => setDeleting(employee)}
+                            className="flex items-center gap-1 rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10 disabled:opacity-60"
+                          >
+                            <Trash2 className="h-3 w-3" /> Excluir
                           </button>
                         </div>
                       </td>
@@ -1894,6 +1931,38 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
             qc.invalidateQueries({ queryKey: ["active-employees"] });
           }}
         />
+      )}
+      {deleting && (
+        <Modal
+          title="Excluir colaborador"
+          description={deleting.full_name}
+          onClose={() => changingId !== deleting.id && setDeleting(null)}
+          footer={
+            <>
+              <button
+                type="button"
+                disabled={changingId === deleting.id}
+                onClick={() => setDeleting(null)}
+                className="rounded border border-border px-3 py-2 text-[12px] hover:bg-muted disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={changingId === deleting.id}
+                onClick={confirmDelete}
+                className="rounded bg-destructive px-3 py-2 text-[12px] font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
+              >
+                {changingId === deleting.id ? "Excluindo…" : "Excluir definitivamente"}
+              </button>
+            </>
+          }
+        >
+          <p className="text-[12px] text-muted-foreground">
+            Esta ação remove o cadastro do colaborador e não pode ser desfeita. Cadastros vinculados a registros
+            históricos devem ser inativados em vez de excluídos.
+          </p>
+        </Modal>
       )}
     </Panel>
   );
