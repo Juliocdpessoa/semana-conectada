@@ -122,14 +122,37 @@ function OvertimePage() {
   // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
   // o filtro de período global não se aplica a essa aba.
   const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
+  const [exportDate, setExportDate] = useState(() => toIsoDate(new Date()));
+  const exportDateOptions = useQuery({
+    queryKey: ["overtime-export-dates", exportPeriod.from, exportPeriod.to],
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    enabled: canExportOvertime && tab === "export",
+    queryFn: async () => {
+      const dates = new Set<string>([toIsoDate(new Date())]);
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await (supabase as any)
+          .from("overtime_requests")
+          .select("overtime_date")
+          .neq("status", "cancelled")
+          .gte("overtime_date", exportPeriod.from)
+          .lte("overtime_date", exportPeriod.to)
+          .range(from, from + 999);
+        if (error) throw error;
+        for (const row of data ?? []) dates.add(row.overtime_date);
+        if ((data?.length ?? 0) < 1000) break;
+      }
+      return [...dates].sort((a, b) => b.localeCompare(a));
+    },
+  });
   const exportRequests = useQuery({
-    queryKey: ["overtime-export-rows", exportPeriod.from, exportPeriod.to],
+    queryKey: ["overtime-export-rows", exportDate],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const result = await loadOvertimeForExport({
-        data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
+        data: { dateFrom: exportDate, dateTo: exportDate },
       });
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
@@ -288,6 +311,9 @@ function OvertimePage() {
         <ApprovedDailyExport
           rows={exportRequests.data ?? []}
           transportOnly={isLogistics}
+          selectedDate={exportDate}
+          availableDates={exportDateOptions.data ?? [exportDate]}
+          onSelectedDateChange={setExportDate}
           onFilteredRowsChange={setFilteredKpiRows}
         />
       )}
@@ -479,28 +505,23 @@ function WeeklyActivityExport() {
 function ApprovedDailyExport({
   rows,
   transportOnly = false,
+  selectedDate,
+  availableDates,
+  onSelectedDateChange,
   onFilteredRowsChange,
 }: {
   rows: OvertimeRow[];
   transportOnly?: boolean;
+  selectedDate: string;
+  availableDates: string[];
+  onSelectedDateChange: (date: string) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
 }) {
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
-  const availableDates = useMemo(() => {
-    const dates = [...new Set(exportableRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
-    const today = toIsoDate(new Date());
-    if (!dates.includes(today)) dates.unshift(today);
-    return dates;
-  }, [exportableRows]);
-  const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
   const effectiveDate = selectedDate || availableDates[0] || "";
-
-  useEffect(() => {
-    if (!selectedDate && availableDates[0]) setSelectedDate(availableDates[0]);
-  }, [availableDates, selectedDate]);
 
   const dateRows = useMemo(
     () =>
@@ -625,7 +646,7 @@ function ApprovedDailyExport({
             <select
               value={effectiveDate}
               onChange={(event) => {
-                setSelectedDate(event.target.value);
+                onSelectedDateChange(event.target.value);
                 setSelectedEntryTime("");
                 setSelectedDepartureTime("");
               }}
