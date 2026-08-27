@@ -60,7 +60,7 @@ function PainelPage() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-none overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
         <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
           <PanelTabBtn active={view === "geral"} onClick={() => changeView("geral")}>
             Visão geral
@@ -947,7 +947,8 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
 
   const activities = useQuery({
-    queryKey: ["panel-activities", effectiveWeekId],
+    // Chave exclusiva/versionada: evita reaproveitar uma resposta antiga sem planning_data/Trab.
+    queryKey: ["non-execution-activities-with-hours-v2", effectiveWeekId],
     enabled: !!effectiveWeekId,
     queryFn: async () => {
       const all: ActivityRow[] = [];
