@@ -10,7 +10,21 @@ const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido")
 export const listScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((data: unknown) =>
-    z.object({ start_date: isoDate.optional(), end_date: isoDate.optional() }).parse(data),
+    z
+      .object({
+        start_date: isoDate.optional(),
+        end_date: isoDate.optional(),
+        search: z.string().trim().max(150).optional(),
+        job_title: z.string().trim().max(120).optional(),
+        status: z.enum(["all", "scheduled", "cancelled"]).default("scheduled"),
+        transport: z.enum(["all", "yes", "no"]).default("all"),
+        entry_time: hhmm.optional(),
+        departure_time: hhmm.optional(),
+        page: z.number().int().min(1).default(1),
+        page_size: z.number().int().min(1).max(100).default(30),
+        mode: z.enum(["page", "export"]).default("page"),
+      })
+      .parse(data),
   )
   .handler(async ({ context, data: input }) => {
     const { supabase, userId } = context;
@@ -22,25 +36,95 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
       const fallbackStart = new Date();
       fallbackStart.setDate(fallbackStart.getDate() - 90);
       const defaultStart = `${fallbackStart.getFullYear()}-${String(fallbackStart.getMonth() + 1).padStart(2, "0")}-${String(fallbackStart.getDate()).padStart(2, "0")}`;
-      const rows: any[] = [];
-      const pageSize = 1000;
-      for (let from = 0; ; from += pageSize) {
-        let rowsQuery = db
-          .from("scheduled_transport_requests")
-          .select("*")
-          .gte("transport_date", input.start_date || defaultStart)
-          .order("transport_date", { ascending: false })
-          .order("employee_name", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (input.end_date) rowsQuery = rowsQuery.lte("transport_date", input.end_date);
-        const { data, error } = await rowsQuery;
+      const applyDateRange = (query: any) => {
+        let next = query.gte("transport_date", input.start_date || defaultStart);
+        if (input.end_date) next = next.lte("transport_date", input.end_date);
+        return next;
+      };
+      const applyFilters = (query: any) => {
+        let next = applyDateRange(query);
+        if (input.status !== "all") next = next.eq("status", input.status);
+        if (input.job_title) next = next.eq("employee_role", input.job_title);
+        if (input.transport === "yes") next = next.eq("needs_transport", true);
+        if (input.transport === "no") next = next.eq("needs_transport", false);
+        if (input.entry_time) next = next.eq("entry_time", input.entry_time);
+        if (input.departure_time) next = next.eq("departure_time", input.departure_time);
+        const term = input.search
+          ?.replace(/[,%()]/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+        if (term) {
+          const pattern = `%${term}%`;
+          next = next.or(
+            [
+              "employee_name",
+              "employee_registration",
+              "employee_external_id",
+              "employee_role",
+              "order_number",
+              "service_description",
+              "requester_name",
+            ]
+              .map((column) => `${column}.ilike.${pattern}`)
+              .join(","),
+          );
+        }
+        return next;
+      };
+
+      const optionsRows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await applyDateRange(
+          db
+            .from("scheduled_transport_requests")
+            .select("transport_date,employee_role,entry_time,departure_time")
+            .order("transport_date", { ascending: false })
+            .range(from, from + 999),
+        );
         if (error) throw error;
         if (!data?.length) break;
-        rows.push(...data);
-        if (data.length < pageSize) break;
+        optionsRows.push(...data);
+        if (data.length < 1000) break;
       }
 
-      const batchIds = Array.from(new Set(rows.map((row) => row.batch_id).filter(Boolean))) as string[];
+      const summaryRows: any[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await applyFilters(
+          db
+            .from("scheduled_transport_requests")
+            .select("employee_master_id,status,needs_transport")
+            .range(from, from + 999),
+        );
+        if (error) throw error;
+        if (!data?.length) break;
+        summaryRows.push(...data);
+        if (data.length < 1000) break;
+      }
+
+      const scheduled = summaryRows.filter((row) => row.status === "scheduled");
+      const cancelled = summaryRows.filter((row) => row.status === "cancelled");
+      const kpis = {
+        employees: new Set(scheduled.map((row) => row.employee_master_id)).size,
+        transport: new Set(scheduled.filter((row) => row.needs_transport).map((row) => row.employee_master_id)).size,
+        noTransport: new Set(scheduled.filter((row) => !row.needs_transport).map((row) => row.employee_master_id)).size,
+        cancelled: new Set(cancelled.map((row) => row.employee_master_id)).size,
+      };
+
+      let rowsQuery = applyFilters(
+        db
+          .from("scheduled_transport_requests")
+          .select("*", { count: "exact" })
+          .order("transport_date", { ascending: false })
+          .order("employee_name", { ascending: true }),
+      );
+      if (input.mode === "page") {
+        const from = (input.page - 1) * input.page_size;
+        rowsQuery = rowsQuery.range(from, from + input.page_size - 1);
+      }
+      const { data: rows, error: rowsError, count } = await rowsQuery;
+      if (rowsError) throw rowsError;
+
+      const batchIds = Array.from(new Set((rows ?? []).map((row: any) => row.batch_id).filter(Boolean))) as string[];
       const batches: any[] = [];
       for (let from = 0; from < batchIds.length; from += 500) {
         const { data, error } = await db
@@ -51,7 +135,19 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
         if (error) throw error;
         batches.push(...(data ?? []));
       }
-      return { ok: true as const, rows, batches };
+      return {
+        ok: true as const,
+        rows: rows ?? [],
+        batches,
+        total: count ?? summaryRows.length,
+        kpis,
+        options: {
+          jobTitles: [...new Set(optionsRows.map((row) => row.employee_role).filter(Boolean))].sort(),
+          dates: [...new Set(optionsRows.map((row) => row.transport_date).filter(Boolean))].sort(),
+          entryTimes: [...new Set(optionsRows.map((row) => row.entry_time).filter(Boolean))].sort(),
+          departurePairs: optionsRows.map((row) => ({ entry: row.entry_time, departure: row.departure_time })),
+        },
+      };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar dados." };
     }
