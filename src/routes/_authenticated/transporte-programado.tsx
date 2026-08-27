@@ -102,11 +102,16 @@ function ScheduledTransportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const query = useQuery({
-    queryKey: ["scheduled-transport"],
+    queryKey: ["scheduled-transport", filters.startDate, filters.endDate],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
-      const result = await load({ data: {} });
+      const result = await load({
+        data: {
+          start_date: filters.startDate || undefined,
+          end_date: filters.endDate || undefined,
+        },
+      });
       if (!result.ok) throw new Error(result.error);
       return result;
     },
