@@ -217,9 +217,9 @@ function PlanejamentoPage() {
     queryKey: ["active-week"],
     queryFn: async () =>
       (
-        await supabase
+        await (supabase as any)
           .from("weeks")
-          .select("id,code,label,start_date,end_date,is_active")
+          .select("id,code,label,start_date,end_date,is_active,lifecycle_status")
           .eq("is_active", true)
           .maybeSingle()
       ).data,
@@ -229,9 +229,9 @@ function PlanejamentoPage() {
     queryKey: ["weeks-list"],
     queryFn: async () =>
       (
-        await supabase
+        await (supabase as any)
           .from("weeks")
-          .select("id, code, label, start_date, end_date, is_active")
+          .select("id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at")
           .order("start_date", { ascending: false })
       ).data ?? [],
   });
@@ -396,9 +396,11 @@ function PlanejamentoPage() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
-          title="Semana ativa"
+          title="Semana operacional"
           description={
-            activeWeek.data ? `${activeWeek.data.start_date} → ${activeWeek.data.end_date}` : "Nenhuma semana ativa."
+            activeWeek.data
+              ? `${activeWeek.data.start_date} → ${activeWeek.data.end_date}`
+              : "Nenhuma semana operacional."
           }
           className="lg:col-span-2"
         >
@@ -478,12 +480,16 @@ function PlanejamentoPage() {
                         {w.start_date} → {w.end_date}
                       </td>
                       <td className="px-3 py-2">
-                        {w.is_active ? (
+                        {w.lifecycle_status === "operational" || w.is_active ? (
                           <span className="status-pill border-success/40 bg-success/10 text-success">
-                            <CheckCircle2 className="h-3 w-3" /> Ativa
+                            <CheckCircle2 className="h-3 w-3" /> Operacional
+                          </span>
+                        ) : w.lifecycle_status === "preparation" ? (
+                          <span className="status-pill border-warning/40 bg-warning/10 text-warning-foreground">
+                            Em preparação
                           </span>
                         ) : (
-                          <span className="text-[11px] text-muted-foreground">—</span>
+                          <span className="text-[11px] text-muted-foreground">Encerrada</span>
                         )}
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -497,20 +503,26 @@ function PlanejamentoPage() {
                             <Download className="h-3.5 w-3.5" />
                             {exportingId === w.id ? "Baixando…" : "Baixar"}
                           </button>
-                          {!w.is_active && (
+                          {w.lifecycle_status !== "operational" && !w.is_active && (
                             <>
                               <button
                                 onClick={async () => {
+                                  if (
+                                    !window.confirm(
+                                      `Ativar ${w.code} como semana operacional? A semana operacional atual será encerrada e a nova semana ficará visível para todos os usuários.`,
+                                    )
+                                  )
+                                    return;
                                   const res = await activateFn({ data: { weekId: w.id } });
                                   if (!res.ok) return toast.error(res.error);
-                                  toast.success("Semana ativada.");
+                                  toast.success("Nova semana operacional ativada. A anterior foi encerrada.");
                                   qc.invalidateQueries({ queryKey: ["active-week"] });
                                   qc.invalidateQueries({ queryKey: ["weeks-list"] });
                                   qc.invalidateQueries({ queryKey: ["activities"] });
                                 }}
                                 className="btn-ghost py-1 text-[11px]"
                               >
-                                Ativar
+                                Ativar como operacional
                               </button>
                               <button
                                 onClick={async () => {
@@ -623,7 +635,6 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-  const [activate, setActivate] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -694,7 +705,6 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           label: label.trim(),
           start_date: startDate,
           end_date: endDate,
-          activate,
           source_file_name: file?.name ?? null,
           sheet_name: parsed.sheetName,
           rows: payload,
@@ -705,7 +715,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         setBusy(false);
         return;
       }
-      toast.success(`Semana importada — ${res.count} atividades.`);
+      toast.success(`Semana importada em preparação — ${res.count} atividades.`);
       onDone();
     } catch (e: any) {
       setError(e?.message ?? "Erro ao importar.");
@@ -717,7 +727,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   return (
     <Modal
       title="Importar planilha semanal"
-      description="A programação importada inclui PBS e Tipo de Liberação; o planejamento poderá atualizá-los depois."
+      description="A nova programação ficará Em preparação e invisível para os líderes até a ativação manual."
       onClose={onClose}
       size="lg"
       footer={
@@ -782,10 +792,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </Field>
       </div>
 
-      <label className="mt-3 flex items-center gap-2 text-[12px]">
-        <input type="checkbox" checked={activate} onChange={(e) => setActivate(e.target.checked)} />
-        Ativar esta semana imediatamente (desativa a atual)
-      </label>
+      <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-foreground">
+        Esta importação não altera a semana operacional atual. Depois dos ajustes, use “Ativar como operacional”.
+      </div>
 
       {error && (
         <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] text-destructive">
