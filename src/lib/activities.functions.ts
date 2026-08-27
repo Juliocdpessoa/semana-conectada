@@ -143,7 +143,10 @@ export const updateActivity = createServerFn({ method: "POST" })
   });
 
 const bulkSchema = z.object({
-  ids: z.array(z.string().uuid()).min(1).max(500),
+  rows: z
+    .array(z.object({ id: z.string().uuid(), expectedVersion: z.number().int().min(1) }))
+    .min(1)
+    .max(500),
   status: z.enum([
     "Sem apontamento",
     "EXECUTADO",
@@ -191,15 +194,16 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
     }
 
-    const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_reports", {
-      p_ids: Array.from(new Set(data.ids)),
+    const uniqueRows = Array.from(new Map(data.rows.map((row) => [row.id, row])).values());
+    const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_reports_v2", {
+      p_rows: uniqueRows.map((row) => ({ id: row.id, expected_version: row.expectedVersion })),
       p_status: data.status,
       p_justification: normalizedJustification,
       p_observation: data.observation,
       p_linked_ids: requiresImmediateLink ? linkedIds : [],
     });
     if (error) return { ok: false as const, error: error.message };
-    return { ok: true as const, count: Number(updatedCount ?? data.ids.length) };
+    return { ok: true as const, count: Number(updatedCount ?? uniqueRows.length) };
   });
 
 const activityPlanningFieldsSchema = z.object({
@@ -207,6 +211,7 @@ const activityPlanningFieldsSchema = z.object({
     .array(
       z.object({
         id: z.string().uuid(),
+        expectedVersion: z.number().int().min(1),
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
         releaseType: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable(),
@@ -321,6 +326,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
 
     const payload = data.rows.map((row) => ({
       id: row.id,
+      expected_version: row.expectedVersion,
       pbs: row.pbs,
       pt_number: row.ptNumber,
       release_type: row.releaseType,
