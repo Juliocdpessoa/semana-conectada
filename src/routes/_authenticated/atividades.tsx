@@ -1250,10 +1250,6 @@ function AtividadesPage() {
                 ))}
               </select>
             )}
-            <div className="hidden text-right sm:block">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
-              <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
-            </div>
             {canEditPlanningFields && (
               <>
                 <button
@@ -1283,6 +1279,10 @@ function AtividadesPage() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Atualizar
             </button>
+            <div className="hidden text-right sm:block">
+              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
+              <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
+            </div>
           </div>
         }
       />
