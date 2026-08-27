@@ -9,21 +9,48 @@ const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido")
 
 export const listScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({}).parse(data))
-  .handler(async ({ context }) => {
+  .inputValidator((data: unknown) =>
+    z.object({ start_date: isoDate.optional(), end_date: isoDate.optional() }).parse(data),
+  )
+  .handler(async ({ context, data: input }) => {
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para o transporte programado." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     try {
-      const [rows, batches] = await Promise.all([
-        fetchAllRows(db, "scheduled_transport_requests", [
-          { column: "transport_date", ascending: false },
-          { column: "employee_name", ascending: true },
-        ]),
-        fetchAllRows(db, "scheduled_transport_batches", [{ column: "created_at", ascending: false }]),
-      ]);
+      const fallbackStart = new Date();
+      fallbackStart.setDate(fallbackStart.getDate() - 90);
+      const defaultStart = `${fallbackStart.getFullYear()}-${String(fallbackStart.getMonth() + 1).padStart(2, "0")}-${String(fallbackStart.getDate()).padStart(2, "0")}`;
+      const rows: any[] = [];
+      const pageSize = 1000;
+      for (let from = 0; ; from += pageSize) {
+        let rowsQuery = db
+          .from("scheduled_transport_requests")
+          .select("*")
+          .gte("transport_date", input.start_date || defaultStart)
+          .order("transport_date", { ascending: false })
+          .order("employee_name", { ascending: true })
+          .range(from, from + pageSize - 1);
+        if (input.end_date) rowsQuery = rowsQuery.lte("transport_date", input.end_date);
+        const { data, error } = await rowsQuery;
+        if (error) throw error;
+        if (!data?.length) break;
+        rows.push(...data);
+        if (data.length < pageSize) break;
+      }
+
+      const batchIds = Array.from(new Set(rows.map((row) => row.batch_id).filter(Boolean))) as string[];
+      const batches: any[] = [];
+      for (let from = 0; from < batchIds.length; from += 500) {
+        const { data, error } = await db
+          .from("scheduled_transport_batches")
+          .select("*")
+          .in("id", batchIds.slice(from, from + 500))
+          .order("created_at", { ascending: false });
+        if (error) throw error;
+        batches.push(...(data ?? []));
+      }
       return { ok: true as const, rows, batches };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar dados." };
