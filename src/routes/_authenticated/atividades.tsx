@@ -206,7 +206,7 @@ function gerLabel(r: { planning_data: Record<string, unknown> | null }): string 
 }
 
 /** Seleção múltipla pesquisável (mobile-friendly, acessível). */
-function WorkCenterMultiSelect({
+function FilterMultiSelect({
   options,
   selected,
   onChange,
@@ -214,6 +214,7 @@ function WorkCenterMultiSelect({
   ariaLabel = "Filtrar por centro de trabalho",
   searchPlaceholder = "Buscar centro...",
   selectedPlural = "itens selecionados",
+  optionLabel = (option: string) => option,
 }: {
   options: string[];
   selected: string[];
@@ -222,6 +223,7 @@ function WorkCenterMultiSelect({
   ariaLabel?: string;
   searchPlaceholder?: string;
   selectedPlural?: string;
+  optionLabel?: (option: string) => string;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -232,7 +234,11 @@ function WorkCenterMultiSelect({
   }, [options, query]);
 
   const label =
-    selected.length === 0 ? allLabel : selected.length === 1 ? selected[0] : `${selected.length} ${selectedPlural}`;
+    selected.length === 0
+      ? allLabel
+      : selected.length === 1
+        ? optionLabel(selected[0])
+        : `${selected.length} ${selectedPlural}`;
 
   function toggle(option: string) {
     const key = normalizeKey(option);
@@ -282,7 +288,7 @@ function WorkCenterMultiSelect({
                   onChange={() => toggle(o)}
                   className="h-4 w-4 shrink-0 accent-primary"
                 />
-                <span className="truncate">{o}</span>
+                <span className="truncate">{optionLabel(o)}</span>
               </label>
             );
           })}
@@ -438,13 +444,13 @@ function AtividadesPage() {
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const dragTarget = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("");
-  const [releaseTypeFilter, setReleaseTypeFilter] = useState<string>("");
-  const [areaFilter, setAreaFilter] = useState<string>("");
+  const [statusFilters, setStatusFilters] = useState<string[]>([]);
+  const [releaseTypeFilters, setReleaseTypeFilters] = useState<string[]>([]);
+  const [areaFilters, setAreaFilters] = useState<string[]>([]);
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
   const [gerFilters, setGerFilters] = useState<string[]>([]);
-  const [dateFilter, setDateFilter] = useState<string>("");
-  const [originFilter, setOriginFilter] = useState<"" | "programmed" | "immediate">("");
+  const [dateFilters, setDateFilters] = useState<string[]>([]);
+  const [originFilters, setOriginFilters] = useState<string[]>([]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<ActivityRow | null>(null);
@@ -505,26 +511,31 @@ function AtividadesPage() {
   const allRows = activities.data ?? [];
   const workCenterKeys = new Set(workCenterFilters.map((value) => normalizeKey(value)));
   const gerKeys = new Set(gerFilters.map((value) => normalizeKey(value)));
+  const areaKeys = new Set(areaFilters.map((value) => normalizeKey(value)));
 
   function matchesActiveFilters(row: ActivityRow, omitted?: FilterDimension) {
     const query = search.trim().toLowerCase();
-    if (omitted !== "status" && statusFilter) {
-      if (statusFilter === PENDING_REPORT_FILTER && !PENDING_REPORT_STATUSES.has(row.status)) return false;
-      if (statusFilter !== PENDING_REPORT_FILTER && row.status !== statusFilter) return false;
+    if (omitted !== "status" && statusFilters.length > 0) {
+      const matchesStatus = statusFilters.some((status) =>
+        status === PENDING_REPORT_FILTER ? PENDING_REPORT_STATUSES.has(row.status) : row.status === status,
+      );
+      if (!matchesStatus) return false;
     }
     if (canEditPlanningFields && omitted !== "releaseType") {
-      if (releaseTypeFilter === "__EMPTY__" && row.release_type) return false;
-      if (releaseTypeFilter && releaseTypeFilter !== "__EMPTY__" && row.release_type !== releaseTypeFilter)
+      if (
+        releaseTypeFilters.length > 0 &&
+        !releaseTypeFilters.some((type) => (type === "__EMPTY__" ? !row.release_type : row.release_type === type))
+      )
         return false;
     }
-    if (omitted !== "area" && areaFilter && normalizeKey(areaLabel(row)) !== normalizeKey(areaFilter)) return false;
+    if (omitted !== "area" && areaKeys.size > 0 && !areaKeys.has(normalizeKey(areaLabel(row)))) return false;
     if (omitted !== "workCenter" && workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(row))))
       return false;
     if (omitted !== "ger" && gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(row)))) return false;
-    if (omitted !== "date" && dateFilter && row.scheduled_date !== dateFilter) return false;
-    if (omitted !== "origin") {
-      if (originFilter === "immediate" && !row.is_immediate) return false;
-      if (originFilter === "programmed" && row.is_immediate) return false;
+    if (omitted !== "date" && dateFilters.length > 0 && !dateFilters.includes(row.scheduled_date ?? "")) return false;
+    if (omitted !== "origin" && originFilters.length > 0) {
+      const origin = row.is_immediate ? "immediate" : "programmed";
+      if (!originFilters.includes(origin)) return false;
     }
     if (!query) return true;
     return (
@@ -562,16 +573,17 @@ function AtividadesPage() {
 
   const statusOptions = STATUSES.filter(
     (status) =>
-      status === statusFilter || allRows.some((row) => row.status === status && matchesActiveFilters(row, "status")),
+      statusFilters.includes(status) ||
+      allRows.some((row) => row.status === status && matchesActiveFilters(row, "status")),
   );
 
   const releaseTypeOptions = RELEASE_TYPES.filter(
     (type) =>
-      type === releaseTypeFilter ||
+      releaseTypeFilters.includes(type) ||
       allRows.some((row) => row.release_type === type && matchesActiveFilters(row, "releaseType")),
   );
   const hasEmptyReleaseType =
-    releaseTypeFilter === "__EMPTY__" ||
+    releaseTypeFilters.includes("__EMPTY__") ||
     allRows.some((row) => !row.release_type && matchesActiveFilters(row, "releaseType"));
 
   const areas = (() => {
@@ -583,7 +595,7 @@ function AtividadesPage() {
       const key = normalizeKey(label);
       if (key && !values.has(key)) values.set(key, label);
     }
-    if (areaFilter) values.set(normalizeKey(areaFilter), areaFilter);
+    for (const selected of areaFilters) values.set(normalizeKey(selected), selected);
     return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
   })();
 
@@ -619,11 +631,11 @@ function AtividadesPage() {
         .filter((value): value is string => Boolean(value)),
     ),
   ).sort();
-  if (dateFilter && !dateOptions.includes(dateFilter)) dateOptions.push(dateFilter);
+  for (const selected of dateFilters) if (!dateOptions.includes(selected)) dateOptions.push(selected);
 
   const originRows = allRows.filter((row) => matchesActiveFilters(row, "origin"));
-  const hasProgrammed = originFilter === "programmed" || originRows.some((row) => !row.is_immediate);
-  const hasImmediate = originFilter === "immediate" || originRows.some((row) => row.is_immediate);
+  const hasProgrammed = originFilters.includes("programmed") || originRows.some((row) => !row.is_immediate);
+  const hasImmediate = originFilters.includes("immediate") || originRows.some((row) => row.is_immediate);
 
   const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
   const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -642,30 +654,36 @@ function AtividadesPage() {
   }, [filtered]);
 
   function toggleKpiStatus(nextStatus: string) {
-    setStatusFilter((current) => (current === nextStatus ? "" : nextStatus));
+    setStatusFilters((current) =>
+      !nextStatus
+        ? []
+        : current.includes(nextStatus)
+          ? current.filter((s) => s !== nextStatus)
+          : [...current, nextStatus],
+    );
     setPage(0);
   }
 
   const activeFilters = [
     search,
-    statusFilter,
-    canEditPlanningFields ? releaseTypeFilter : "",
-    areaFilter,
+    statusFilters.length > 0 ? "1" : "",
+    canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
+    areaFilters.length > 0 ? "1" : "",
     workCenterFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
-    dateFilter,
-    originFilter,
+    dateFilters.length > 0 ? "1" : "",
+    originFilters.length > 0 ? "1" : "",
   ].filter(Boolean).length;
 
   function clearFilters() {
     setSearch("");
-    setStatusFilter("");
-    setReleaseTypeFilter("");
-    setAreaFilter("");
+    setStatusFilters([]);
+    setReleaseTypeFilters([]);
+    setAreaFilters([]);
     setWorkCenterFilters([]);
     setGerFilters([]);
-    setDateFilter("");
-    setOriginFilter("");
+    setDateFilters([]);
+    setOriginFilters([]);
     setPage(0);
   }
 
@@ -1285,9 +1303,9 @@ function AtividadesPage() {
           onClick={() => toggleKpiStatus("EXECUTADO")}
           className={cn(
             "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-            statusFilter === "EXECUTADO" && "ring-2 ring-success/50",
+            statusFilters.includes("EXECUTADO") && "ring-2 ring-success/50",
           )}
-          aria-pressed={statusFilter === "EXECUTADO"}
+          aria-pressed={statusFilters.includes("EXECUTADO")}
         >
           <KpiCard
             label="Executadas"
@@ -1301,9 +1319,9 @@ function AtividadesPage() {
           onClick={() => toggleKpiStatus("NÃO EXECUTADO")}
           className={cn(
             "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-            statusFilter === "NÃO EXECUTADO" && "ring-2 ring-destructive/50",
+            statusFilters.includes("NÃO EXECUTADO") && "ring-2 ring-destructive/50",
           )}
-          aria-pressed={statusFilter === "NÃO EXECUTADO"}
+          aria-pressed={statusFilters.includes("NÃO EXECUTADO")}
         >
           <KpiCard
             label="Não executadas"
@@ -1317,9 +1335,9 @@ function AtividadesPage() {
           onClick={() => toggleKpiStatus(PENDING_REPORT_FILTER)}
           className={cn(
             "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-            statusFilter === PENDING_REPORT_FILTER && "ring-2 ring-border",
+            statusFilters.includes(PENDING_REPORT_FILTER) && "ring-2 ring-border",
           )}
-          aria-pressed={statusFilter === PENDING_REPORT_FILTER}
+          aria-pressed={statusFilters.includes(PENDING_REPORT_FILTER)}
           title="Inclui Sem apontamento e os três status do fluxo de PT"
         >
           <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
@@ -1329,9 +1347,9 @@ function AtividadesPage() {
           onClick={() => toggleKpiStatus("CANCELADA")}
           className={cn(
             "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-            statusFilter === "CANCELADA" && "ring-2 ring-warning/50",
+            statusFilters.includes("CANCELADA") && "ring-2 ring-warning/50",
           )}
-          aria-pressed={statusFilter === "CANCELADA"}
+          aria-pressed={statusFilters.includes("CANCELADA")}
         >
           <KpiCard label="Canceladas" value={kpis.cancelled} tone="warning" icon={<X className="h-3.5 w-3.5" />} />
         </button>
@@ -1357,67 +1375,47 @@ function AtividadesPage() {
             className="input-base pl-8"
           />
         </div>
-        <select
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value);
+        <FilterMultiSelect
+          options={[PENDING_REPORT_FILTER, ...statusOptions]}
+          selected={statusFilters}
+          onChange={(next) => {
+            setStatusFilters(next);
             setPage(0);
           }}
-          className="input-base w-auto py-2 text-xs"
-        >
-          <option value="">Todos os status</option>
-          <option value={PENDING_REPORT_FILTER}>Sem apontamento + fluxo de PT</option>
-          {statusOptions.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
+          allLabel="Todos os status"
+          ariaLabel="Filtrar por status"
+          searchPlaceholder="Buscar status..."
+          selectedPlural="status selecionados"
+          optionLabel={(value) => (value === PENDING_REPORT_FILTER ? "Sem apontamento + fluxo de PT" : value)}
+        />
         {canEditPlanningFields && (
-          <select
-            value={releaseTypeFilter}
-            onChange={(e) => {
-              setReleaseTypeFilter(e.target.value);
+          <FilterMultiSelect
+            options={[...releaseTypeOptions, ...(hasEmptyReleaseType ? ["__EMPTY__"] : [])]}
+            selected={releaseTypeFilters}
+            onChange={(next) => {
+              setReleaseTypeFilters(next);
               setPage(0);
             }}
-            className="input-base w-auto py-2 text-xs"
-            aria-label="Filtrar por tipo de liberação"
-          >
-            <option value="">Todos os tipos de liberação</option>
-            {releaseTypeOptions.map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-            {hasEmptyReleaseType && <option value="__EMPTY__">Sem tipo de liberação</option>}
-          </select>
+            allLabel="Todos os tipos de liberação"
+            ariaLabel="Filtrar por tipo de liberação"
+            searchPlaceholder="Buscar tipo..."
+            selectedPlural="tipos selecionados"
+            optionLabel={(value) => (value === "__EMPTY__" ? "Sem tipo de liberação" : value)}
+          />
         )}
-        <select
-          value={areaFilter}
-          onChange={(e) => {
-            const next = e.target.value;
-            setAreaFilter(next);
-            setWorkCenterFilters((prev) => {
-              if (!next) return prev;
-              const allowed = new Set(
-                (activities.data ?? [])
-                  .filter((r) => normalizeKey(areaLabel(r)) === normalizeKey(next))
-                  .map((r) => normalizeKey(workCenterLabel(r))),
-              );
-              return prev.filter((c) => allowed.has(normalizeKey(c)));
-            });
+        <FilterMultiSelect
+          options={areas}
+          selected={areaFilters}
+          onChange={(next) => {
+            setAreaFilters(next);
             setPage(0);
           }}
-          className="input-base w-auto py-2 text-xs"
-        >
-          <option value="">Todas as áreas</option>
-          {areas.map((a) => (
-            <option key={a} value={a}>
-              {a}
-            </option>
-          ))}
-        </select>
-        <WorkCenterMultiSelect
+          allLabel="Todas as áreas"
+          ariaLabel="Filtrar por área"
+          searchPlaceholder="Buscar área..."
+          selectedPlural="áreas selecionadas"
+        />
+        <FilterMultiSelect
           options={gerOptions}
           selected={gerFilters}
           onChange={(next) => {
@@ -1429,7 +1427,7 @@ function AtividadesPage() {
           searchPlaceholder="Buscar Ger..."
           selectedPlural="Ger selecionadas"
         />
-        <WorkCenterMultiSelect
+        <FilterMultiSelect
           options={workCenters}
           selected={workCenterFilters}
           onChange={(next) => {
@@ -1438,35 +1436,31 @@ function AtividadesPage() {
           }}
         />
 
-        <select
-          value={originFilter}
-          onChange={(e) => {
-            setOriginFilter(e.target.value as "" | "programmed" | "immediate");
+        <FilterMultiSelect
+          options={[...(hasProgrammed ? ["programmed"] : []), ...(hasImmediate ? ["immediate"] : [])]}
+          selected={originFilters}
+          onChange={(next) => {
+            setOriginFilters(next);
             setPage(0);
           }}
-          className="input-base w-auto py-2 text-xs"
-          aria-label="Filtrar por origem da atividade"
-        >
-          <option value="">Todas as atividades</option>
-          {hasProgrammed && <option value="programmed">Somente programadas</option>}
-          {hasImmediate && <option value="immediate">Somente imediatas</option>}
-        </select>
-        <select
-          value={dateFilter}
-          onChange={(e) => {
-            setDateFilter(e.target.value);
+          allLabel="Todas as atividades"
+          ariaLabel="Filtrar por origem da atividade"
+          selectedPlural="origens selecionadas"
+          optionLabel={(value) => (value === "programmed" ? "Programadas" : "Imediatas")}
+        />
+        <FilterMultiSelect
+          options={dateOptions}
+          selected={dateFilters}
+          onChange={(next) => {
+            setDateFilters(next);
             setPage(0);
           }}
-          className="input-base w-auto min-w-[150px] py-2 text-xs"
-          aria-label="Filtrar por data"
-        >
-          <option value="">Todas as datas</option>
-          {dateOptions.map((date) => (
-            <option key={date} value={date}>
-              {formatDate(date)}
-            </option>
-          ))}
-        </select>
+          allLabel="Todas as datas"
+          ariaLabel="Filtrar por data"
+          searchPlaceholder="Buscar data..."
+          selectedPlural="datas selecionadas"
+          optionLabel={(value) => formatDate(value)}
+        />
         {activeFilters > 0 && (
           <button onClick={clearFilters} className="btn-ghost py-1.5 text-xs">
             <X className="h-3 w-3" /> Limpar {activeFilters}
