@@ -120,6 +120,23 @@ const PENDING_REPORT_STATUSES = new Set([
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
+/** HH planejado da atividade: valor da coluna Trab importada da programação. */
+function activityHours(planningData: Record<string, unknown> | null): number {
+  if (!planningData) return 0;
+  const raw = planningData.Trab ?? planningData.TRAB ?? planningData.trab;
+  if (raw === null || raw === undefined || raw === "") return 0;
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  if (typeof raw !== "string") return 0;
+  let normalized = raw.trim().replace(/\s*h(?:oras?)?$/i, "");
+  if (normalized.includes(",")) normalized = normalized.replace(/\./g, "").replace(",", ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+}
+
+function formatActivityHours(value: number) {
+  return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10)} h`;
+}
 const ACTIVITY_EXPORT_COLUMNS = [
   "Tipo de Nota",
   "Nota",
@@ -648,9 +665,10 @@ function AtividadesPage() {
     const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
     const noReport = rows.filter((r) => PENDING_REPORT_STATUSES.has(r.status)).length;
     const cancelled = rows.filter((r) => r.status === "CANCELADA").length;
+    const hours = rows.reduce((totalHours, row) => totalHours + activityHours(row.planning_data), 0);
     const validTotal = total - cancelled;
     const percent = validTotal > 0 ? Math.round((concluded / validTotal) * 100) : 0;
-    return { total, concluded, impeded, noReport, cancelled, percent };
+    return { total, concluded, impeded, noReport, cancelled, hours, percent };
   }, [filtered]);
 
   function toggleKpiStatus(nextStatus: string) {
@@ -1289,7 +1307,7 @@ function AtividadesPage() {
       )}
 
       {/* KPIs */}
-      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
         <button
           type="button"
           onClick={() => toggleKpiStatus("")}
@@ -1353,6 +1371,11 @@ function AtividadesPage() {
         >
           <KpiCard label="Canceladas" value={kpis.cancelled} tone="warning" icon={<X className="h-3.5 w-3.5" />} />
         </button>
+        <KpiCard
+          label="HH programado"
+          value={formatActivityHours(kpis.hours)}
+          icon={<Clock className="h-3.5 w-3.5" />}
+        />
         <KpiCard
           label="Conclusão"
           value={`${kpis.percent}%`}
