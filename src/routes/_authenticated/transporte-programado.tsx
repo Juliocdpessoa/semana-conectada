@@ -102,7 +102,7 @@ function ScheduledTransportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const query = useQuery({
-    queryKey: ["scheduled-transport", filters.startDate, filters.endDate],
+    queryKey: ["scheduled-transport", filters, page],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
@@ -110,6 +110,15 @@ function ScheduledTransportPage() {
         data: {
           start_date: filters.startDate || undefined,
           end_date: filters.endDate || undefined,
+          search: filters.search || undefined,
+          job_title: filters.jobTitle || undefined,
+          status: filters.status,
+          transport: filters.transport,
+          entry_time: filters.entryTime || undefined,
+          departure_time: filters.departureTime || undefined,
+          page,
+          page_size: 30,
+          mode: "page",
         },
       });
       if (!result.ok) throw new Error(result.error);
@@ -143,100 +152,66 @@ function ScheduledTransportPage() {
   });
 
   const rows = (query.data?.rows ?? []) as ScheduledTransportRow[];
-  const batchesList = (query.data?.batches ?? []) as ScheduledTransportBatch[];
   const employees = employeesQuery.data ?? [];
-  const batches = useMemo(() => new Map(batchesList.map((batch) => [batch.id, batch])), [batchesList]);
 
-  const jobTitles = useMemo(
-    () => [...new Set(rows.map((row) => row.employee_role).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
-    [rows],
-  );
-  const availableDates = useMemo(
-    () => [...new Set(rows.map((row) => row.transport_date).filter(Boolean))].sort(),
-    [rows],
-  );
+  const jobTitles = (query.data?.options?.jobTitles ?? []) as string[];
+  const availableDates = (query.data?.options?.dates ?? []) as string[];
   const availableEndDates = useMemo(
     () => availableDates.filter((date) => !filters.startDate || date >= filters.startDate),
     [availableDates, filters.startDate],
   );
-  const rowsInSelectedDateRange = useMemo(
-    () =>
-      rows.filter((row) => {
-        if (filters.startDate && row.transport_date < filters.startDate) return false;
-        if (filters.endDate && row.transport_date > filters.endDate) return false;
-        return true;
-      }),
-    [rows, filters.startDate, filters.endDate],
-  );
-  const availableEntryTimes = useMemo(
-    () => [...new Set(rowsInSelectedDateRange.map((row) => row.entry_time).filter(Boolean))].sort(),
-    [rowsInSelectedDateRange],
-  );
+  const availableEntryTimes = (query.data?.options?.entryTimes ?? []) as string[];
   const availableDepartureTimes = useMemo(
     () =>
       [
         ...new Set(
-          rowsInSelectedDateRange
-            .filter((row) => !filters.entryTime || row.entry_time === filters.entryTime)
-            .map((row) => row.departure_time)
+          ((query.data?.options?.departurePairs ?? []) as { entry: string; departure: string }[])
+            .filter((row) => !filters.entryTime || row.entry === filters.entryTime)
+            .map((row) => row.departure)
             .filter(Boolean),
         ),
       ].sort(),
-    [rowsInSelectedDateRange, filters.entryTime],
+    [query.data?.options?.departurePairs, filters.entryTime],
   );
-  const filtered = useMemo(() => {
-    const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-    return rows.filter((row) => {
-      if (filters.status !== "all" && row.status !== filters.status) return false;
-      if (filters.startDate && row.transport_date < filters.startDate) return false;
-      if (filters.endDate && row.transport_date > filters.endDate) return false;
-      if (filters.jobTitle && row.employee_role !== filters.jobTitle) return false;
-      if (filters.transport === "yes" && !row.needs_transport) return false;
-      if (filters.transport === "no" && row.needs_transport) return false;
-      if (filters.entryTime && row.entry_time !== filters.entryTime) return false;
-      if (filters.departureTime && row.departure_time !== filters.departureTime) return false;
-      if (
-        term &&
-        ![
-          row.employee_name,
-          row.employee_registration ?? "",
-          row.employee_external_id ?? "",
-          row.employee_role,
-          row.order_number ?? "",
-          row.service_description ?? "",
-          row.requester_name,
-        ].some((value) => value.toLocaleLowerCase("pt-BR").includes(term))
-      )
-        return false;
-      return true;
-    });
-  }, [rows, filters]);
   const pageSize = 30;
-  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const totalRows = query.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const paginatedRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedRows = rows;
 
   useEffect(() => setPage(1), [filters]);
 
-  const kpis = useMemo(() => {
-    const scheduled = filtered.filter((row) => row.status === "scheduled");
-    const cancelled = filtered.filter((row) => row.status === "cancelled");
-    return {
-      employees: new Set(scheduled.map((row) => row.employee_master_id)).size,
-      transport: new Set(scheduled.filter((row) => row.needs_transport).map((row) => row.employee_master_id)).size,
-      noTransport: new Set(scheduled.filter((row) => !row.needs_transport).map((row) => row.employee_master_id)).size,
-      cancelled: new Set(cancelled.map((row) => row.employee_master_id)).size,
-    };
-  }, [filtered]);
-
-  const consolidated = useMemo(() => consolidateScheduledTransport(filtered, batches), [filtered, batches]);
+  const kpis = query.data?.kpis ?? { employees: 0, transport: 0, noTransport: 0, cancelled: 0 };
 
   async function exportExcel() {
-    if (consolidated.length === 0) {
-      toast.error("Não há mudanças de escala para exportar com os filtros atuais.");
-      return;
-    }
     try {
+      const exportResult = await load({
+        data: {
+          start_date: filters.startDate || undefined,
+          end_date: filters.endDate || undefined,
+          search: filters.search || undefined,
+          job_title: filters.jobTitle || undefined,
+          status: filters.status,
+          transport: filters.transport,
+          entry_time: filters.entryTime || undefined,
+          departure_time: filters.departureTime || undefined,
+          page: 1,
+          page_size: 30,
+          mode: "export",
+        },
+      });
+      if (!exportResult.ok) throw new Error(exportResult.error);
+      const exportBatches = new Map(
+        ((exportResult.batches ?? []) as ScheduledTransportBatch[]).map((batch) => [batch.id, batch]),
+      );
+      const consolidated = consolidateScheduledTransport(
+        (exportResult.rows ?? []) as ScheduledTransportRow[],
+        exportBatches,
+      );
+      if (consolidated.length === 0) {
+        toast.error("Não há mudanças de escala para exportar com os filtros atuais.");
+        return;
+      }
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
@@ -534,7 +509,7 @@ function ScheduledTransportPage() {
                     <Trash2 className="h-4 w-4" /> Cancelar mudanças selecionadas ({selected.size})
                   </button>
                   <span className="ml-auto text-[11px] text-muted-foreground">
-                    {filtered.length} registro(s) · {consolidated.length} linha(s) na planilha
+                    {totalRows} registro(s) encontrado(s)
                   </span>
                 </div>
               </div>
@@ -543,7 +518,7 @@ function ScheduledTransportPage() {
                 <div className="p-6 text-[12px] text-muted-foreground">Carregando mudanças de escala…</div>
               ) : query.isError ? (
                 <div className="p-6 text-[12px] text-destructive">{(query.error as Error).message}</div>
-              ) : filtered.length === 0 ? (
+              ) : totalRows === 0 ? (
                 <div className="p-6">
                   <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhuma mudança de escala encontrada" />
                 </div>
@@ -666,10 +641,10 @@ function ScheduledTransportPage() {
                       </tbody>
                     </table>
                   </div>
-                  {filtered.length > pageSize && (
+                  {totalRows > pageSize && (
                     <div className="flex flex-col gap-2 border-t border-border bg-muted/20 px-3 py-3 text-[12px] text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
                       <span>
-                        Página {currentPage} de {pageCount} · {filtered.length} registro(s) · até {pageSize} por página
+                        Página {currentPage} de {pageCount} · {totalRows} registro(s) · até {pageSize} por página
                       </span>
                       <div className="flex gap-2">
                         <button
