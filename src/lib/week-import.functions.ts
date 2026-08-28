@@ -2,6 +2,20 @@ import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
 
+function normalizeReleaseType(value: unknown): unknown {
+  if (typeof value !== "string") return value;
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("pt-BR");
+  if (normalized === "OFICINA" || normalized === "OFICINAS" || normalized.includes("SERVICO DE OFICINA")) {
+    return "OFICINAS";
+  }
+  return normalized || null;
+}
+
 const rowSchema = z.object({
   source_key: z.string().min(1).max(120),
   order_number: z.string().max(64).nullable().optional(),
@@ -11,7 +25,7 @@ const rowSchema = z.object({
   specialty: z.string().max(160).nullable().optional(),
   scheduled_date: z.string().nullable().optional(),
   pbs: z.string().max(255).nullable().optional(),
-  release_type: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable().optional(),
+  release_type: z.preprocess(normalizeReleaseType, z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable().optional()),
   planning_data: z.record(z.string(), z.any()),
   source_row_number: z.number().int().nullable().optional(),
 });
