@@ -368,11 +368,12 @@ function PtColorSelector({
             onClick={() => onChange?.(selected ? null : color)}
             title={`${selected ? "Remover" : "Selecionar"} PT ${PT_COLOR_LABELS[color].toLowerCase()}`}
             aria-pressed={selected}
+            style={{
+              backgroundColor: color === "red" ? "#dc2626" : color === "yellow" ? "#facc15" : "#ffffff",
+              borderColor: color === "red" ? "#991b1b" : color === "yellow" ? "#ca8a04" : "#64748b",
+            }}
             className={cn(
               "relative h-5 w-5 rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-              color === "red" && "border-red-700 bg-red-600",
-              color === "yellow" && "border-amber-500 bg-yellow-400",
-              color === "white" && "border-slate-400 bg-white",
               selected ? "scale-110 ring-2 ring-primary ring-offset-1" : "opacity-55 hover:scale-105 hover:opacity-100",
               (!editable || disabled) && "cursor-default",
             )}
