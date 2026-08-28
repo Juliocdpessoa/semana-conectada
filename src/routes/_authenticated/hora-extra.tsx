@@ -132,18 +132,11 @@ function OvertimePage() {
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const dates = new Set<string>([toIsoDate(new Date())]);
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await (supabase as any)
-          .from("overtime_requests")
-          .select("overtime_date")
-          .neq("status", "cancelled")
-          .gte("overtime_date", exportPeriod.from)
-          .lte("overtime_date", exportPeriod.to)
-          .range(from, from + 999);
-        if (error) throw error;
-        for (const row of data ?? []) dates.add(row.overtime_date);
-        if ((data?.length ?? 0) < 1000) break;
-      }
+      const result = await loadOvertimeForExport({
+        data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
+      });
+      if (!result.ok) throw new Error(result.error);
+      for (const row of result.rows ?? []) dates.add(row.overtime_date);
       return [...dates].sort((a, b) => b.localeCompare(a));
     },
   });
