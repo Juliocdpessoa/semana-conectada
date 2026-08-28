@@ -194,6 +194,21 @@ function extractField(row: Record<string, any>, ...aliases: string[]): string | 
   return null;
 }
 
+function normalizeReleaseType(value: string | null): "PT" | "PTT" | "ATRE" | "OFICINAS" | null {
+  if (!value?.trim()) return null;
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLocaleUpperCase("pt-BR");
+  if (normalized === "PT" || normalized === "PTT" || normalized === "ATRE") return normalized;
+  if (normalized === "OFICINA" || normalized === "OFICINAS" || normalized.includes("SERVICO DE OFICINA")) {
+    return "OFICINAS";
+  }
+  return normalized as "PT" | "PTT" | "ATRE" | "OFICINAS";
+}
+
 function toISODate(v: any): string | null {
   if (!v) return null;
   if (v instanceof Date) return v.toISOString().slice(0, 10);
@@ -693,8 +708,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           specialty: spec,
           scheduled_date: toISODate(dateRaw),
           pbs: extractField(r, "PBS"),
-          release_type:
-            extractField(r, "Tipo de Liberação", "Tipo de Liberacao")?.trim().toLocaleUpperCase("pt-BR") ?? null,
+          release_type: normalizeReleaseType(extractField(r, "Tipo de Liberação", "Tipo de Liberacao")),
           planning_data: r,
           source_row_number: r.__row ?? null,
         };
