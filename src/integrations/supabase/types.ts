@@ -22,6 +22,7 @@ export type Database = {
           order_number: string | null;
           planning_data: Json;
           pbs: string | null;
+          pt_color: Database["public"]["Enums"]["pt_color"] | null;
           pt_number: string | null;
           release_type: string | null;
           d1_date: string | null;
@@ -53,6 +54,7 @@ export type Database = {
           order_number?: string | null;
           planning_data?: Json;
           pbs?: string | null;
+          pt_color?: Database["public"]["Enums"]["pt_color"] | null;
           pt_number?: string | null;
           release_type?: string | null;
           d1_date?: string | null;
@@ -84,6 +86,7 @@ export type Database = {
           order_number?: string | null;
           planning_data?: Json;
           pbs?: string | null;
+          pt_color?: Database["public"]["Enums"]["pt_color"] | null;
           pt_number?: string | null;
           release_type?: string | null;
           d1_date?: string | null;
@@ -885,6 +888,7 @@ export type Database = {
       app_role: "admin" | "planning" | "leader" | "viewer" | "manager" | "measurement_control" | "logistics";
       approval_status: "pending" | "approved" | "blocked";
       change_source: "individual" | "bulk" | "import" | "sync";
+      pt_color: "red" | "yellow" | "white";
       sync_status: "synced" | "pending" | "error";
     };
     CompositeTypes: {
@@ -1008,6 +1012,7 @@ export const Constants = {
       app_role: ["admin", "planning", "leader", "viewer", "manager", "measurement_control", "logistics"],
       approval_status: ["pending", "approved", "blocked"],
       change_source: ["individual", "bulk", "import", "sync"],
+      pt_color: ["red", "yellow", "white"],
       sync_status: ["synced", "pending", "error"],
     },
   },
