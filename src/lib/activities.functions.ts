@@ -29,6 +29,22 @@ const CANCELLATION_JUSTIFICATIONS = new Set([
   "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ]);
+const PLANNING_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
+
+async function canUsePlanningWorkflow(
+  supabase: any,
+  userId: string,
+  roles: Array<{ role: string }> | null | undefined,
+) {
+  if (roles?.some((row) => row.role === "planning")) return true;
+  if (!roles?.some((row) => row.role === "admin")) return false;
+  const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
+  return (
+    String(profile?.email ?? "")
+      .trim()
+      .toLowerCase() === PLANNING_ADMIN_EMAIL
+  );
+}
 
 export const updateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -51,14 +67,14 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (PLANNING_WORKFLOW_STATUSES.has(data.status) && currentActivity.status !== data.status) {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
-      if (!roles?.some((row) => row.role === "planning")) {
+      if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
       }
     }
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
-      const isPlanning = roles?.some((row) => row.role === "planning");
+      const isPlanning = await canUsePlanningWorkflow(supabase, userId, roles);
       const preservesExistingCancellation =
         currentActivity.status === "CANCELADA" && currentActivity.justification === normalizedJustification;
       if (!isPlanning && !preservesExistingCancellation) {
@@ -170,14 +186,14 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
     if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
-      if (!roles?.some((row) => row.role === "planning")) {
+      if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
       }
     }
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
-      if (!roles?.some((row) => row.role === "planning")) {
+      if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
       }
       if (!normalizedJustification || !CANCELLATION_JUSTIFICATIONS.has(normalizedJustification)) {
