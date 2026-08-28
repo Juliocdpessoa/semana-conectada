@@ -25,6 +25,7 @@ import {
   ListChecks,
   Percent,
   ChevronDown,
+  Upload,
 } from "lucide-react";
 import logoAsset from "@/assets/normatel-logo.png.asset.json";
 import type { SessionInfo } from "./route";
@@ -59,6 +60,14 @@ type ActivityRow = {
   pt_number: string | null;
   pt_color: "red" | "yellow" | "white" | null;
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
+};
+
+type PtImportChange = {
+  row: ActivityRow;
+  confirmation: string;
+  nextPtNumber: string | null;
+  nextPtColor: PtColor | null;
+  replacesExisting: boolean;
 };
 
 const STATUSES = [
@@ -503,6 +512,7 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
+  const isPlanning = session.roles.includes("planning");
   const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
@@ -536,6 +546,12 @@ function AtividadesPage() {
   const [planningFieldsOpen, setPlanningFieldsOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
+  const [isPtTemplateDownloading, setIsPtTemplateDownloading] = useState(false);
+  const [isPtImporting, setIsPtImporting] = useState(false);
+  const [ptImportChanges, setPtImportChanges] = useState<PtImportChange[]>([]);
+  const [ptImportIgnored, setPtImportIgnored] = useState<string[]>([]);
+  const [ptImportOpen, setPtImportOpen] = useState(false);
+  const ptImportInputRef = useRef<HTMLInputElement | null>(null);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -612,6 +628,17 @@ function AtividadesPage() {
         origins: string[];
       };
     };
+  }
+
+  async function fetchActivitiesForDay(date: string) {
+    const { data, error } = await (supabase as any).rpc("get_activities_page", {
+      p_week_id: activeWeek.data!.id,
+      p_filters: { dates: [date] },
+      p_page: 0,
+      p_page_size: 5000,
+    });
+    if (error) throw error;
+    return (data?.rows ?? []) as ActivityRow[];
   }
 
   const activities = useQuery({
@@ -1022,6 +1049,139 @@ function AtividadesPage() {
     }
   }
 
+  function selectedPtImportDay() {
+    if (dateFilters.length !== 1) {
+      toast.info("Selecione exatamente um dia no filtro de data para trabalhar com PTs em massa.");
+      return null;
+    }
+    return dateFilters[0];
+  }
+
+  async function downloadPtImportTemplate() {
+    const day = selectedPtImportDay();
+    if (!day || !activeWeek.data || isPtTemplateDownloading) return;
+    setIsPtTemplateDownloading(true);
+    try {
+      const dayRows = await fetchActivitiesForDay(day);
+      const XLSX = await import("xlsx");
+      const rows = dayRows
+        .map((row) => ({
+          Confirmação: String(row.planning_data?.["Confirmação"] ?? "").trim(),
+          "Nº da PT": row.pt_number ?? "",
+          "Cor da PT": effectivePtColor(row) ? PT_COLOR_LABELS[effectivePtColor(row)!].toUpperCase() : "",
+        }))
+        .filter((row) => row.Confirmação);
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["Confirmação", "Nº da PT", "Cor da PT"] });
+      worksheet["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 18 }];
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "PTs");
+      XLSX.writeFile(workbook, `modelo-pts-${day}.xlsx`);
+      toast.success(`${rows.length.toLocaleString("pt-BR")} confirmação(ões) incluída(s) no modelo.`);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível gerar o modelo de PTs.");
+    } finally {
+      setIsPtTemplateDownloading(false);
+    }
+  }
+
+  async function preparePtImport(file: File) {
+    const day = selectedPtImportDay();
+    if (!day || !activeWeek.data) return;
+    try {
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const imported = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: "" });
+      const dayRows = await fetchActivitiesForDay(day);
+      const byConfirmation = new Map(
+        dayRows
+          .map((row) => [String(row.planning_data?.["Confirmação"] ?? "").trim(), row] as const)
+          .filter(([confirmation]) => confirmation),
+      );
+      const colorMap: Record<string, PtColor> = {
+        VERMELHO: "red",
+        RED: "red",
+        AMARELO: "yellow",
+        YELLOW: "yellow",
+        BRANCO: "white",
+        WHITE: "white",
+      };
+      const changes: PtImportChange[] = [];
+      const ignored: string[] = [];
+      const seen = new Set<string>();
+      for (const item of imported) {
+        const confirmation = String(item["Confirmação"] ?? item["CONFIRMAÇÃO"] ?? item["Confirmacao"] ?? "").trim();
+        const ptNumber = String(item["Nº da PT"] ?? item["N° da PT"] ?? item["Numero da PT"] ?? "").trim();
+        const rawColor = String(item["Cor da PT"] ?? item["COR DA PT"] ?? "")
+          .trim()
+          .toLocaleUpperCase("pt-BR");
+        if (!confirmation || (!ptNumber && !rawColor)) continue;
+        if (seen.has(confirmation)) {
+          ignored.push(`${confirmation}: confirmação repetida na planilha`);
+          continue;
+        }
+        seen.add(confirmation);
+        const row = byConfirmation.get(confirmation);
+        if (!row) {
+          ignored.push(`${confirmation}: não pertence ao dia ${formatDate(day)}`);
+          continue;
+        }
+        const nextColor = rawColor ? colorMap[rawColor] : effectivePtColor(row);
+        if (rawColor && !nextColor) {
+          ignored.push(`${confirmation}: cor inválida (${rawColor})`);
+          continue;
+        }
+        const normalizedColor = row.release_type === "ATRE" || row.release_type === "OFICINAS" ? null : nextColor;
+        const nextPtNumber = ptNumber || row.pt_number;
+        if ((nextPtNumber ?? "") === (row.pt_number ?? "") && normalizedColor === effectivePtColor(row)) continue;
+        changes.push({
+          row,
+          confirmation,
+          nextPtNumber,
+          nextPtColor: normalizedColor,
+          replacesExisting: Boolean(row.pt_number || effectivePtColor(row)),
+        });
+      }
+      setPtImportChanges(changes);
+      setPtImportIgnored(ignored);
+      setPtImportOpen(true);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível ler a planilha de PTs.");
+    } finally {
+      if (ptImportInputRef.current) ptImportInputRef.current.value = "";
+    }
+  }
+
+  async function confirmPtImport() {
+    if (isPtImporting || ptImportChanges.length === 0) return;
+    setIsPtImporting(true);
+    try {
+      const result = await savePlanningFields({
+        data: {
+          rows: ptImportChanges.map(({ row, nextPtNumber, nextPtColor }) => ({
+            id: row.id,
+            expectedVersion: row.version,
+            pbs: row.pbs,
+            ptNumber: nextPtNumber,
+            ptColor: nextPtColor,
+            releaseType: row.release_type as "PT" | "PTT" | "ATRE" | "OFICINAS" | null,
+            scheduledDate: row.scheduled_date,
+          })),
+        },
+      });
+      if (!result.ok) throw new Error(result.error);
+      toast.success(`${result.count} atividade(s) atualizada(s). As alterações foram registradas no histórico.`);
+      setPtImportOpen(false);
+      setPtImportChanges([]);
+      setPtImportIgnored([]);
+      await qc.invalidateQueries({ queryKey: ["activities"] });
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível importar as PTs.");
+    } finally {
+      setIsPtImporting(false);
+    }
+  }
+
   async function exportPrintableSchedule() {
     if (isPrinting) return;
     if (planningSavesPendingRef.current > 0) {
@@ -1295,6 +1455,37 @@ function AtividadesPage() {
                   <Download className="h-3.5 w-3.5" />
                   {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
                 </button>
+              </>
+            )}
+            {isPlanning && (
+              <>
+                <button
+                  onClick={downloadPtImportTemplate}
+                  disabled={isPtTemplateDownloading || planningSavePending}
+                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+                  title="Baixar modelo de PT para o dia selecionado"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  {isPtTemplateDownloading ? "Gerando…" : "Modelo de PT"}
+                </button>
+                <button
+                  onClick={() => selectedPtImportDay() && ptImportInputRef.current?.click()}
+                  disabled={isPtImporting || planningSavePending}
+                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+                  title="Importar números e cores de PT para o dia selecionado"
+                >
+                  <Upload className="h-3.5 w-3.5" /> Importar PTs
+                </button>
+                <input
+                  ref={ptImportInputRef}
+                  type="file"
+                  accept=".xlsx,.xls"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void preparePtImport(file);
+                  }}
+                />
               </>
             )}
             <button
@@ -1883,6 +2074,101 @@ function AtividadesPage() {
             qc.invalidateQueries({ queryKey: ["activities"] });
           }}
         />
+      )}
+
+      {ptImportOpen && (
+        <Modal
+          onClose={() => !isPtImporting && setPtImportOpen(false)}
+          title="Conferir importação de PTs"
+          description={`Atualização restrita ao dia ${formatDate(dateFilters[0] ?? "")}. Confirme antes de substituir os valores atuais.`}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={isPtImporting}
+                onClick={() => setPtImportOpen(false)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={isPtImporting || ptImportChanges.length === 0}
+                onClick={confirmPtImport}
+              >
+                {isPtImporting ? "Importando…" : `Confirmar ${ptImportChanges.length} atualização(ões)`}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div className="rounded-md border bg-muted/30 p-3">
+                <div className="text-[10px] uppercase text-muted-foreground">Novos preenchimentos</div>
+                <div className="text-xl font-semibold tabular">
+                  {ptImportChanges.filter((item) => !item.replacesExisting).length}
+                </div>
+              </div>
+              <div className="rounded-md border border-warning/40 bg-warning/10 p-3">
+                <div className="text-[10px] uppercase text-muted-foreground">Substituições</div>
+                <div className="text-xl font-semibold tabular">
+                  {ptImportChanges.filter((item) => item.replacesExisting).length}
+                </div>
+              </div>
+              <div className="rounded-md border bg-muted/30 p-3">
+                <div className="text-[10px] uppercase text-muted-foreground">Ignoradas</div>
+                <div className="text-xl font-semibold tabular">{ptImportIgnored.length}</div>
+              </div>
+            </div>
+            {ptImportChanges.some((item) => item.replacesExisting) && (
+              <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+                Algumas atividades já possuem PT ou cor. Ao confirmar, os valores atuais serão substituídos pelos
+                valores da planilha.
+              </div>
+            )}
+            <div className="max-h-72 overflow-auto rounded-md border">
+              <table className="w-full text-xs">
+                <thead className="sticky top-0 bg-muted text-left text-[10px] uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-2">Confirmação</th>
+                    <th className="px-2 py-2">PT atual</th>
+                    <th className="px-2 py-2">Nova PT</th>
+                    <th className="px-2 py-2">Cor atual</th>
+                    <th className="px-2 py-2">Nova cor</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y">
+                  {ptImportChanges.map((item) => (
+                    <tr key={item.row.id} className={item.replacesExisting ? "bg-warning/[0.05]" : ""}>
+                      <td className="px-2 py-2 font-mono">{item.confirmation}</td>
+                      <td className="px-2 py-2">{item.row.pt_number || "—"}</td>
+                      <td className="px-2 py-2 font-medium">{item.nextPtNumber || "—"}</td>
+                      <td className="px-2 py-2">
+                        {effectivePtColor(item.row) ? PT_COLOR_LABELS[effectivePtColor(item.row)!] : "—"}
+                      </td>
+                      <td className="px-2 py-2 font-medium">
+                        {item.nextPtColor ? PT_COLOR_LABELS[item.nextPtColor] : "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {ptImportIgnored.length > 0 && (
+              <details className="rounded-md border px-3 py-2 text-xs">
+                <summary className="cursor-pointer font-medium">
+                  Ver {ptImportIgnored.length} linha(s) ignorada(s)
+                </summary>
+                <ul className="mt-2 max-h-32 space-y-1 overflow-auto text-muted-foreground">
+                  {ptImportIgnored.map((message, index) => (
+                    <li key={`${message}-${index}`}>{message}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
+          </div>
+        </Modal>
       )}
 
       {editing && (
