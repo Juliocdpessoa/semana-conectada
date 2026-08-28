@@ -273,7 +273,7 @@ function FilterMultiSelect({
         <button
           type="button"
           aria-label={ariaLabel}
-          className="input-base flex w-full items-center justify-between gap-2 py-2 text-left text-xs sm:w-auto sm:min-w-[190px]"
+          className="input-base flex w-full items-center justify-between gap-2 py-2 text-left text-xs sm:w-auto sm:max-w-[260px]"
         >
           <span className="truncate">{label}</span>
           <ChevronDown className="h-3.5 w-3.5 shrink-0 opacity-60" />
@@ -524,6 +524,7 @@ function AtividadesPage() {
   const [ptColorFilters, setPtColorFilters] = useState<string[]>([]);
   const [areaFilters, setAreaFilters] = useState<string[]>([]);
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
+  const [planningGroupFilters, setPlanningGroupFilters] = useState<string[]>([]);
   const [gerFilters, setGerFilters] = useState<string[]>([]);
   const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [originFilters, setOriginFilters] = useState<string[]>([]);
@@ -572,6 +573,7 @@ function AtividadesPage() {
     ptColors: ptColorFilters,
     areas: areaFilters,
     workCenters: workCenterFilters,
+    planningGroups: planningGroupFilters,
     gers: gerFilters,
     dates: dateFilters,
     origins: originFilters,
@@ -604,6 +606,7 @@ function AtividadesPage() {
         ptColors: string[];
         areas: string[];
         workCenters: string[];
+        planningGroups: string[];
         gers: string[];
         dates: string[];
         origins: string[];
@@ -655,6 +658,9 @@ function AtividadesPage() {
   const workCenters = Array.from(new Set([...(serverOptions?.workCenters ?? []), ...workCenterFilters])).sort((a, b) =>
     a.localeCompare(b, "pt-BR"),
   );
+  const planningGroups = Array.from(new Set([...(serverOptions?.planningGroups ?? []), ...planningGroupFilters])).sort(
+    (a, b) => a.localeCompare(b, "pt-BR", { numeric: true }),
+  );
   const dateOptions = Array.from(new Set([...(serverOptions?.dates ?? []), ...dateFilters])).sort();
   const hasProgrammed = originFilters.includes("programmed") || Boolean(serverOptions?.origins?.includes("programmed"));
   const hasImmediate = originFilters.includes("immediate") || Boolean(serverOptions?.origins?.includes("immediate"));
@@ -687,6 +693,7 @@ function AtividadesPage() {
     ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
     workCenterFilters.length > 0 ? "1" : "",
+    planningGroupFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
     dateFilters.length > 0 ? "1" : "",
     originFilters.length > 0 ? "1" : "",
@@ -699,6 +706,7 @@ function AtividadesPage() {
     setPtColorFilters([]);
     setAreaFilters([]);
     setWorkCenterFilters([]);
+    setPlanningGroupFilters([]);
     setGerFilters([]);
     setDateFilters([]);
     setOriginFilters([]);
@@ -1527,6 +1535,18 @@ function AtividadesPage() {
             setWorkCenterFilters(next);
             setPage(0);
           }}
+        />
+        <FilterMultiSelect
+          options={planningGroups}
+          selected={planningGroupFilters}
+          onChange={(next) => {
+            setPlanningGroupFilters(next);
+            setPage(0);
+          }}
+          allLabel="Todos Gr pl"
+          ariaLabel="Filtrar por Gr pl"
+          searchPlaceholder="Buscar Gr pl..."
+          selectedPlural="Gr pl selecionados"
         />
 
         <FilterMultiSelect
