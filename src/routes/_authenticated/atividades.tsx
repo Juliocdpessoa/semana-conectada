@@ -57,6 +57,7 @@ type ActivityRow = {
   planning_data: Record<string, unknown> | null;
   pbs: string | null;
   pt_number: string | null;
+  pt_color: "red" | "yellow" | "white" | null;
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
 };
 
@@ -119,6 +120,9 @@ const PENDING_REPORT_STATUSES = new Set([
 ]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
+const PT_COLORS = ["red", "yellow", "white"] as const;
+type PtColor = (typeof PT_COLORS)[number];
+const PT_COLOR_LABELS: Record<PtColor, string> = { red: "Vermelha", yellow: "Amarela", white: "Branca" };
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 /** HH planejado da atividade: valor da coluna Trab importada da programação. */
@@ -165,7 +169,7 @@ const ACTIVITY_EXPORT_COLUMNS = [
   "Observações",
 ] as const;
 type PlanningField = "pbs" | "pt_number" | "release_type" | "scheduled_date";
-type PlanningDraft = Record<PlanningField, string>;
+type PlanningDraft = Record<PlanningField | "pt_color", string>;
 const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "scheduled_date"];
 
 const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
@@ -338,6 +342,58 @@ function FilterMultiSelect({
   );
 }
 
+function PtColorSelector({
+  value,
+  editable,
+  disabled = false,
+  onChange,
+}: {
+  value: PtColor | null;
+  editable: boolean;
+  disabled?: boolean;
+  onChange?: (value: PtColor | null) => void;
+}) {
+  return (
+    <div
+      className="flex shrink-0 items-center gap-1"
+      aria-label={value ? `Cor da PT: ${PT_COLOR_LABELS[value]}` : "Cor da PT não definida"}
+    >
+      {PT_COLORS.map((color) => {
+        const selected = value === color;
+        return (
+          <button
+            key={color}
+            type="button"
+            disabled={!editable || disabled}
+            onClick={() => onChange?.(selected ? null : color)}
+            title={`${selected ? "Remover" : "Selecionar"} PT ${PT_COLOR_LABELS[color].toLowerCase()}`}
+            aria-pressed={selected}
+            className={cn(
+              "relative h-5 w-5 rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+              color === "red" && "border-red-700 bg-red-600",
+              color === "yellow" && "border-amber-500 bg-yellow-400",
+              color === "white" && "border-slate-400 bg-white",
+              selected ? "scale-110 ring-2 ring-primary ring-offset-1" : "opacity-55 hover:scale-105 hover:opacity-100",
+              (!editable || disabled) && "cursor-default",
+            )}
+          >
+            {selected && (
+              <span
+                className={cn(
+                  "absolute inset-0 grid place-items-center text-[11px] font-bold",
+                  color === "white" ? "text-slate-700" : "text-white",
+                )}
+              >
+                ✓
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function PlanningGridCell({
   value,
   field,
@@ -464,6 +520,7 @@ function AtividadesPage() {
   const [search, setSearch] = useState("");
   const [statusFilters, setStatusFilters] = useState<string[]>([]);
   const [releaseTypeFilters, setReleaseTypeFilters] = useState<string[]>([]);
+  const [ptColorFilters, setPtColorFilters] = useState<string[]>([]);
   const [areaFilters, setAreaFilters] = useState<string[]>([]);
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
   const [gerFilters, setGerFilters] = useState<string[]>([]);
@@ -543,7 +600,7 @@ function AtividadesPage() {
   const canConfigureDateCutoff = dateEditSettings.data?.canConfigure ?? false;
   const canEditPlanningDate = canEditPlanningFields && !dateEditLocked;
 
-  type FilterDimension = "status" | "releaseType" | "area" | "workCenter" | "ger" | "date" | "origin";
+  type FilterDimension = "status" | "releaseType" | "ptColor" | "area" | "workCenter" | "ger" | "date" | "origin";
   const allRows = activities.data ?? [];
   const workCenterKeys = new Set(workCenterFilters.map((value) => normalizeKey(value)));
   const gerKeys = new Set(gerFilters.map((value) => normalizeKey(value)));
@@ -564,6 +621,8 @@ function AtividadesPage() {
       )
         return false;
     }
+    if (omitted !== "ptColor" && ptColorFilters.length > 0 && !ptColorFilters.includes(row.pt_color ?? ""))
+      return false;
     if (omitted !== "area" && areaKeys.size > 0 && !areaKeys.has(normalizeKey(areaLabel(row)))) return false;
     if (omitted !== "workCenter" && workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(row))))
       return false;
@@ -621,6 +680,12 @@ function AtividadesPage() {
   const hasEmptyReleaseType =
     releaseTypeFilters.includes("__EMPTY__") ||
     allRows.some((row) => !row.release_type && matchesActiveFilters(row, "releaseType"));
+
+  const ptColorOptions = PT_COLORS.filter(
+    (color) =>
+      ptColorFilters.includes(color) ||
+      allRows.some((row) => row.pt_color === color && matchesActiveFilters(row, "ptColor")),
+  );
 
   const areas = (() => {
     const values = new Map<string, string>();
@@ -705,6 +770,7 @@ function AtividadesPage() {
     search,
     statusFilters.length > 0 ? "1" : "",
     canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
+    ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
     workCenterFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
@@ -716,6 +782,7 @@ function AtividadesPage() {
     setSearch("");
     setStatusFilters([]);
     setReleaseTypeFilters([]);
+    setPtColorFilters([]);
     setAreaFilters([]);
     setWorkCenterFilters([]);
     setGerFilters([]);
@@ -762,6 +829,7 @@ function AtividadesPage() {
     const current = {
       pbs: planningValue(row, "pbs"),
       pt_number: planningValue(row, "pt_number"),
+      pt_color: row.pt_color ?? "",
       release_type: planningValue(row, "release_type"),
       scheduled_date: planningValue(row, "scheduled_date"),
       ...overrides,
@@ -771,6 +839,7 @@ function AtividadesPage() {
       expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.version),
       pbs: current.pbs || null,
       ptNumber: current.pt_number || null,
+      ptColor: (current.pt_color || null) as PtColor | null,
       releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
       scheduledDate: current.scheduled_date || null,
     };
@@ -804,6 +873,10 @@ function AtividadesPage() {
     });
     planningSaveQueueRef.current = run.catch(() => undefined);
     await run;
+  }
+
+  async function changePtColor(row: ActivityRow, color: PtColor | null) {
+    await persistPlanningRows([planningPayload(row, { pt_color: color ?? "" })]);
   }
 
   async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
@@ -916,7 +989,7 @@ function AtividadesPage() {
       const XLSX = await import("xlsx");
       const responsibleHeader = "Responsável pela informação";
       const reportedAtHeader = "Data da informação";
-      const extraHeaders = ["Ger", "Nº PT"];
+      const extraHeaders = ["Ger", "Nº PT", "Cor da PT"];
       const exportHeaders = [...ACTIVITY_EXPORT_COLUMNS, ...extraHeaders, responsibleHeader, reportedAtHeader];
       const pad2 = (value: number) => String(value).padStart(2, "0");
       const formatDateOnly = (value: unknown): string => {
@@ -972,6 +1045,7 @@ function AtividadesPage() {
           }
           row["Ger"] = gerLabel(activity);
           row["Nº PT"] = planningValue(activity, "pt_number");
+          row["Cor da PT"] = activity.pt_color ? PT_COLOR_LABELS[activity.pt_color] : "";
           row[responsibleHeader] = activity.reported_by_name || activity.reported_by_email || "";
           row[reportedAtHeader] = formatReportedAt(activity.reported_at);
           return row;
@@ -1070,7 +1144,7 @@ function AtividadesPage() {
       };
       for (let row = 1; row <= 3; row += 1) {
         worksheet.getRow(row).height = 18;
-        for (let column = 1; column <= 20; column += 1) {
+        for (let column = 1; column <= 21; column += 1) {
           const cell = worksheet.getRow(row).getCell(column);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
           cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -1103,7 +1177,7 @@ function AtividadesPage() {
         const row = worksheet.getRow(rowNumber);
         row.font = { name: "Arial", size: 10, bold: true };
         row.alignment = { vertical: "middle" };
-        for (let column = 1; column <= 20; column += 1) {
+        for (let column = 1; column <= 21; column += 1) {
           row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
           row.getCell(column).font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
         }
@@ -1115,6 +1189,7 @@ function AtividadesPage() {
         "Nota",
         "Tipo de Lib",
         "Nº PT",
+        "Cor PT",
         "Ordem",
         "Op",
         "Sub",
@@ -1144,6 +1219,7 @@ function AtividadesPage() {
             activity.note_number ?? planning["Nota"] ?? "",
             planningValue(activity, "release_type"),
             planningValue(activity, "pt_number"),
+            activity.pt_color ? PT_COLOR_LABELS[activity.pt_color] : "",
             activity.order_number ?? planning["Ordem"] ?? "",
             planning["Op"] ?? "",
             planning["Subop"] ?? "",
@@ -1168,7 +1244,7 @@ function AtividadesPage() {
       worksheet.getRow(9).height = 18;
       worksheet.getRow(9).font = { name: "Arial", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
       worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      for (let column = 1; column <= 20; column += 1) {
+      for (let column = 1; column <= 21; column += 1) {
         const cell = worksheet.getRow(9).getCell(column);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
         cell.border = thinBorder;
@@ -1178,25 +1254,25 @@ function AtividadesPage() {
         row.height = 21;
         row.font = { name: "Arial", size: 8 };
         row.alignment = { vertical: "middle", wrapText: true };
-        for (let column = 1; column <= 20; column += 1) {
+        for (let column = 1; column <= 21; column += 1) {
           const cell = row.getCell(column);
           cell.border = thinBorder;
           if (rowNumber % 2 === 0) {
             cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${tableStripeFill}` } };
           }
         }
-        row.getCell(9).numFmt = "dd/mm/yyyy";
-        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19]) {
+        row.getCell(10).numFmt = "dd/mm/yyyy";
+        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20]) {
           row.getCell(column).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
         }
       }
 
-      [11, 13, 13, 13, 13, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
+      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
         worksheet.getColumn(index + 1).width = width;
       });
 
       const lastRow = rows.length + 9;
-      worksheet.pageSetup.printArea = `A1:T${lastRow}`;
+      worksheet.pageSetup.printArea = `A1:U${lastRow}`;
       worksheet.pageSetup.printTitlesRow = "1:9";
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -1468,6 +1544,18 @@ function AtividadesPage() {
           />
         )}
         <FilterMultiSelect
+          options={[...ptColorOptions]}
+          selected={ptColorFilters}
+          onChange={(next) => {
+            setPtColorFilters(next);
+            setPage(0);
+          }}
+          allLabel="Todas as cores de PT"
+          ariaLabel="Filtrar por cor da PT"
+          selectedPlural="cores selecionadas"
+          optionLabel={(value) => PT_COLOR_LABELS[value as PtColor]}
+        />
+        <FilterMultiSelect
           options={areas}
           selected={areaFilters}
           onChange={(next) => {
@@ -1599,7 +1687,7 @@ function AtividadesPage() {
                     {canEditPlanningFields && <th className="px-2 py-2 text-left font-semibold">Localização</th>}
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
-                    <th className="px-2 py-2 text-left font-semibold">Nº PT</th>
+                    <th className="px-2 py-2 text-left font-semibold">Nº PT / Cor</th>
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
@@ -1644,28 +1732,38 @@ function AtividadesPage() {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
                           <td key={field} className="px-1 py-1.5 align-top text-[11px]">
-                            <PlanningGridCell
-                              value={planningValue(r, field)}
-                              field={field}
-                              editable={canEditPlanningFields && (field !== "scheduled_date" || canEditPlanningDate)}
-                              onChange={(value) => setPlanningValue(r.id, field, value)}
-                              onCommit={(value) => commitPlanningCell(r, field, value)}
-                              onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
-                              onDragStart={() => {
-                                dragSource.current = { rowIndex, field };
-                                dragTarget.current = { rowIndex, field };
-                              }}
-                              onDragEnter={() => {
-                                if (dragSource.current?.field === field) {
+                            <div className={cn(field === "pt_number" && "flex min-w-[185px] items-center gap-2")}>
+                              <PlanningGridCell
+                                value={planningValue(r, field)}
+                                field={field}
+                                editable={canEditPlanningFields && (field !== "scheduled_date" || canEditPlanningDate)}
+                                onChange={(value) => setPlanningValue(r.id, field, value)}
+                                onCommit={(value) => commitPlanningCell(r, field, value)}
+                                onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
+                                onDragStart={() => {
+                                  dragSource.current = { rowIndex, field };
                                   dragTarget.current = { rowIndex, field };
-                                }
-                              }}
-                              onDragEnd={() => {
-                                const target = dragTarget.current;
-                                if (target) void fillPlanningByDrag(target.rowIndex, target.field);
-                              }}
-                              onDrop={() => fillPlanningByDrag(rowIndex, field)}
-                            />
+                                }}
+                                onDragEnter={() => {
+                                  if (dragSource.current?.field === field) {
+                                    dragTarget.current = { rowIndex, field };
+                                  }
+                                }}
+                                onDragEnd={() => {
+                                  const target = dragTarget.current;
+                                  if (target) void fillPlanningByDrag(target.rowIndex, target.field);
+                                }}
+                                onDrop={() => fillPlanningByDrag(rowIndex, field)}
+                              />
+                              {field === "pt_number" && (
+                                <PtColorSelector
+                                  value={r.pt_color}
+                                  editable={canEditPlanningFields}
+                                  disabled={planningSavePending}
+                                  onChange={(color) => void changePtColor(r, color)}
+                                />
+                              )}
+                            </div>
                           </td>
                         );
                       })}
@@ -1739,6 +1837,15 @@ function AtividadesPage() {
                     )}
                     <div className="mt-1 text-[10px] text-muted-foreground">
                       PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"}
+                    </div>
+                    <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
+                      <span>Cor da PT:</span>
+                      <PtColorSelector
+                        value={r.pt_color}
+                        editable={canEditPlanningFields}
+                        disabled={planningSavePending}
+                        onChange={(color) => void changePtColor(r, color)}
+                      />
                     </div>
                   </div>
                 </div>
@@ -2134,6 +2241,7 @@ const HISTORY_LABELS: Record<string, string> = {
   scheduled_date: "Data",
   pbs: "PBS",
   pt_number: "Nº PT",
+  pt_color: "Cor da PT",
   release_type: "Tipo de Liberação",
   d1_date: "Data D-1",
   is_immediate: "Atividade imediata",
@@ -2141,6 +2249,9 @@ const HISTORY_LABELS: Record<string, string> = {
 
 function historyValue(v: unknown, key?: string): string {
   if (v === null || v === undefined || v === "") return "—";
+  if (key === "pt_color" && typeof v === "string" && PT_COLORS.includes(v as PtColor)) {
+    return PT_COLOR_LABELS[v as PtColor];
+  }
   if ((key === "scheduled_date" || key === "d1_date") && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
     const [year, month, day] = v.split("-");
     return `${day}/${month}/${year}`;
