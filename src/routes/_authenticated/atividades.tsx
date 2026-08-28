@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useRef, useState } from "react";
+import { useDeferredValue, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -564,27 +564,58 @@ function AtividadesPage() {
     },
   });
 
+  const deferredSearch = useDeferredValue(search);
+  const activityFilters = {
+    search: deferredSearch,
+    statuses: statusFilters,
+    releaseTypes: canEditPlanningFields ? releaseTypeFilters : [],
+    ptColors: ptColorFilters,
+    areas: areaFilters,
+    workCenters: workCenterFilters,
+    gers: gerFilters,
+    dates: dateFilters,
+    origins: originFilters,
+  };
+
+  async function fetchActivitiesPage(pageIndex: number, size: number) {
+    const { data, error } = await (supabase as any).rpc("get_activities_page", {
+      p_week_id: activeWeek.data!.id,
+      p_filters: activityFilters,
+      p_page: pageIndex,
+      p_page_size: size,
+    });
+    if (error) throw error;
+    return data as {
+      rows: ActivityRow[];
+      totalAll: number;
+      kpis: {
+        total: number;
+        concluded: number;
+        impeded: number;
+        noReport: number;
+        cancelled: number;
+        hours: number;
+        percent: number;
+      };
+      options: {
+        statuses: string[];
+        releaseTypes: string[];
+        hasEmptyReleaseType: boolean;
+        ptColors: string[];
+        areas: string[];
+        workCenters: string[];
+        gers: string[];
+        dates: string[];
+        origins: string[];
+      };
+    };
+  }
+
   const activities = useQuery({
-    queryKey: ["activities", activeWeek.data?.id],
+    queryKey: ["activities", activeWeek.data?.id, page, activityFilters],
     enabled: !!activeWeek.data?.id,
-    queryFn: async () => {
-      const chunk = 1000;
-      const all: any[] = [];
-      for (let from = 0; ; from += chunk) {
-        const { data, error } = await supabase
-          .from("activities")
-          .select("*")
-          .eq("week_id", activeWeek.data!.id)
-          .order("scheduled_date", { ascending: true })
-          .order("order_number", { ascending: true })
-          .range(from, from + chunk - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        all.push(...data);
-        if (data.length < chunk) break;
-      }
-      return all as ActivityRow[];
-    },
+    queryFn: () => fetchActivitiesPage(page, pageSize),
+    placeholderData: (previous) => previous,
   });
 
   const dateEditSettings = useQuery({
@@ -601,160 +632,42 @@ function AtividadesPage() {
   const canConfigureDateCutoff = dateEditSettings.data?.canConfigure ?? false;
   const canEditPlanningDate = canEditPlanningFields && !dateEditLocked;
 
-  type FilterDimension = "status" | "releaseType" | "ptColor" | "area" | "workCenter" | "ger" | "date" | "origin";
-  const allRows = activities.data ?? [];
-  const workCenterKeys = new Set(workCenterFilters.map((value) => normalizeKey(value)));
-  const gerKeys = new Set(gerFilters.map((value) => normalizeKey(value)));
-  const areaKeys = new Set(areaFilters.map((value) => normalizeKey(value)));
-
-  function matchesActiveFilters(row: ActivityRow, omitted?: FilterDimension) {
-    const query = search.trim().toLowerCase();
-    if (omitted !== "status" && statusFilters.length > 0) {
-      const matchesStatus = statusFilters.some((status) =>
-        status === PENDING_REPORT_FILTER ? PENDING_REPORT_STATUSES.has(row.status) : row.status === status,
-      );
-      if (!matchesStatus) return false;
-    }
-    if (canEditPlanningFields && omitted !== "releaseType") {
-      if (
-        releaseTypeFilters.length > 0 &&
-        !releaseTypeFilters.some((type) => (type === "__EMPTY__" ? !row.release_type : row.release_type === type))
-      )
-        return false;
-    }
-    if (omitted !== "ptColor" && ptColorFilters.length > 0 && !ptColorFilters.includes(effectivePtColor(row) ?? ""))
-      return false;
-    if (omitted !== "area" && areaKeys.size > 0 && !areaKeys.has(normalizeKey(areaLabel(row)))) return false;
-    if (omitted !== "workCenter" && workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(row))))
-      return false;
-    if (omitted !== "ger" && gerKeys.size > 0 && !gerKeys.has(normalizeKey(gerLabel(row)))) return false;
-    if (omitted !== "date" && dateFilters.length > 0 && !dateFilters.includes(row.scheduled_date ?? "")) return false;
-    if (omitted !== "origin" && originFilters.length > 0) {
-      const origin = row.is_immediate ? "immediate" : "programmed";
-      if (!originFilters.includes(origin)) return false;
-    }
-    if (!query) return true;
-    return (
-      row.order_number?.toLowerCase().includes(query) ||
-      row.note_number?.toLowerCase().includes(query) ||
-      row.description.toLowerCase().includes(query) ||
-      row.area?.toLowerCase().includes(query) ||
-      row.specialty?.toLowerCase().includes(query) ||
-      fmtPlan(row.planning_data, "Op")?.toLowerCase().includes(query) ||
-      fmtPlan(row.planning_data, "Subop")?.toLowerCase().includes(query) ||
-      row.reported_by_name?.toLowerCase().includes(query)
-    );
-  }
-
-  const filtered = allRows
-    .filter((row) => matchesActiveFilters(row))
-    .sort((a, b) => {
-      const fields: Array<[string | null | undefined, string | null | undefined]> = [
-        [a.order_number, b.order_number],
-        [fmtPlan(a.planning_data, "Op"), fmtPlan(b.planning_data, "Op")],
-        [fmtPlan(a.planning_data, "Subop"), fmtPlan(b.planning_data, "Subop")],
-      ];
-
-      for (const [leftValue, rightValue] of fields) {
-        const left = leftValue?.trim() ?? "";
-        const right = rightValue?.trim() ?? "";
-        if (!left && right) return 1;
-        if (left && !right) return -1;
-        const comparison = ACTIVITY_SORT_COLLATOR.compare(left, right);
-        if (comparison !== 0) return comparison;
-      }
-
-      return (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER);
-    });
-
+  const allRows = activities.data?.rows ?? [];
+  const filtered = allRows;
+  const paged = allRows;
+  const serverOptions = activities.data?.options;
   const statusOptions = STATUSES.filter(
-    (status) =>
-      statusFilters.includes(status) ||
-      allRows.some((row) => row.status === status && matchesActiveFilters(row, "status")),
+    (value) => statusFilters.includes(value) || serverOptions?.statuses?.includes(value),
   );
-
   const releaseTypeOptions = RELEASE_TYPES.filter(
-    (type) =>
-      releaseTypeFilters.includes(type) ||
-      allRows.some((row) => row.release_type === type && matchesActiveFilters(row, "releaseType")),
+    (value) => releaseTypeFilters.includes(value) || serverOptions?.releaseTypes?.includes(value),
   );
-  const hasEmptyReleaseType =
-    releaseTypeFilters.includes("__EMPTY__") ||
-    allRows.some((row) => !row.release_type && matchesActiveFilters(row, "releaseType"));
-
+  const hasEmptyReleaseType = releaseTypeFilters.includes("__EMPTY__") || Boolean(serverOptions?.hasEmptyReleaseType);
   const ptColorOptions = PT_COLORS.filter(
-    (color) =>
-      ptColorFilters.includes(color) ||
-      allRows.some((row) => effectivePtColor(row) === color && matchesActiveFilters(row, "ptColor")),
+    (value) => ptColorFilters.includes(value) || serverOptions?.ptColors?.includes(value),
   );
-
-  const areas = (() => {
-    const values = new Map<string, string>();
-    for (const row of allRows) {
-      if (!matchesActiveFilters(row, "area")) continue;
-      const label = areaLabel(row);
-      if (!label || isNumericOnly(label)) continue;
-      const key = normalizeKey(label);
-      if (key && !values.has(key)) values.set(key, label);
-    }
-    for (const selected of areaFilters) values.set(normalizeKey(selected), selected);
-    return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  })();
-
-  const gerOptions = (() => {
-    const values = new Set<string>();
-    for (const row of allRows) if (matchesActiveFilters(row, "ger")) values.add(gerLabel(row));
-    for (const selected of gerFilters) values.add(selected);
-    return Array.from(values).sort((a, b) => {
-      if (a === "Não mapeado") return 1;
-      if (b === "Não mapeado") return -1;
-      return a.localeCompare(b, "pt-BR");
-    });
-  })();
-
-  const workCenters = (() => {
-    const values = new Map<string, string>();
-    for (const row of allRows) {
-      if (!matchesActiveFilters(row, "workCenter")) continue;
-      const label = workCenterLabel(row);
-      if (!label) continue;
-      const key = normalizeKey(label);
-      if (key && !values.has(key)) values.set(key, label);
-    }
-    for (const selected of workCenterFilters) values.set(normalizeKey(selected), selected);
-    return Array.from(values.values()).sort((a, b) => a.localeCompare(b, "pt-BR"));
-  })();
-
-  const dateOptions = Array.from(
-    new Set(
-      allRows
-        .filter((row) => matchesActiveFilters(row, "date"))
-        .map((row) => row.scheduled_date)
-        .filter((value): value is string => Boolean(value)),
-    ),
-  ).sort();
-  for (const selected of dateFilters) if (!dateOptions.includes(selected)) dateOptions.push(selected);
-
-  const originRows = allRows.filter((row) => matchesActiveFilters(row, "origin"));
-  const hasProgrammed = originFilters.includes("programmed") || originRows.some((row) => !row.is_immediate);
-  const hasImmediate = originFilters.includes("immediate") || originRows.some((row) => row.is_immediate);
-
-  const paged = filtered.slice(page * pageSize, (page + 1) * pageSize);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
-
-  // Todos os indicadores usam o conjunto já filtrado (busca, status, área, centro, tipo e data)
-  const kpis = useMemo(() => {
-    const rows = filtered;
-    const total = rows.length;
-    const concluded = rows.filter((r) => r.status === "EXECUTADO").length;
-    const impeded = rows.filter((r) => r.status === "NÃO EXECUTADO").length;
-    const noReport = rows.filter((r) => PENDING_REPORT_STATUSES.has(r.status)).length;
-    const cancelled = rows.filter((r) => r.status === "CANCELADA").length;
-    const hours = rows.reduce((totalHours, row) => totalHours + activityHours(row.planning_data), 0);
-    const validTotal = total - cancelled;
-    const percent = validTotal > 0 ? Math.round((concluded / validTotal) * 100) : 0;
-    return { total, concluded, impeded, noReport, cancelled, hours, percent };
-  }, [filtered]);
+  const areas = Array.from(new Set([...(serverOptions?.areas ?? []), ...areaFilters])).sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+  const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort((a, b) =>
+    a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR"),
+  );
+  const workCenters = Array.from(new Set([...(serverOptions?.workCenters ?? []), ...workCenterFilters])).sort((a, b) =>
+    a.localeCompare(b, "pt-BR"),
+  );
+  const dateOptions = Array.from(new Set([...(serverOptions?.dates ?? []), ...dateFilters])).sort();
+  const hasProgrammed = originFilters.includes("programmed") || Boolean(serverOptions?.origins?.includes("programmed"));
+  const hasImmediate = originFilters.includes("immediate") || Boolean(serverOptions?.origins?.includes("immediate"));
+  const kpis = activities.data?.kpis ?? {
+    total: 0,
+    concluded: 0,
+    impeded: 0,
+    noReport: 0,
+    cancelled: 0,
+    hours: 0,
+    percent: 0,
+  };
+  const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
 
   function toggleKpiStatus(nextStatus: string) {
     setStatusFilters((current) =>
@@ -812,7 +725,7 @@ function AtividadesPage() {
     return releaseType !== "ATRE" && releaseType !== "OFICINAS";
   }
 
-  function setPlanningValue(rowId: string, field: PlanningField, value: string) {
+  function setPlanningValue(rowId: string, field: PlanningField | "pt_color", value: string) {
     setPlanningDrafts((previous) => ({
       ...previous,
       [rowId]: { ...previous[rowId], [field]: value },
@@ -1005,12 +918,13 @@ function AtividadesPage() {
       toast.info("Aguarde o término do salvamento antes de exportar.");
       return;
     }
-    if (!activeWeek.data || filtered.length === 0) {
+    if (!activeWeek.data || kpis.total === 0) {
       toast.error("Não há atividades nos filtros atuais para exportar.");
       return;
     }
     setIsExporting(true);
     try {
+      const filtered = (await fetchActivitiesPage(0, 5000)).rows;
       const XLSX = await import("xlsx");
       const responsibleHeader = "Responsável pela informação";
       const reportedAtHeader = "Data da informação";
@@ -1106,13 +1020,14 @@ function AtividadesPage() {
       toast.info("Aguarde o término do salvamento antes de gerar a impressão.");
       return;
     }
-    if (!activeWeek.data || filtered.length === 0) {
+    if (!activeWeek.data || kpis.total === 0) {
       toast.error("Não há atividades nos filtros atuais para imprimir.");
       return;
     }
 
     setIsPrinting(true);
     try {
+      const filtered = (await fetchActivitiesPage(0, 5000)).rows;
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
@@ -1356,7 +1271,7 @@ function AtividadesPage() {
               <>
                 <button
                   onClick={exportPrintableSchedule}
-                  disabled={isPrinting || planningSavePending || filtered.length === 0}
+                  disabled={isPrinting || planningSavePending || kpis.total === 0}
                   className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title="Gerar o modelo de impressão com os filtros atuais"
                 >
@@ -1365,7 +1280,7 @@ function AtividadesPage() {
                 </button>
                 <button
                   onClick={exportFilteredActivities}
-                  disabled={isExporting || planningSavePending || filtered.length === 0}
+                  disabled={isExporting || planningSavePending || kpis.total === 0}
                   className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title="Exportar as atividades com os filtros atuais"
                 >
@@ -1645,8 +1560,8 @@ function AtividadesPage() {
           </button>
         )}
         <div className="ml-auto text-[11px] font-medium text-muted-foreground tabular">
-          {filtered.length.toLocaleString("pt-BR")}{" "}
-          <span className="opacity-60">de {(activities.data?.length ?? 0).toLocaleString("pt-BR")}</span>
+          {kpis.total.toLocaleString("pt-BR")}{" "}
+          <span className="opacity-60">de {(activities.data?.totalAll ?? 0).toLocaleString("pt-BR")}</span>
         </div>
       </Toolbar>
 
@@ -1914,14 +1829,20 @@ function AtividadesPage() {
             </div>
             <div className="flex gap-1">
               <button
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => {
+                  setSelected(new Set());
+                  setPage((p) => Math.max(0, p - 1));
+                }}
                 disabled={page === 0}
                 className="btn-ghost py-1 text-xs disabled:opacity-40"
               >
                 Anterior
               </button>
               <button
-                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                onClick={() => {
+                  setSelected(new Set());
+                  setPage((p) => Math.min(totalPages - 1, p + 1));
+                }}
                 disabled={page >= totalPages - 1}
                 className="btn-ghost py-1 text-xs disabled:opacity-40"
               >
