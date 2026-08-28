@@ -792,7 +792,7 @@ function AtividadesPage() {
     setPage(0);
   }
 
-  function planningValue(row: ActivityRow, field: PlanningField): string {
+  function planningValue(row: ActivityRow, field: PlanningField | "pt_color"): string {
     const draft = planningDrafts[row.id];
     if (draft && Object.prototype.hasOwnProperty.call(draft, field)) return draft[field] ?? "";
     const value = row[field];
@@ -1759,7 +1759,7 @@ function AtividadesPage() {
                               />
                               {field === "pt_number" && (
                                 <PtColorSelector
-                                  value={r.pt_color}
+                                  value={(planningValue(r, "pt_color") || null) as PtColor | null}
                                   editable={canEditPlanningFields}
                                   onChange={(color) => void changePtColor(r, color)}
                                 />
@@ -1842,7 +1842,7 @@ function AtividadesPage() {
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
                       <span>Cor da PT:</span>
                       <PtColorSelector
-                        value={r.pt_color}
+                        value={(planningValue(r, "pt_color") || null) as PtColor | null}
                         editable={canEditPlanningFields}
                         onChange={(color) => void changePtColor(r, color)}
                       />
