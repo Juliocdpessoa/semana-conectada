@@ -1085,11 +1085,14 @@ function AtividadesPage() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const imported = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: "" });
       const dayRows = await fetchActivitiesForDay(day);
-      const byConfirmation = new Map(
-        dayRows
-          .map((row) => [String(row.planning_data?.["Confirmação"] ?? "").trim(), row] as const)
-          .filter(([confirmation]) => confirmation),
-      );
+      const byConfirmation = new Map<string, ActivityRow[]>();
+      for (const row of dayRows) {
+        const confirmation = String(row.planning_data?.["Confirmação"] ?? "").trim();
+        if (!confirmation) continue;
+        const matches = byConfirmation.get(confirmation) ?? [];
+        matches.push(row);
+        byConfirmation.set(confirmation, matches);
+      }
       const colorMap: Record<string, PtColor> = {
         VERMELHO: "red",
         VERMELHA: "red",
@@ -1116,26 +1119,29 @@ function AtividadesPage() {
           continue;
         }
         seen.add(confirmation);
-        const row = byConfirmation.get(confirmation);
-        if (!row) {
+        const matchingRows = byConfirmation.get(confirmation);
+        if (!matchingRows?.length) {
           ignored.push(`${confirmation}: não pertence ao dia ${formatDate(day)}`);
           continue;
         }
-        const nextColor = rawColor ? colorMap[rawColor] : effectivePtColor(row);
-        if (rawColor && !nextColor) {
+        const importedColor = rawColor ? colorMap[rawColor] : null;
+        if (rawColor && !importedColor) {
           ignored.push(`${confirmation}: cor inválida (${rawColor})`);
           continue;
         }
-        const normalizedColor = row.release_type === "ATRE" || row.release_type === "OFICINAS" ? null : nextColor;
-        const nextPtNumber = ptNumber || row.pt_number;
-        if ((nextPtNumber ?? "") === (row.pt_number ?? "") && normalizedColor === effectivePtColor(row)) continue;
-        changes.push({
-          row,
-          confirmation,
-          nextPtNumber,
-          nextPtColor: normalizedColor,
-          replacesExisting: Boolean(row.pt_number || effectivePtColor(row)),
-        });
+        for (const row of matchingRows) {
+          const nextColor = rawColor ? importedColor : effectivePtColor(row);
+          const normalizedColor = row.release_type === "ATRE" || row.release_type === "OFICINAS" ? null : nextColor;
+          const nextPtNumber = ptNumber || row.pt_number;
+          if ((nextPtNumber ?? "") === (row.pt_number ?? "") && normalizedColor === effectivePtColor(row)) continue;
+          changes.push({
+            row,
+            confirmation,
+            nextPtNumber,
+            nextPtColor: normalizedColor,
+            replacesExisting: Boolean(row.pt_number || effectivePtColor(row)),
+          });
+        }
       }
       setPtImportChanges(changes);
       setPtImportIgnored(ignored);
