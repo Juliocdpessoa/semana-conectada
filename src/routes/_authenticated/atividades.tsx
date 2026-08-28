@@ -877,6 +877,7 @@ function AtividadesPage() {
   }
 
   async function changePtColor(row: ActivityRow, color: PtColor | null) {
+    setPlanningValue(row.id, "pt_color", color ?? "");
     await persistPlanningRows([planningPayload(row, { pt_color: color ?? "" })]);
   }
 
@@ -1760,7 +1761,6 @@ function AtividadesPage() {
                                 <PtColorSelector
                                   value={r.pt_color}
                                   editable={canEditPlanningFields}
-                                  disabled={planningSavePending}
                                   onChange={(color) => void changePtColor(r, color)}
                                 />
                               )}
@@ -1844,7 +1844,6 @@ function AtividadesPage() {
                       <PtColorSelector
                         value={r.pt_color}
                         editable={canEditPlanningFields}
-                        disabled={planningSavePending}
                         onChange={(color) => void changePtColor(r, color)}
                       />
                     </div>
