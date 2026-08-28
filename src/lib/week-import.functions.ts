@@ -103,7 +103,7 @@ export const importWeek = createServerFn({ method: "POST" })
       scheduled_date: r.scheduled_date ?? null,
       pbs: r.pbs?.trim() || null,
       release_type: r.release_type ?? null,
-      pt_color: r.release_type === "PTT" ? "white" : null,
+      pt_color: r.release_type === "PTT" ? ("white" as const) : null,
       planning_data: r.planning_data,
       source_row_number: r.source_row_number ?? null,
       status: "Sem apontamento",
