@@ -512,7 +512,9 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
-  const isPlanning = session.roles.includes("planning");
+  const isPlanning =
+    session.roles.includes("planning") ||
+    (session.roles.includes("admin") && session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
