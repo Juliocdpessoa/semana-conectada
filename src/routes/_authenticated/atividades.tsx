@@ -1092,10 +1092,13 @@ function AtividadesPage() {
       );
       const colorMap: Record<string, PtColor> = {
         VERMELHO: "red",
+        VERMELHA: "red",
         RED: "red",
         AMARELO: "yellow",
+        AMARELA: "yellow",
         YELLOW: "yellow",
         BRANCO: "white",
+        BRANCA: "white",
         WHITE: "white",
       };
       const changes: PtImportChange[] = [];
