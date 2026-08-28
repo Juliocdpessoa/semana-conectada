@@ -622,7 +622,7 @@ function AtividadesPage() {
       )
         return false;
     }
-    if (omitted !== "ptColor" && ptColorFilters.length > 0 && !ptColorFilters.includes(row.pt_color ?? ""))
+    if (omitted !== "ptColor" && ptColorFilters.length > 0 && !ptColorFilters.includes(effectivePtColor(row) ?? ""))
       return false;
     if (omitted !== "area" && areaKeys.size > 0 && !areaKeys.has(normalizeKey(areaLabel(row)))) return false;
     if (omitted !== "workCenter" && workCenterKeys.size > 0 && !workCenterKeys.has(normalizeKey(workCenterLabel(row))))
@@ -685,7 +685,7 @@ function AtividadesPage() {
   const ptColorOptions = PT_COLORS.filter(
     (color) =>
       ptColorFilters.includes(color) ||
-      allRows.some((row) => row.pt_color === color && matchesActiveFilters(row, "ptColor")),
+      allRows.some((row) => effectivePtColor(row) === color && matchesActiveFilters(row, "ptColor")),
   );
 
   const areas = (() => {
@@ -799,6 +799,19 @@ function AtividadesPage() {
     return value == null ? "" : String(value);
   }
 
+  function effectivePtColor(row: ActivityRow): PtColor | null {
+    const releaseType = planningValue(row, "release_type");
+    if (releaseType === "ATRE" || releaseType === "OFICINAS") return null;
+    const savedColor = planningValue(row, "pt_color") as PtColor | "";
+    if (savedColor) return savedColor;
+    return releaseType === "PTT" ? "white" : null;
+  }
+
+  function hasPtColorChoice(row: ActivityRow): boolean {
+    const releaseType = planningValue(row, "release_type");
+    return releaseType !== "ATRE" && releaseType !== "OFICINAS";
+  }
+
   function setPlanningValue(rowId: string, field: PlanningField, value: string) {
     setPlanningDrafts((previous) => ({
       ...previous,
@@ -889,7 +902,17 @@ function AtividadesPage() {
     try {
       const value = normalizeGridValue(field, rawValue);
       setPlanningValue(row.id, field, value);
-      await persistPlanningRows([planningPayload(row, { [field]: value })]);
+      const overrides: Partial<PlanningDraft> = { [field]: value };
+      if (field === "release_type") {
+        if (value === "ATRE" || value === "OFICINAS") {
+          overrides.pt_color = "";
+          setPlanningValue(row.id, "pt_color", "");
+        } else if (value === "PTT" && !planningValue(row, "pt_color")) {
+          overrides.pt_color = "white";
+          setPlanningValue(row.id, "pt_color", "white");
+        }
+      }
+      await persistPlanningRows([planningPayload(row, overrides)]);
     } catch (error: any) {
       toast.error(error?.message ?? "Valor inválido.");
     }
@@ -1047,7 +1070,8 @@ function AtividadesPage() {
           }
           row["Ger"] = gerLabel(activity);
           row["Nº PT"] = planningValue(activity, "pt_number");
-          row["Cor da PT"] = activity.pt_color ? PT_COLOR_LABELS[activity.pt_color] : "";
+          const color = effectivePtColor(activity);
+          row["Cor da PT"] = color ? PT_COLOR_LABELS[color] : "";
           row[responsibleHeader] = activity.reported_by_name || activity.reported_by_email || "";
           row[reportedAtHeader] = formatReportedAt(activity.reported_at);
           return row;
@@ -1221,7 +1245,7 @@ function AtividadesPage() {
             activity.note_number ?? planning["Nota"] ?? "",
             planningValue(activity, "release_type"),
             planningValue(activity, "pt_number"),
-            activity.pt_color ? PT_COLOR_LABELS[activity.pt_color] : "",
+            effectivePtColor(activity) ? PT_COLOR_LABELS[effectivePtColor(activity)!] : "",
             activity.order_number ?? planning["Ordem"] ?? "",
             planning["Op"] ?? "",
             planning["Subop"] ?? "",
@@ -1757,13 +1781,21 @@ function AtividadesPage() {
                                 }}
                                 onDrop={() => fillPlanningByDrag(rowIndex, field)}
                               />
-                              {field === "pt_number" && (
-                                <PtColorSelector
-                                  value={(planningValue(r, "pt_color") || null) as PtColor | null}
-                                  editable={canEditPlanningFields}
-                                  onChange={(color) => void changePtColor(r, color)}
-                                />
-                              )}
+                              {field === "pt_number" &&
+                                (hasPtColorChoice(r) ? (
+                                  <PtColorSelector
+                                    value={effectivePtColor(r)}
+                                    editable={canEditPlanningFields}
+                                    onChange={(color) => void changePtColor(r, color)}
+                                  />
+                                ) : (
+                                  <span
+                                    className="px-1 text-sm text-muted-foreground"
+                                    title="Este tipo de liberação não possui cor de PT"
+                                  >
+                                    —
+                                  </span>
+                                ))}
                             </div>
                           </td>
                         );
@@ -1841,11 +1873,17 @@ function AtividadesPage() {
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
                       <span>Cor da PT:</span>
-                      <PtColorSelector
-                        value={(planningValue(r, "pt_color") || null) as PtColor | null}
-                        editable={canEditPlanningFields}
-                        onChange={(color) => void changePtColor(r, color)}
-                      />
+                      {hasPtColorChoice(r) ? (
+                        <PtColorSelector
+                          value={effectivePtColor(r)}
+                          editable={canEditPlanningFields}
+                          onChange={(color) => void changePtColor(r, color)}
+                        />
+                      ) : (
+                        <span className="text-sm" title="Este tipo de liberação não possui cor de PT">
+                          —
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>
