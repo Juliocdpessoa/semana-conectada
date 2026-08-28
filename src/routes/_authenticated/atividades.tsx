@@ -1062,21 +1062,13 @@ function AtividadesPage() {
     if (!day || !activeWeek.data || isPtTemplateDownloading) return;
     setIsPtTemplateDownloading(true);
     try {
-      const dayRows = await fetchActivitiesForDay(day);
       const XLSX = await import("xlsx");
-      const rows = dayRows
-        .map((row) => ({
-          Confirmação: String(row.planning_data?.["Confirmação"] ?? "").trim(),
-          "Nº da PT": row.pt_number ?? "",
-          "Cor da PT": effectivePtColor(row) ? PT_COLOR_LABELS[effectivePtColor(row)!].toUpperCase() : "",
-        }))
-        .filter((row) => row.Confirmação);
-      const worksheet = XLSX.utils.json_to_sheet(rows, { header: ["Confirmação", "Nº da PT", "Cor da PT"] });
+      const worksheet = XLSX.utils.aoa_to_sheet([["Confirmação", "Nº da PT", "Cor da PT"]]);
       worksheet["!cols"] = [{ wch: 22 }, { wch: 22 }, { wch: 18 }];
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "PTs");
       XLSX.writeFile(workbook, `modelo-pts-${day}.xlsx`);
-      toast.success(`${rows.length.toLocaleString("pt-BR")} confirmação(ões) incluída(s) no modelo.`);
+      toast.success(`Modelo vazio gerado para preenchimento e importação no dia ${formatDate(day)}.`);
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível gerar o modelo de PTs.");
     } finally {
