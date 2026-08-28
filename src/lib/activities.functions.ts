@@ -214,6 +214,7 @@ const activityPlanningFieldsSchema = z.object({
         expectedVersion: z.number().int().min(1),
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
+        ptColor: z.enum(["red", "yellow", "white"]).nullable(),
         releaseType: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable(),
         scheduledDate: z
           .string()
@@ -302,8 +303,8 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
     const { supabase, userId } = context;
     const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     if (rolesError) return { ok: false as const, error: rolesError.message };
-    if (!roles?.some((row) => row.role === "planning")) {
-      return { ok: false as const, error: "Apenas o perfil Planejamento pode editar estes campos." };
+    if (!roles?.some((row) => row.role === "planning" || row.role === "admin")) {
+      return { ok: false as const, error: "Apenas Planejamento ou Administrador pode editar estes campos." };
     }
 
     const access = await getDateEditAccess(supabase, userId);
@@ -329,6 +330,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       expected_version: row.expectedVersion,
       pbs: row.pbs,
       pt_number: row.ptNumber,
+      pt_color: row.ptColor,
       release_type: row.releaseType,
       scheduled_date: row.scheduledDate,
     }));
