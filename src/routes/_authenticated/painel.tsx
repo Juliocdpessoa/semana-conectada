@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertTriangle,
@@ -143,7 +143,7 @@ function OverviewPanel() {
     },
   });
 
-  const rows = activities.data ?? [];
+  const rows = useMemo(() => activities.data ?? [], [activities.data]);
 
   const kpis = useMemo(() => {
     const programmed = rows.filter((r) => !r.is_immediate);
@@ -161,7 +161,17 @@ function OverviewPanel() {
     const apontadas = executado + naoExec;
     const aderencia = total > 0 ? Math.round((executado / total) * 100) : 0;
     const progresso = total > 0 ? Math.round((apontadas / total) * 100) : 0;
-    return { total, executado, naoExec, semApont, imediatas, imediatasExecutadas, impactadas, aderencia, progresso };
+    return {
+      total,
+      executado,
+      naoExec,
+      semApont,
+      imediatas,
+      imediatasExecutadas,
+      impactadas,
+      aderencia,
+      progresso,
+    };
   }, [rows]);
 
   const byArea = useMemo(
@@ -561,7 +571,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
   const hoursDisabled = totalHours <= 0;
   const effectiveMetric = hoursDisabled && metric === "hours" ? "count" : metric;
 
-  const unitOf = (r: CurveRow) => (effectiveMetric === "hours" ? hoursOf(r.planning_data) : 1);
+  const unitOf = useCallback(
+    (r: CurveRow) => (effectiveMetric === "hours" ? hoursOf(r.planning_data) : 1),
+    [effectiveMetric],
+  );
 
   const { data, totalPlanned, cutoffIso, indicators } = useMemo(() => {
     const dPlanned = new Map<string, number>();
@@ -690,7 +703,7 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         immediateExecuted: round2(immediateExecuted),
       },
     };
-  }, [rows, days, daySet, effectiveMetric]);
+  }, [rows, days, daySet, effectiveMetric, unitOf]);
 
   const cutoffLabel = data.find((d) => d.day === cutoffIso)?.label ?? "";
   const unitLabel = effectiveMetric === "hours" ? "h" : "";
@@ -783,7 +796,11 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                     stroke="hsl(var(--muted-foreground))"
                   />
                   <Tooltip
-                    contentStyle={{ fontSize: 12, borderRadius: 8, border: "1px solid hsl(var(--border))" }}
+                    contentStyle={{
+                      fontSize: 12,
+                      borderRadius: 8,
+                      border: "1px solid hsl(var(--border))",
+                    }}
                     formatter={(value: number | string, name: string) => {
                       if (name.includes("%")) return [`${Number(value).toFixed(1)}%`, name];
                       return [`${Number(value).toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`, name];
@@ -836,7 +853,12 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                       x={cutoffLabel}
                       stroke="#2563EB"
                       strokeDasharray="4 3"
-                      label={{ value: "Data de corte", position: "top", fill: "#2563EB", fontSize: 11 }}
+                      label={{
+                        value: "Data de corte",
+                        position: "top",
+                        fill: "#2563EB",
+                        fontSize: 11,
+                      }}
                     />
                   )}
                 </ComposedChart>
@@ -971,7 +993,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     },
   });
 
-  const rows = activities.data ?? [];
+  const rows = useMemo(() => activities.data ?? [], [activities.data]);
   const nonExecuted = useMemo(
     () =>
       rows.filter((row) => {
@@ -981,46 +1003,50 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     [rows, isUnjustifiedMode],
   );
 
-  const matchesFilters = (row: ActivityRow, omitted?: keyof Filters) => {
-    const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-    if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
-    if (
-      omitted !== "management" &&
-      filters.management.length > 0 &&
-      !filters.management.includes(managementLabelNe(row))
-    )
-      return false;
+  const matchesFilters = useCallback(
+    (row: ActivityRow, omitted?: keyof Filters) => {
+      const term = filters.search.trim().toLocaleLowerCase("pt-BR");
+      if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || ""))
+        return false;
+      if (
+        omitted !== "management" &&
+        filters.management.length > 0 &&
+        !filters.management.includes(managementLabelNe(row))
+      )
+        return false;
 
-    if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
-      return false;
-    }
-    if (omitted !== "reason" && filters.reason && reasonLabelNe(row) !== filters.reason) return false;
-    if (omitted !== "responsible" && filters.responsible && responsibleLabelNe(row) !== filters.responsible) {
-      return false;
-    }
-    if (omitted !== "origin") {
-      if (filters.origin === "programmed" && row.is_immediate) return false;
-      if (filters.origin === "immediate" && !row.is_immediate) return false;
-    }
-    if (omitted !== "search" && term) {
-      const searchable = [
-        row.order_number,
-        row.note_number,
-        row.description,
-        managementLabelNe(row),
-        row.specialty,
-        reasonLabelNe(row),
-        responsibleLabelNe(row),
-        planValueNe(row.planning_data, "Op"),
-        planValueNe(row.planning_data, "Subop"),
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLocaleLowerCase("pt-BR");
-      if (!searchable.includes(term)) return false;
-    }
-    return true;
-  };
+      if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
+        return false;
+      }
+      if (omitted !== "reason" && filters.reason && reasonLabelNe(row) !== filters.reason) return false;
+      if (omitted !== "responsible" && filters.responsible && responsibleLabelNe(row) !== filters.responsible) {
+        return false;
+      }
+      if (omitted !== "origin") {
+        if (filters.origin === "programmed" && row.is_immediate) return false;
+        if (filters.origin === "immediate" && !row.is_immediate) return false;
+      }
+      if (omitted !== "search" && term) {
+        const searchable = [
+          row.order_number,
+          row.note_number,
+          row.description,
+          managementLabelNe(row),
+          row.specialty,
+          reasonLabelNe(row),
+          responsibleLabelNe(row),
+          planValueNe(row.planning_data, "Op"),
+          planValueNe(row.planning_data, "Subop"),
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLocaleLowerCase("pt-BR");
+        if (!searchable.includes(term)) return false;
+      }
+      return true;
+    },
+    [filters],
+  );
 
   const dateOptions = useMemo(
     () =>
@@ -1030,7 +1056,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           .map((row) => row.scheduled_date)
           .filter((value): value is string => !!value),
       ).sort(),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const managementOptions = useMemo(
     () =>
@@ -1040,7 +1066,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           .map(managementLabelNe)
           .filter(Boolean) as string[],
       ).sort(localeSortNe),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const specialtyOptions = useMemo(
     () =>
@@ -1050,7 +1076,7 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           .map((row) => row.specialty)
           .filter((value): value is string => !!value),
       ).sort(localeSortNe),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const visibleSpecialtyOptions = useMemo(() => {
     const term = specialtySearch
@@ -1070,17 +1096,17 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
 
   const reasonOptions = useMemo(
     () => uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "reason")).map(reasonLabelNe)).sort(localeSortNe),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const responsibleOptions = useMemo(
     () =>
       uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "responsible")).map(responsibleLabelNe)).sort(
         localeSortNe,
       ),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
 
-  const filtered = useMemo(() => nonExecuted.filter((row) => matchesFilters(row)), [nonExecuted, filters]);
+  const filtered = useMemo(() => nonExecuted.filter((row) => matchesFilters(row)), [nonExecuted, matchesFilters]);
 
   const denominator = useMemo(() => {
     return rows.filter((row) => {
@@ -1125,18 +1151,18 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         selected: filters.date.includes(date),
       };
     });
-  }, [nonExecuted, filters]);
+  }, [nonExecuted, filters.date, matchesFilters]);
   const areaRanking = useMemo(
     () =>
       groupCountsNe(
         nonExecuted.filter((row) => matchesFilters(row, "management")),
         managementLabelNe,
       ).slice(0, 8),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const areaRankingTotal = useMemo(
     () => sumHoursNe(nonExecuted.filter((row) => matchesFilters(row, "management"))),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const specialtyRanking = useMemo(
     () =>
@@ -1144,11 +1170,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         nonExecuted.filter((row) => matchesFilters(row, "specialty")),
         (row) => row.specialty || "Sem especialidade",
       ).slice(0, 8),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
   const specialtyRankingTotal = useMemo(
     () => sumHoursNe(nonExecuted.filter((row) => matchesFilters(row, "specialty"))),
-    [nonExecuted, filters],
+    [nonExecuted, matchesFilters],
   );
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
@@ -1867,7 +1893,10 @@ function groupCountsNe(rows: ActivityRow[], label: (row: ActivityRow) => string)
   rows.forEach((row) => {
     const key = label(row);
     const current = counts.get(key) ?? { value: 0, hours: 0 };
-    counts.set(key, { value: current.value + 1, hours: current.hours + hoursOf(row.planning_data) });
+    counts.set(key, {
+      value: current.value + 1,
+      hours: current.hours + hoursOf(row.planning_data),
+    });
   });
   return [...counts.entries()]
     .map(([name, agg]) => ({ name, value: agg.value, hours: agg.hours }))
