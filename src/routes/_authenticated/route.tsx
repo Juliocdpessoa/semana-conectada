@@ -1,14 +1,33 @@
-import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Outlet,
+  Link,
+  redirect,
+  useRouter,
+  useRouterState,
+} from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { selectGlobalWorksite } from "@/lib/worksites.functions";
 import { toast } from "sonner";
-import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer, Bus } from "lucide-react";
+import {
+  LogOut,
+  ClipboardList,
+  History,
+  Settings,
+  Zap,
+  BarChart3,
+  Menu,
+  X,
+  Timer,
+  Bus,
+} from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
-export type AppRole = "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
+export type AppRole =
+  "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
 
 export type SessionInfo = {
   userId: string;
@@ -45,7 +64,11 @@ async function loadSession(): Promise<SessionInfo | null> {
   }
   const worksiteId = String(profile.data?.worksite_id ?? "");
   const { data: worksite } = worksiteId
-    ? await (supabase as any).from("worksites").select("code,name").eq("id", worksiteId).maybeSingle()
+    ? await (supabase as any)
+        .from("worksites")
+        .select("code,name")
+        .eq("id", worksiteId)
+        .maybeSingle()
     : { data: null };
   const rolesRows = roles?.data ?? [];
   const priority: SessionInfo["role"][] = [
@@ -117,7 +140,12 @@ function AuthedLayout() {
     roleSet.has(role as AppRole),
   );
   const overtimeOnly = (isMeasurementControl || isLogistics) && !hasGeneralAccess;
-  const canOvertime = roleSet.has("leader") || roleSet.has("manager") || isAdmin || isMeasurementControl || isLogistics;
+  const canOvertime =
+    roleSet.has("leader") ||
+    roleSet.has("manager") ||
+    isAdmin ||
+    isMeasurementControl ||
+    isLogistics;
 
   useEffect(() => {
     if (overtimeOnly && pathname !== "/hora-extra" && pathname !== "/transporte-programado") {
@@ -180,11 +208,13 @@ function AuthedLayout() {
       <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-primary-foreground shadow-sm">
         <div className="mx-auto flex max-w-none items-center gap-4 px-4 py-2 sm:px-6">
           {/* Marca */}
-          <Link to={overtimeOnly ? "/hora-extra" : "/atividades"} className="flex items-center gap-2.5">
-            <BrandLogo className="h-8 w-auto brightness-0 invert drop-shadow-[0_1px_2px_rgba(0,0,0,0.35)]" />
-            <div className="hidden leading-tight sm:block">
+          <Link
+            to={overtimeOnly ? "/hora-extra" : "/atividades"}
+            className="flex items-center gap-2.5"
+          >
+            <div className="leading-tight">
               <div className="text-[13px] font-semibold">NEXO</div>
-              <div className="text-[10px] uppercase tracking-[0.09em] text-primary-foreground/70">
+              <div className="hidden text-[10px] uppercase tracking-[0.09em] text-primary-foreground/70 lg:block">
                 Gestão integrada da manutenção
               </div>
             </div>
@@ -195,7 +225,12 @@ function AuthedLayout() {
           {/* Navegação desktop */}
           <nav className="hidden items-center gap-0.5 sm:flex">
             {nav.map((n) => (
-              <DesktopNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-3.5 w-3.5" />} />
+              <DesktopNavItem
+                key={n.to}
+                to={n.to}
+                label={n.label}
+                icon={<n.icon className="h-3.5 w-3.5" />}
+              />
             ))}
           </nav>
 
@@ -203,7 +238,9 @@ function AuthedLayout() {
           <div className="ml-auto flex items-center gap-2">
             {isGlobalAdmin && worksites.length > 0 && (
               <label className="hidden items-center gap-1.5 md:flex">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">Obra</span>
+                <span className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                  Obra
+                </span>
                 <select
                   value={s.worksiteId}
                   onChange={(event) => void changeWorksite(event.target.value)}
@@ -213,7 +250,7 @@ function AuthedLayout() {
                 >
                   {worksites.map((worksite) => (
                     <option key={worksite.id} value={worksite.id} className="text-foreground">
-                      {worksite.code} — {worksite.name}
+                      {worksite.code}
                     </option>
                   ))}
                 </select>
@@ -226,7 +263,7 @@ function AuthedLayout() {
               </div>
               {s.worksiteCode && (
                 <div className="text-[9px] leading-tight text-primary-foreground/65">
-                  {s.worksiteCode} · {s.worksiteName}
+                  {s.worksiteCode}
                 </div>
               )}
             </div>
@@ -260,13 +297,18 @@ function AuthedLayout() {
               </div>
               {s.worksiteCode && (
                 <div className="mt-0.5 text-primary-foreground/70">
-                  {s.worksiteCode} · {s.worksiteName}
+                  Obra: {s.worksiteCode}
                 </div>
               )}
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
-                <MobileNavItem key={n.to} to={n.to} label={n.label} icon={<n.icon className="h-4 w-4" />} />
+                <MobileNavItem
+                  key={n.to}
+                  to={n.to}
+                  label={n.label}
+                  icon={<n.icon className="h-4 w-4" />}
+                />
               ))}
               <button
                 onClick={signOut}
@@ -278,7 +320,13 @@ function AuthedLayout() {
           </nav>
         )}
       </header>
-      <Outlet />
+      <BrandLogo
+        alt=""
+        className="pointer-events-none fixed bottom-8 right-8 z-0 hidden w-64 select-none opacity-[0.035] grayscale lg:block"
+      />
+      <div className="relative z-10">
+        <Outlet />
+      </div>
     </div>
   );
 }
