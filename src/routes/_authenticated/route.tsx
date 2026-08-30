@@ -39,6 +39,7 @@ export type SessionInfo = {
   worksiteId: string;
   worksiteCode: string;
   worksiteName: string;
+  isWorksiteAdmin: boolean;
 };
 
 async function loadSession(): Promise<SessionInfo | null> {
@@ -70,6 +71,11 @@ async function loadSession(): Promise<SessionInfo | null> {
         .eq("id", worksiteId)
         .maybeSingle()
     : { data: null };
+  const { data: activeMembership } = worksiteId
+    ? await (supabase as any).from("worksite_memberships")
+        .select("is_worksite_admin").eq("user_id", data.user.id)
+        .eq("worksite_id", worksiteId).maybeSingle()
+    : { data: null };
   const rolesRows = roles?.data ?? [];
   const priority: SessionInfo["role"][] = [
     "admin",
@@ -94,6 +100,7 @@ async function loadSession(): Promise<SessionInfo | null> {
     worksiteId,
     worksiteCode: String(worksite?.code ?? ""),
     worksiteName: String(worksite?.name ?? ""),
+    isWorksiteAdmin: Boolean(activeMembership?.is_worksite_admin),
   };
 }
 
@@ -129,10 +136,9 @@ function AuthedLayout() {
   }, [pathname]);
 
   const s = session as SessionInfo;
-  const isGlobalAdmin = s.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const roleSet = new Set(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []);
   const isPlanning = roleSet.has("planning") || roleSet.has("admin");
-  const isAdmin = roleSet.has("admin");
+  const isAdmin = roleSet.has("admin") || s.isWorksiteAdmin;
   const isManager = roleSet.has("manager") || isAdmin;
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
@@ -156,7 +162,6 @@ function AuthedLayout() {
   const canScheduledTransport = isManager || isAdmin || isLogistics;
 
   useEffect(() => {
-    if (!isGlobalAdmin) return;
     void (async () => {
       const { data, error } = await (supabase as any)
         .from("worksites")
@@ -166,7 +171,7 @@ function AuthedLayout() {
       if (error) toast.error("Não foi possível carregar as obras.");
       else setWorksites(data ?? []);
     })();
-  }, [isGlobalAdmin]);
+  }, []);
 
   async function changeWorksite(worksiteId: string) {
     if (!worksiteId || worksiteId === s.worksiteId) return;
@@ -236,7 +241,7 @@ function AuthedLayout() {
 
           {/* Ações à direita */}
           <div className="ml-auto flex items-center gap-2">
-            {isGlobalAdmin && worksites.length > 0 && (
+            {worksites.length > 1 && (
               <label className="hidden items-center gap-1.5 md:flex">
                 <span className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
                   Obra
@@ -384,3 +389,4 @@ function roleLabel(role: SessionInfo["role"]) {
       return "Sem perfil";
   }
 }
+
