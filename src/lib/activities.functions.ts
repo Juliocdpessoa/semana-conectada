@@ -1,6 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { JULIO_ADMIN_EMAIL, canUseRestrictedPlanningWorkflow, isJulioPlanningAdmin } from "@/lib/planning-access";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -30,6 +29,19 @@ const CANCELLATION_JUSTIFICATIONS = new Set([
   "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ]);
+const JULIO_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
+
+function isJulioPlanningAdmin(email: string | null | undefined) {
+  return (
+    String(email ?? "")
+      .trim()
+      .toLowerCase() === JULIO_ADMIN_EMAIL
+  );
+}
+
+function canUseRestrictedPlanningWorkflow(roles: readonly string[], email: string | null | undefined) {
+  return roles.includes("planning") || (roles.includes("admin") && isJulioPlanningAdmin(email));
+}
 async function canUsePlanningWorkflow(
   supabase: any,
   userId: string,
