@@ -29,7 +29,16 @@ import {
 } from "lucide-react";
 import logoAsset from "@/assets/normatel-logo.png.asset.json";
 import type { SessionInfo } from "./route";
-import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
+import {
+  PageHeader,
+  KpiCard,
+  Toolbar,
+  EmptyState,
+  Skeleton,
+  StatusPill,
+  Modal,
+  Field,
+} from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 
@@ -119,7 +128,11 @@ const CANCELLATION_JUSTIFICATIONS = [
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ];
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
-const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA", "PT ENVIADA P/ CAMPO"]);
+const PLANNING_WORKFLOW_STATUSES = new Set([
+  "AGUARDANDO PRÉ-EMISSÃO DE PT",
+  "PT EM ASSINATURA",
+  "PT ENVIADA P/ CAMPO",
+]);
 const PENDING_REPORT_FILTER = "__PENDING_REPORT__";
 const PENDING_REPORT_STATUSES = new Set([
   "Sem apontamento",
@@ -210,7 +223,10 @@ function isNumericOnly(value: string): boolean {
 }
 
 /** Área/gerência textual (CAT, DEC, TUT…). Ignora números de área operacional. */
-function areaLabel(r: { area: string | null; planning_data: Record<string, unknown> | null }): string | null {
+function areaLabel(r: {
+  area: string | null;
+  planning_data: Record<string, unknown> | null;
+}): string | null {
   const candidates = [fmtPlan(r.planning_data, "Gerência"), r.area];
   for (const c of candidates) {
     const v = c?.replace(/\s+/g, " ").trim();
@@ -231,7 +247,9 @@ function workCenterLabel(r: { planning_data: Record<string, unknown> | null }): 
 
 function operationalAreaValue(r: { planning_data: Record<string, unknown> | null }): string | null {
   return (
-    fmtPlan(r.planning_data, "Área op") ?? fmtPlan(r.planning_data, "Área Op") ?? fmtPlan(r.planning_data, "Area Op")
+    fmtPlan(r.planning_data, "Área op") ??
+    fmtPlan(r.planning_data, "Área Op") ??
+    fmtPlan(r.planning_data, "Area Op")
   );
 }
 
@@ -308,7 +326,9 @@ function FilterMultiSelect({
           </div>
         )}
         <div className="max-h-64 overflow-y-auto overscroll-contain p-1">
-          {visible.length === 0 && <p className="px-2 py-3 text-xs text-muted-foreground">Nenhum centro encontrado.</p>}
+          {visible.length === 0 && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">Nenhum centro encontrado.</p>
+          )}
           {visible.map((o) => {
             const checked = selected.some((s) => normalizeKey(s) === normalizeKey(o));
             return (
@@ -342,11 +362,19 @@ function FilterMultiSelect({
             >
               Selecionar todos os visíveis
             </button>
-            <button type="button" className="btn-ghost py-1 text-[11px]" onClick={() => onChange([])}>
+            <button
+              type="button"
+              className="btn-ghost py-1 text-[11px]"
+              onClick={() => onChange([])}
+            >
               Limpar
             </button>
           </div>
-          <button type="button" className="btn-primary py-1 text-[11px]" onClick={() => setOpen(false)}>
+          <button
+            type="button"
+            className="btn-primary py-1 text-[11px]"
+            onClick={() => setOpen(false)}
+          >
             Aplicar
           </button>
         </div>
@@ -382,12 +410,15 @@ function PtColorSelector({
             title={`${selected ? "Remover" : "Selecionar"} PT ${PT_COLOR_LABELS[color].toLowerCase()}`}
             aria-pressed={selected}
             style={{
-              backgroundColor: color === "red" ? "#dc2626" : color === "yellow" ? "#facc15" : "#ffffff",
+              backgroundColor:
+                color === "red" ? "#dc2626" : color === "yellow" ? "#facc15" : "#ffffff",
               borderColor: color === "red" ? "#991b1b" : color === "yellow" ? "#ca8a04" : "#64748b",
             }}
             className={cn(
               "relative h-5 w-5 rounded-full border transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-              selected ? "scale-110 ring-2 ring-primary ring-offset-1" : "opacity-55 hover:scale-105 hover:opacity-100",
+              selected
+                ? "scale-110 ring-2 ring-primary ring-offset-1"
+                : "opacity-55 hover:scale-105 hover:opacity-100",
               (!editable || disabled) && "cursor-default",
             )}
           >
@@ -515,13 +546,19 @@ function PlanningGridCell({
 
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
-  const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
+  const effectiveRoles = session.roles.length > 0 ? session.roles : session.role ? [session.role] : [];
+  const isLeaderOnly = effectiveRoles.length === 1 && effectiveRoles[0] === "leader";
+  const canEditPlanningFields = session.roles.some(
+    (role) => role === "planning" || role === "admin",
+  );
   const isPlanning =
     session.roles.includes("planning") ||
-    (session.roles.includes("admin") && session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
+    (session.roles.includes("admin") &&
+      session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
-  const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
+  const canLoadDateEditSettings =
+    canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
   const qc = useQueryClient();
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
@@ -580,7 +617,9 @@ function AtividadesPage() {
     queryFn: async () => {
       let request = (supabase as any).from("weeks").select("*");
       request =
-        canAccessPreparation && selectedWeekId ? request.eq("id", selectedWeekId) : request.eq("is_active", true);
+        canAccessPreparation && selectedWeekId
+          ? request.eq("id", selectedWeekId)
+          : request.eq("is_active", true);
       const { data, error } = await request.maybeSingle();
       if (error) throw error;
       return data;
@@ -590,12 +629,12 @@ function AtividadesPage() {
   const deferredSearch = useDeferredValue(search);
   const activityFilters = {
     search: deferredSearch,
-    statuses: statusFilters,
+    statuses: isLeaderOnly ? [] : statusFilters,
     releaseTypes: canEditPlanningFields ? releaseTypeFilters : [],
-    ptColors: ptColorFilters,
+    ptColors: isLeaderOnly ? [] : ptColorFilters,
     areas: areaFilters,
     workCenters: workCenterFilters,
-    planningGroups: planningGroupFilters,
+    planningGroups: isLeaderOnly ? [] : planningGroupFilters,
     gers: gerFilters,
     dates: dateFilters,
     origins: originFilters,
@@ -678,25 +717,28 @@ function AtividadesPage() {
   const releaseTypeOptions = RELEASE_TYPES.filter(
     (value) => releaseTypeFilters.includes(value) || serverOptions?.releaseTypes?.includes(value),
   );
-  const hasEmptyReleaseType = releaseTypeFilters.includes("__EMPTY__") || Boolean(serverOptions?.hasEmptyReleaseType);
+  const hasEmptyReleaseType =
+    releaseTypeFilters.includes("__EMPTY__") || Boolean(serverOptions?.hasEmptyReleaseType);
   const ptColorOptions = PT_COLORS.filter(
     (value) => ptColorFilters.includes(value) || serverOptions?.ptColors?.includes(value),
   );
-  const areas = Array.from(new Set([...(serverOptions?.areas ?? []), ...areaFilters])).sort((a, b) =>
-    a.localeCompare(b, "pt-BR"),
+  const areas = Array.from(new Set([...(serverOptions?.areas ?? []), ...areaFilters])).sort(
+    (a, b) => a.localeCompare(b, "pt-BR"),
   );
-  const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort((a, b) =>
-    a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR"),
+  const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort(
+    (a, b) => (a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR")),
   );
-  const workCenters = Array.from(new Set([...(serverOptions?.workCenters ?? []), ...workCenterFilters])).sort((a, b) =>
-    a.localeCompare(b, "pt-BR"),
-  );
-  const planningGroups = Array.from(new Set([...(serverOptions?.planningGroups ?? []), ...planningGroupFilters])).sort(
-    (a, b) => a.localeCompare(b, "pt-BR", { numeric: true }),
-  );
+  const workCenters = Array.from(
+    new Set([...(serverOptions?.workCenters ?? []), ...workCenterFilters]),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+  const planningGroups = Array.from(
+    new Set([...(serverOptions?.planningGroups ?? []), ...planningGroupFilters]),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR", { numeric: true }));
   const dateOptions = Array.from(new Set([...(serverOptions?.dates ?? []), ...dateFilters])).sort();
-  const hasProgrammed = originFilters.includes("programmed") || Boolean(serverOptions?.origins?.includes("programmed"));
-  const hasImmediate = originFilters.includes("immediate") || Boolean(serverOptions?.origins?.includes("immediate"));
+  const hasProgrammed =
+    originFilters.includes("programmed") || Boolean(serverOptions?.origins?.includes("programmed"));
+  const hasImmediate =
+    originFilters.includes("immediate") || Boolean(serverOptions?.origins?.includes("immediate"));
   const kpis = activities.data?.kpis ?? {
     total: 0,
     concluded: 0,
@@ -709,6 +751,7 @@ function AtividadesPage() {
   const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
 
   function toggleKpiStatus(nextStatus: string) {
+    if (isLeaderOnly) return;
     setStatusFilters((current) =>
       !nextStatus
         ? []
@@ -721,12 +764,12 @@ function AtividadesPage() {
 
   const activeFilters = [
     search,
-    statusFilters.length > 0 ? "1" : "",
+    !isLeaderOnly && statusFilters.length > 0 ? "1" : "",
     canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
-    ptColorFilters.length > 0 ? "1" : "",
+    !isLeaderOnly && ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
     workCenterFilters.length > 0 ? "1" : "",
-    planningGroupFilters.length > 0 ? "1" : "",
+    !isLeaderOnly && planningGroupFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
     dateFilters.length > 0 ? "1" : "",
     originFilters.length > 0 ? "1" : "",
@@ -813,18 +856,25 @@ function AtividadesPage() {
     };
   }
 
-  async function persistPlanningRows(payload: ReturnType<typeof planningPayload>[], showSuccess = false) {
+  async function persistPlanningRows(
+    payload: ReturnType<typeof planningPayload>[],
+    showSuccess = false,
+  ) {
     planningSavesPendingRef.current += 1;
     setPlanningSavePending(true);
     const run = planningSaveQueueRef.current.then(async () => {
       const versionedPayload = payload.map((row) => ({
         ...row,
-        expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.expectedVersion),
+        expectedVersion: Math.max(
+          planningVersionsRef.current.get(row.id) ?? 0,
+          row.expectedVersion,
+        ),
       }));
       try {
         const result = await savePlanningFields({ data: { rows: versionedPayload } });
         if (!result.ok) throw new Error(result.error);
-        for (const row of versionedPayload) planningVersionsRef.current.set(row.id, row.expectedVersion + 1);
+        for (const row of versionedPayload)
+          planningVersionsRef.current.set(row.id, row.expectedVersion + 1);
         if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
         qc.invalidateQueries({ queryKey: ["activities"] });
       } catch (error: any) {
@@ -850,7 +900,9 @@ function AtividadesPage() {
 
   async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
     if (field === "scheduled_date" && !canEditPlanningDate) {
-      toast.error(`A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`);
+      toast.error(
+        `A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`,
+      );
       return;
     }
     try {
@@ -872,7 +924,11 @@ function AtividadesPage() {
     }
   }
 
-  async function pastePlanningGrid(event: ClipboardEvent<HTMLElement>, startRow: number, startField: PlanningField) {
+  async function pastePlanningGrid(
+    event: ClipboardEvent<HTMLElement>,
+    startRow: number,
+    startField: PlanningField,
+  ) {
     if (!canEditPlanningFields) return;
     event.preventDefault();
     try {
@@ -919,7 +975,9 @@ function AtividadesPage() {
     dragTarget.current = null;
     if (!source || source.field !== targetField || source.rowIndex === targetRow) return;
     if (targetField === "scheduled_date" && !canEditPlanningDate) {
-      toast.error(`A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`);
+      toast.error(
+        `A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`,
+      );
       return;
     }
     const sourceRow = paged[source.rowIndex];
@@ -971,7 +1029,12 @@ function AtividadesPage() {
       const responsibleHeader = "Responsável pela informação";
       const reportedAtHeader = "Data da informação";
       const extraHeaders = ["Ger", "Nº PT", "Cor da PT"];
-      const exportHeaders = [...ACTIVITY_EXPORT_COLUMNS, ...extraHeaders, responsibleHeader, reportedAtHeader];
+      const exportHeaders = [
+        ...ACTIVITY_EXPORT_COLUMNS,
+        ...extraHeaders,
+        responsibleHeader,
+        reportedAtHeader,
+      ];
       const pad2 = (value: number) => String(value).padStart(2, "0");
       const formatDateOnly = (value: unknown): string => {
         if (value === null || value === undefined || value === "") return "";
@@ -1007,17 +1070,22 @@ function AtividadesPage() {
       const rows = filtered
         .slice()
         .sort(
-          (a, b) => (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
+          (a, b) =>
+            (a.source_row_number ?? Number.MAX_SAFE_INTEGER) -
+            (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
         )
         .map((activity) => {
           const planning = activity.planning_data ?? {};
           const row: Record<string, unknown> = {};
           for (const header of ACTIVITY_EXPORT_COLUMNS) {
-            if (header === "PBS") row[header] = planningValue(activity, "pbs") || planning[header] || "";
+            if (header === "PBS")
+              row[header] = planningValue(activity, "pbs") || planning[header] || "";
             else if (header === "Tipo de Liberação")
               row[header] = planningValue(activity, "release_type") || planning[header] || "";
             else if (header === "Data início")
-              row[header] = formatDateOnly(planningValue(activity, "scheduled_date") || planning[header]);
+              row[header] = formatDateOnly(
+                planningValue(activity, "scheduled_date") || planning[header],
+              );
             else if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
             else if (header === "Justificativa") row[header] = activity.justification ?? "";
             else if (header === "Observações") row[header] = activity.observation ?? "";
@@ -1048,7 +1116,9 @@ function AtividadesPage() {
       XLSX.utils.book_append_sheet(workbook, worksheet, "Acompanhamento");
       const code = String(activeWeek.data.code ?? "semana").replace(/\//g, "-");
       XLSX.writeFile(workbook, `${code}-apontamentos-filtrados.xlsx`);
-      toast.success(`${rows.length.toLocaleString("pt-BR")} atividade(s) exportada(s) com os filtros atuais.`);
+      toast.success(
+        `${rows.length.toLocaleString("pt-BR")} atividade(s) exportada(s) com os filtros atuais.`,
+      );
     } catch (error: any) {
       toast.error(error?.message ?? "Falha ao exportar as atividades filtradas.");
     } finally {
@@ -1075,7 +1145,9 @@ function AtividadesPage() {
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "PTs");
       XLSX.writeFile(workbook, `modelo-pts-${day}.xlsx`);
-      toast.success(`Modelo vazio gerado para preenchimento e importação no dia ${formatDate(day)}.`);
+      toast.success(
+        `Modelo vazio gerado para preenchimento e importação no dia ${formatDate(day)}.`,
+      );
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível gerar o modelo de PTs.");
     } finally {
@@ -1115,8 +1187,12 @@ function AtividadesPage() {
       const ignored: string[] = [];
       const seen = new Set<string>();
       for (const item of imported) {
-        const confirmation = String(item["Confirmação"] ?? item["CONFIRMAÇÃO"] ?? item["Confirmacao"] ?? "").trim();
-        const ptNumber = String(item["Nº da PT"] ?? item["N° da PT"] ?? item["Numero da PT"] ?? "").trim();
+        const confirmation = String(
+          item["Confirmação"] ?? item["CONFIRMAÇÃO"] ?? item["Confirmacao"] ?? "",
+        ).trim();
+        const ptNumber = String(
+          item["Nº da PT"] ?? item["N° da PT"] ?? item["Numero da PT"] ?? "",
+        ).trim();
         const rawColor = String(item["Cor da PT"] ?? item["COR DA PT"] ?? "")
           .trim()
           .toLocaleUpperCase("pt-BR");
@@ -1138,9 +1214,14 @@ function AtividadesPage() {
         }
         for (const row of matchingRows) {
           const nextColor = rawColor ? importedColor : effectivePtColor(row);
-          const normalizedColor = row.release_type === "ATRE" || row.release_type === "OFICINAS" ? null : nextColor;
+          const normalizedColor =
+            row.release_type === "ATRE" || row.release_type === "OFICINAS" ? null : nextColor;
           const nextPtNumber = ptNumber || row.pt_number;
-          if ((nextPtNumber ?? "") === (row.pt_number ?? "") && normalizedColor === effectivePtColor(row)) continue;
+          if (
+            (nextPtNumber ?? "") === (row.pt_number ?? "") &&
+            normalizedColor === effectivePtColor(row)
+          )
+            continue;
           changes.push({
             row,
             confirmation,
@@ -1178,7 +1259,9 @@ function AtividadesPage() {
         },
       });
       if (!result.ok) throw new Error(result.error);
-      toast.success(`${result.count} atividade(s) atualizada(s). As alterações foram registradas no histórico.`);
+      toast.success(
+        `${result.count} atividade(s) atualizada(s). As alterações foram registradas no histórico.`,
+      );
       setPtImportOpen(false);
       setPtImportChanges([]);
       setPtImportIgnored([]);
@@ -1335,7 +1418,9 @@ function AtividadesPage() {
       const rows = filtered
         .slice()
         .sort(
-          (a, b) => (a.source_row_number ?? Number.MAX_SAFE_INTEGER) - (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
+          (a, b) =>
+            (a.source_row_number ?? Number.MAX_SAFE_INTEGER) -
+            (b.source_row_number ?? Number.MAX_SAFE_INTEGER),
         )
         .map((activity) => {
           const planning = activity.planning_data ?? {};
@@ -1406,9 +1491,11 @@ function AtividadesPage() {
         }
       }
 
-      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach((width, index) => {
-        worksheet.getColumn(index + 1).width = width;
-      });
+      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach(
+        (width, index) => {
+          worksheet.getColumn(index + 1).width = width;
+        },
+      );
 
       const lastRow = rows.length + 9;
       worksheet.pageSetup.printArea = `A1:U${lastRow}`;
@@ -1427,9 +1514,13 @@ function AtividadesPage() {
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toast.success(`${rows.length.toLocaleString("pt-BR")} atividade(s) preparadas no modelo de impressão.`);
+      toast.success(
+        `${rows.length.toLocaleString("pt-BR")} atividade(s) preparadas no modelo de impressão.`,
+      );
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível gerar o modelo de impressão.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível gerar o modelo de impressão.",
+      );
     } finally {
       setIsPrinting(false);
     }
@@ -1438,7 +1529,11 @@ function AtividadesPage() {
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
-        eyebrow={activeWeek.data?.lifecycle_status === "preparation" ? "Semana em preparação" : "Semana operacional"}
+        eyebrow={
+          activeWeek.data?.lifecycle_status === "preparation"
+            ? "Semana em preparação"
+            : "Semana operacional"
+        }
         title={activeWeek.data?.label ?? "—"}
         description={
           activeWeek.data
@@ -1460,7 +1555,8 @@ function AtividadesPage() {
               >
                 {(availableWeeks.data ?? []).map((week: any) => (
                   <option key={week.id} value={week.id}>
-                    {week.label} — {week.lifecycle_status === "preparation" ? "Em preparação" : "Operacional"}
+                    {week.label} —{" "}
+                    {week.lifecycle_status === "preparation" ? "Em preparação" : "Operacional"}
                   </option>
                 ))}
               </select>
@@ -1474,7 +1570,11 @@ function AtividadesPage() {
                   title="Gerar o modelo de impressão com os filtros atuais"
                 >
                   <Printer className="h-3.5 w-3.5" />
-                  {planningSavePending ? "Salvando…" : isPrinting ? "Gerando…" : "Imprimir programação"}
+                  {planningSavePending
+                    ? "Salvando…"
+                    : isPrinting
+                      ? "Gerando…"
+                      : "Imprimir programação"}
                 </button>
                 <button
                   onClick={exportFilteredActivities}
@@ -1526,8 +1626,12 @@ function AtividadesPage() {
               <RefreshCw className="h-3.5 w-3.5" /> Atualizar
             </button>
             <div className="hidden text-right sm:block">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Conclusão</div>
-              <div className="text-lg font-semibold leading-none text-foreground tabular">{kpis.percent}%</div>
+              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+                Conclusão
+              </div>
+              <div className="text-lg font-semibold leading-none text-foreground tabular">
+                {kpis.percent}%
+              </div>
             </div>
           </div>
         }
@@ -1601,7 +1705,11 @@ function AtividadesPage() {
           className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
           title="Mostrar todos os status dentro dos demais filtros"
         >
-          <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Programadas"
+            value={kpis.total}
+            icon={<ListChecks className="h-3.5 w-3.5" />}
+          />
         </button>
         <button
           type="button"
@@ -1645,7 +1753,11 @@ function AtividadesPage() {
           aria-pressed={statusFilters.includes(PENDING_REPORT_FILTER)}
           title="Inclui Sem apontamento e os três status do fluxo de PT"
         >
-          <KpiCard label="Sem apontamento" value={kpis.noReport} icon={<Clock className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Sem apontamento"
+            value={kpis.noReport}
+            icon={<Clock className="h-3.5 w-3.5" />}
+          />
         </button>
         <button
           type="button"
@@ -1656,7 +1768,12 @@ function AtividadesPage() {
           )}
           aria-pressed={statusFilters.includes("CANCELADA")}
         >
-          <KpiCard label="Canceladas" value={kpis.cancelled} tone="warning" icon={<X className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Canceladas"
+            value={kpis.cancelled}
+            tone="warning"
+            icon={<X className="h-3.5 w-3.5" />}
+          />
         </button>
         <KpiCard
           label="HH programado"
@@ -1685,19 +1802,23 @@ function AtividadesPage() {
             className="input-base pl-8"
           />
         </div>
-        <FilterMultiSelect
-          options={[PENDING_REPORT_FILTER, ...statusOptions]}
-          selected={statusFilters}
-          onChange={(next) => {
-            setStatusFilters(next);
-            setPage(0);
-          }}
-          allLabel="Todos os status"
-          ariaLabel="Filtrar por status"
-          searchPlaceholder="Buscar status..."
-          selectedPlural="status selecionados"
-          optionLabel={(value) => (value === PENDING_REPORT_FILTER ? "Sem apontamento + fluxo de PT" : value)}
-        />
+        {!isLeaderOnly && (
+          <FilterMultiSelect
+            options={[PENDING_REPORT_FILTER, ...statusOptions]}
+            selected={statusFilters}
+            onChange={(next) => {
+              setStatusFilters(next);
+              setPage(0);
+            }}
+            allLabel="Todos os status"
+            ariaLabel="Filtrar por status"
+            searchPlaceholder="Buscar status..."
+            selectedPlural="status selecionados"
+            optionLabel={(value) =>
+              value === PENDING_REPORT_FILTER ? "Sem apontamento + fluxo de PT" : value
+            }
+          />
+        )}
         {canEditPlanningFields && (
           <FilterMultiSelect
             options={[...releaseTypeOptions, ...(hasEmptyReleaseType ? ["__EMPTY__"] : [])]}
@@ -1713,18 +1834,20 @@ function AtividadesPage() {
             optionLabel={(value) => (value === "__EMPTY__" ? "Sem tipo de liberação" : value)}
           />
         )}
-        <FilterMultiSelect
-          options={[...ptColorOptions]}
-          selected={ptColorFilters}
-          onChange={(next) => {
-            setPtColorFilters(next);
-            setPage(0);
-          }}
-          allLabel="Todas as cores de PT"
-          ariaLabel="Filtrar por cor da PT"
-          selectedPlural="cores selecionadas"
-          optionLabel={(value) => PT_COLOR_LABELS[value as PtColor]}
-        />
+        {!isLeaderOnly && (
+          <FilterMultiSelect
+            options={[...ptColorOptions]}
+            selected={ptColorFilters}
+            onChange={(next) => {
+              setPtColorFilters(next);
+              setPage(0);
+            }}
+            allLabel="Todas as cores de PT"
+            ariaLabel="Filtrar por cor da PT"
+            selectedPlural="cores selecionadas"
+            optionLabel={(value) => PT_COLOR_LABELS[value as PtColor]}
+          />
+        )}
         <FilterMultiSelect
           options={areas}
           selected={areaFilters}
@@ -1757,21 +1880,26 @@ function AtividadesPage() {
             setPage(0);
           }}
         />
-        <FilterMultiSelect
-          options={planningGroups}
-          selected={planningGroupFilters}
-          onChange={(next) => {
-            setPlanningGroupFilters(next);
-            setPage(0);
-          }}
-          allLabel="Todos Gr pl"
-          ariaLabel="Filtrar por Gr pl"
-          searchPlaceholder="Buscar Gr pl..."
-          selectedPlural="Gr pl selecionados"
-        />
+        {!isLeaderOnly && (
+          <FilterMultiSelect
+            options={planningGroups}
+            selected={planningGroupFilters}
+            onChange={(next) => {
+              setPlanningGroupFilters(next);
+              setPage(0);
+            }}
+            allLabel="Todos Gr pl"
+            ariaLabel="Filtrar por Gr pl"
+            searchPlaceholder="Buscar Gr pl..."
+            selectedPlural="Gr pl selecionados"
+          />
+        )}
 
         <FilterMultiSelect
-          options={[...(hasProgrammed ? ["programmed"] : []), ...(hasImmediate ? ["immediate"] : [])]}
+          options={[
+            ...(hasProgrammed ? ["programmed"] : []),
+            ...(hasImmediate ? ["immediate"] : []),
+          ]}
           selected={originFilters}
           onChange={(next) => {
             setOriginFilters(next);
@@ -1802,7 +1930,9 @@ function AtividadesPage() {
         )}
         <div className="ml-auto text-[11px] font-medium text-muted-foreground tabular">
           {kpis.total.toLocaleString("pt-BR")}{" "}
-          <span className="opacity-60">de {(activities.data?.totalAll ?? 0).toLocaleString("pt-BR")}</span>
+          <span className="opacity-60">
+            de {(activities.data?.totalAll ?? 0).toLocaleString("pt-BR")}
+          </span>
         </div>
       </Toolbar>
 
@@ -1810,14 +1940,18 @@ function AtividadesPage() {
       {selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/[0.06] px-3 py-2">
           <div className="text-[13px]">
-            <span className="font-semibold tabular">{selected.size}</span> atividade(s) selecionada(s)
+            <span className="font-semibold tabular">{selected.size}</span> atividade(s)
+            selecionada(s)
           </div>
           <div className="flex gap-2">
             <button onClick={() => setSelected(new Set())} className="btn-ghost py-1 text-xs">
               Cancelar
             </button>
             {canEditPlanningFields && (
-              <button onClick={() => setPlanningFieldsOpen(true)} className="btn-ghost py-1 text-xs">
+              <button
+                onClick={() => setPlanningFieldsOpen(true)}
+                className="btn-ghost py-1 text-xs"
+              >
                 Preencher liberação
               </button>
             )}
@@ -1866,7 +2000,9 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
                     <th className="px-2 py-2 text-left font-semibold">Oper / Sub</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
-                    {canEditPlanningFields && <th className="px-2 py-2 text-left font-semibold">Localização</th>}
+                    {canEditPlanningFields && (
+                      <th className="px-2 py-2 text-left font-semibold">Localização</th>
+                    )}
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
                     <th className="px-2 py-2 text-left font-semibold">Nº PT / Cor</th>
@@ -1881,15 +2017,23 @@ function AtividadesPage() {
                   {paged.map((r) => (
                     <tr key={r.id} className="row-zebra hover:bg-accent/60">
                       <td className="px-2 py-2 align-top">
-                        <input type="checkbox" checked={selected.has(r.id)} onChange={() => toggleSelect(r.id)} />
+                        <input
+                          type="checkbox"
+                          checked={selected.has(r.id)}
+                          onChange={() => toggleSelect(r.id)}
+                        />
                       </td>
                       <td className="px-2 py-2 align-top font-mono text-[11px]">
                         <div className="text-foreground">{r.order_number}</div>
                         <div className="text-muted-foreground">{r.note_number}</div>
                       </td>
                       <td className="px-2 py-2 align-top font-mono text-[11px]">
-                        <div className="text-foreground">{fmtPlan(r.planning_data, "Op") ?? "—"}</div>
-                        <div className="text-muted-foreground">{fmtPlan(r.planning_data, "Subop") ?? "—"}</div>
+                        <div className="text-foreground">
+                          {fmtPlan(r.planning_data, "Op") ?? "—"}
+                        </div>
+                        <div className="text-muted-foreground">
+                          {fmtPlan(r.planning_data, "Subop") ?? "—"}
+                        </div>
                       </td>
                       <td className="px-2 py-2 align-top">
                         <div className="flex items-start gap-1.5">
@@ -1910,15 +2054,24 @@ function AtividadesPage() {
                         <div className="text-foreground">{r.area}</div>
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
-                      {(["pbs", "pt_number", "release_type", "scheduled_date"] as PlanningField[]).map((field) => {
+                      {(
+                        ["pbs", "pt_number", "release_type", "scheduled_date"] as PlanningField[]
+                      ).map((field) => {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
                           <td key={field} className="px-1 py-1.5 align-top text-[11px]">
-                            <div className={cn(field === "pt_number" && "flex min-w-[185px] items-center gap-2")}>
+                            <div
+                              className={cn(
+                                field === "pt_number" && "flex min-w-[185px] items-center gap-2",
+                              )}
+                            >
                               <PlanningGridCell
                                 value={planningValue(r, field)}
                                 field={field}
-                                editable={canEditPlanningFields && (field !== "scheduled_date" || canEditPlanningDate)}
+                                editable={
+                                  canEditPlanningFields &&
+                                  (field !== "scheduled_date" || canEditPlanningDate)
+                                }
                                 onChange={(value) => setPlanningValue(r.id, field, value)}
                                 onCommit={(value) => commitPlanningCell(r, field, value)}
                                 onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
@@ -1933,7 +2086,8 @@ function AtividadesPage() {
                                 }}
                                 onDragEnd={() => {
                                   const target = dragTarget.current;
-                                  if (target) void fillPlanningByDrag(target.rowIndex, target.field);
+                                  if (target)
+                                    void fillPlanningByDrag(target.rowIndex, target.field);
                                 }}
                                 onDrop={() => fillPlanningByDrag(rowIndex, field)}
                               />
@@ -1973,7 +2127,10 @@ function AtividadesPage() {
                         )}
                       </td>
                       <td className="px-2 py-2 text-right align-top">
-                        <button onClick={() => setEditing(r)} className="btn-primary py-1 text-[11px]">
+                        <button
+                          onClick={() => setEditing(r)}
+                          className="btn-primary py-1 text-[11px]"
+                        >
                           {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
                         </button>
                       </td>
@@ -1987,7 +2144,10 @@ function AtividadesPage() {
           {/* Mobile */}
           <div className="space-y-2 md:hidden">
             {paged.map((r) => (
-              <div key={r.id} className={`surface-card p-3 ${r.is_immediate ? "border-l-[3px] border-l-warning" : ""}`}>
+              <div
+                key={r.id}
+                className={`surface-card p-3 ${r.is_immediate ? "border-l-[3px] border-l-warning" : ""}`}
+              >
                 <div className="flex items-start gap-2">
                   <input
                     type="checkbox"
@@ -1997,7 +2157,9 @@ function AtividadesPage() {
                   />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                      <span className="font-mono text-[11px] text-foreground">{r.order_number}</span>
+                      <span className="font-mono text-[11px] text-foreground">
+                        {r.order_number}
+                      </span>
                       {fmtPlan(r.planning_data, "Op") && (
                         <span className="font-mono text-[11px] text-muted-foreground">
                           · Op {fmtPlan(r.planning_data, "Op")}
@@ -2014,7 +2176,9 @@ function AtividadesPage() {
                         </span>
                       )}
                     </div>
-                    <div className="mt-1 text-[13px] leading-snug text-foreground">{r.description}</div>
+                    <div className="mt-1 text-[13px] leading-snug text-foreground">
+                      {r.description}
+                    </div>
                     <div className="mt-1 text-[11px] text-muted-foreground">
                       {r.area}
                       {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
@@ -2025,7 +2189,8 @@ function AtividadesPage() {
                       </div>
                     )}
                     <div className="mt-1 text-[10px] text-muted-foreground">
-                      PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} · {r.release_type || "Sem liberação"}
+                      PBS: {r.pbs || "—"} · Nº PT: {r.pt_number || "—"} ·{" "}
+                      {r.release_type || "Sem liberação"}
                     </div>
                     <div className="mt-2 flex items-center gap-2 text-[10px] text-muted-foreground">
                       <span>Cor da PT:</span>
@@ -2036,7 +2201,10 @@ function AtividadesPage() {
                           onChange={(color) => void changePtColor(r, color)}
                         />
                       ) : (
-                        <span className="text-sm" title="Este tipo de liberação não possui cor de PT">
+                        <span
+                          className="text-sm"
+                          title="Este tipo de liberação não possui cor de PT"
+                        >
                           —
                         </span>
                       )}
@@ -2066,7 +2234,8 @@ function AtividadesPage() {
           {/* Paginação */}
           <div className="mt-4 flex items-center justify-between text-[11px]">
             <div className="text-muted-foreground tabular">
-              Página <span className="font-semibold text-foreground">{page + 1}</span> de {totalPages}
+              Página <span className="font-semibold text-foreground">{page + 1}</span> de{" "}
+              {totalPages}
             </div>
             <div className="flex gap-1">
               <button
@@ -2127,7 +2296,9 @@ function AtividadesPage() {
                 disabled={isPtImporting || ptImportChanges.length === 0}
                 onClick={confirmPtImport}
               >
-                {isPtImporting ? "Importando…" : `Confirmar ${ptImportChanges.length} atualização(ões)`}
+                {isPtImporting
+                  ? "Importando…"
+                  : `Confirmar ${ptImportChanges.length} atualização(ões)`}
               </button>
             </>
           }
@@ -2135,7 +2306,9 @@ function AtividadesPage() {
           <div className="space-y-3">
             <div className="grid gap-2 sm:grid-cols-3">
               <div className="rounded-md border bg-muted/30 p-3">
-                <div className="text-[10px] uppercase text-muted-foreground">Novos preenchimentos</div>
+                <div className="text-[10px] uppercase text-muted-foreground">
+                  Novos preenchimentos
+                </div>
                 <div className="text-xl font-semibold tabular">
                   {ptImportChanges.filter((item) => !item.replacesExisting).length}
                 </div>
@@ -2153,8 +2326,8 @@ function AtividadesPage() {
             </div>
             {ptImportChanges.some((item) => item.replacesExisting) && (
               <div className="rounded-md border border-warning/50 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-                Algumas atividades já possuem PT ou cor. Ao confirmar, os valores atuais serão substituídos pelos
-                valores da planilha.
+                Algumas atividades já possuem PT ou cor. Ao confirmar, os valores atuais serão
+                substituídos pelos valores da planilha.
               </div>
             )}
             <div className="max-h-72 overflow-auto rounded-md border">
@@ -2170,12 +2343,17 @@ function AtividadesPage() {
                 </thead>
                 <tbody className="divide-y">
                   {ptImportChanges.map((item) => (
-                    <tr key={item.row.id} className={item.replacesExisting ? "bg-warning/[0.05]" : ""}>
+                    <tr
+                      key={item.row.id}
+                      className={item.replacesExisting ? "bg-warning/[0.05]" : ""}
+                    >
                       <td className="px-2 py-2 font-mono">{item.confirmation}</td>
                       <td className="px-2 py-2">{item.row.pt_number || "—"}</td>
                       <td className="px-2 py-2 font-medium">{item.nextPtNumber || "—"}</td>
                       <td className="px-2 py-2">
-                        {effectivePtColor(item.row) ? PT_COLOR_LABELS[effectivePtColor(item.row)!] : "—"}
+                        {effectivePtColor(item.row)
+                          ? PT_COLOR_LABELS[effectivePtColor(item.row)!]
+                          : "—"}
                       </td>
                       <td className="px-2 py-2 font-medium">
                         {item.nextPtColor ? PT_COLOR_LABELS[item.nextPtColor] : "—"}
@@ -2270,7 +2448,11 @@ function PlanningFieldsModal({
   const [saving, setSaving] = useState(false);
   const [grid, setGrid] = useState(() =>
     rows
-      .map((row) => [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.scheduled_date ?? ""].join("\t"))
+      .map((row) =>
+        [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.scheduled_date ?? ""].join(
+          "\t",
+        ),
+      )
       .join("\n"),
   );
 
@@ -2278,14 +2460,18 @@ function PlanningFieldsModal({
     try {
       const lines = grid.replace(/\r/g, "").split("\n");
       if (lines.length !== rows.length)
-        throw new Error(`Cole exatamente ${rows.length} linha(s), uma para cada atividade selecionada.`);
+        throw new Error(
+          `Cole exatamente ${rows.length} linha(s), uma para cada atividade selecionada.`,
+        );
       const parsed = lines.map((line, index) => {
         const cells = line.split("\t");
         if (cells.length > 4) throw new Error(`A linha ${index + 1} possui mais de 4 colunas.`);
         while (cells.length < 4) cells.push("");
         const [pbs, ptNumber, releaseType, scheduledDate] = cells.map((cell) => cell.trim());
         if (releaseType && !RELEASE_TYPES.includes(releaseType as (typeof RELEASE_TYPES)[number])) {
-          throw new Error(`Tipo de liberação inválido na linha ${index + 1}. Use PT, PTT, ATRE ou Oficina.`);
+          throw new Error(
+            `Tipo de liberação inválido na linha ${index + 1}. Use PT, PTT, ATRE ou Oficina.`,
+          );
         }
         if (scheduledDate && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
           throw new Error(`Data inválida na linha ${index + 1}. Use AAAA-MM-DD.`);
@@ -2320,7 +2506,12 @@ function PlanningFieldsModal({
           <button type="button" onClick={onClose} className="btn-ghost" disabled={saving}>
             Cancelar
           </button>
-          <button type="button" onClick={save} className="btn-primary" disabled={saving || rows.length === 0}>
+          <button
+            type="button"
+            onClick={save}
+            className="btn-primary"
+            disabled={saving || rows.length === 0}
+          >
             {saving ? "Salvando…" : `Salvar ${rows.length} atividade(s)`}
           </button>
         </>
@@ -2343,8 +2534,8 @@ function PlanningFieldsModal({
           aria-label="Dados de liberação em formato de planilha"
         />
         <p className="text-[11px] text-muted-foreground">
-          São necessárias {rows.length} linha(s). Campos vazios apagam o valor atual. Tipos aceitos: PT, PTT, ATRE e
-          Oficina. A data deve estar no formato AAAA-MM-DD.
+          São necessárias {rows.length} linha(s). Campos vazios apagam o valor atual. Tipos aceitos:
+          PT, PTT, ATRE e Oficina. A data deve estar no formato AAAA-MM-DD.
         </p>
       </div>
     </Modal>
@@ -2372,7 +2563,8 @@ function ApontarModal({
   );
   const call = useServerFn(updateActivity);
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
-  const needsImmediateLink = status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
+  const needsImmediateLink =
+    status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
     if (needsJust && !justification.trim()) {
@@ -2397,7 +2589,8 @@ function ApontarModal({
         },
       });
       if (!res.ok) {
-        if ((res as any).conflict) toast.error("Esta atividade foi alterada por outro usuário. Recarregue e revise.");
+        if ((res as any).conflict)
+          toast.error("Esta atividade foi alterada por outro usuário. Recarregue e revise.");
         else toast.error(res.error ?? "Erro ao salvar apontamento.");
         return;
       }
@@ -2442,14 +2635,20 @@ function ApontarModal({
             onChange={(e) => {
               const nextStatus = e.target.value;
               if (!REQUIRES_JUSTIFICATION.has(nextStatus)) setJustification("");
-              if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
+              if (
+                nextStatus === "CANCELADA" &&
+                !CANCELLATION_JUSTIFICATIONS.includes(justification)
+              )
                 setJustification("");
               setStatus(nextStatus);
             }}
             className="input-base"
           >
             {STATUSES.filter(
-              (s) => (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") || canCancel || activity.status === s,
+              (s) =>
+                (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") ||
+                canCancel ||
+                activity.status === s,
             ).map((s) => (
               <option
                 key={s}
@@ -2468,7 +2667,8 @@ function ApontarModal({
             onChange={(e) => {
               const value = e.target.value;
               setJustification(value);
-              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
+              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
+                setImmediatePickerOpen(true);
             }}
             className="input-base"
             disabled={!needsJust}
@@ -2486,15 +2686,22 @@ function ApontarModal({
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-[11px] font-semibold text-warning-foreground">Imediatas atendidas</div>
+                <div className="text-[11px] font-semibold text-warning-foreground">
+                  Imediatas atendidas
+                </div>
                 <div className="text-[11px] text-muted-foreground">
                   {selectedImmediateIds.size > 0
                     ? `${selectedImmediateIds.size} atividade(s) vinculada(s)`
                     : "Selecione a atividade imediata que causou o desvio."}
                 </div>
               </div>
-              <button type="button" onClick={() => setImmediatePickerOpen(true)} className="btn-ghost text-xs">
-                <Zap className="h-3.5 w-3.5" /> {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
+              <button
+                type="button"
+                onClick={() => setImmediatePickerOpen(true)}
+                className="btn-ghost text-xs"
+              >
+                <Zap className="h-3.5 w-3.5" />{" "}
+                {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
               </button>
             </div>
           </div>
@@ -2552,7 +2759,11 @@ function historyValue(v: unknown, key?: string): string {
   if (key === "pt_color" && typeof v === "string" && PT_COLORS.includes(v as PtColor)) {
     return PT_COLOR_LABELS[v as PtColor];
   }
-  if ((key === "scheduled_date" || key === "d1_date") && typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+  if (
+    (key === "scheduled_date" || key === "d1_date") &&
+    typeof v === "string" &&
+    /^\d{4}-\d{2}-\d{2}$/.test(v)
+  ) {
     const [year, month, day] = v.split("-");
     return `${day}/${month}/${year}`;
   }
@@ -2565,7 +2776,9 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
     queryFn: async () => {
       const { data } = await supabase
         .from("activity_history")
-        .select("id, changed_at, changed_by_name, changed_by_email, change_source, previous_values, new_values")
+        .select(
+          "id, changed_at, changed_by_name, changed_by_email, change_source, previous_values, new_values",
+        )
         .eq("activity_id", activityId)
         .order("changed_at", { ascending: false })
         .limit(50);
@@ -2581,7 +2794,9 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
       {q.isLoading ? (
         <Skeleton className="h-16 w-full" />
       ) : (q.data?.length ?? 0) === 0 ? (
-        <div className="text-[12px] text-muted-foreground">Nenhuma alteração registrada até agora.</div>
+        <div className="text-[12px] text-muted-foreground">
+          Nenhuma alteração registrada até agora.
+        </div>
       ) : (
         <ol className="max-h-64 space-y-3 overflow-y-auto pr-1">
           {q.data!.map((h: any) => {
@@ -2597,19 +2812,25 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
                   <span className="tabular font-medium text-foreground">
                     {new Date(h.changed_at).toLocaleString("pt-BR")}
                   </span>
-                  <span className="text-muted-foreground">{h.changed_by_name || h.changed_by_email || "Sistema"}</span>
+                  <span className="text-muted-foreground">
+                    {h.changed_by_name || h.changed_by_email || "Sistema"}
+                  </span>
                   <span className="status-pill border-border bg-muted text-muted-foreground">
                     {h.change_source === "planning" ? "Planejamento" : h.change_source}
                   </span>
                 </div>
                 <div className="mt-1 space-y-0.5">
                   {keys.length === 0 ? (
-                    <div className="text-[11px] text-muted-foreground">Atualização sem mudança de campos.</div>
+                    <div className="text-[11px] text-muted-foreground">
+                      Atualização sem mudança de campos.
+                    </div>
                   ) : (
                     keys.map((k) => (
                       <div key={k} className="text-[11px]">
                         <span className="font-medium text-foreground">{HISTORY_LABELS[k]}: </span>
-                        <span className="text-muted-foreground line-through">{historyValue(prev[k], k)}</span>
+                        <span className="text-muted-foreground line-through">
+                          {historyValue(prev[k], k)}
+                        </span>
                         <span className="text-muted-foreground"> → </span>
                         <span className="text-foreground">{historyValue(next[k], k)}</span>
                       </div>
@@ -2645,7 +2866,9 @@ function ImmediatePicker({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("activities")
-        .select("id,order_number,note_number,description,scheduled_date,status,area,specialty,planning_data")
+        .select(
+          "id,order_number,note_number,description,scheduled_date,status,area,specialty,planning_data",
+        )
         .eq("week_id", weekId)
         .eq("is_immediate", true)
         .order("scheduled_date", { ascending: true })
@@ -2738,12 +2961,20 @@ function ImmediatePicker({
                 key={row.id}
                 className={`flex cursor-pointer items-start gap-3 rounded-md border p-3 transition ${checked ? "border-warning bg-warning/10" : "border-border hover:bg-muted/60"}`}
               >
-                <input type="checkbox" checked={checked} onChange={() => toggle(row.id)} className="mt-1" />
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={() => toggle(row.id)}
+                  className="mt-1"
+                />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-mono text-[11px] font-semibold">{row.order_number || "—"}</span>
+                    <span className="font-mono text-[11px] font-semibold">
+                      {row.order_number || "—"}
+                    </span>
                     <span className="font-mono text-[10px] text-muted-foreground">
-                      Op {fmtPlan(row.planning_data, "Op") ?? "—"} · Sub {fmtPlan(row.planning_data, "Subop") ?? "—"}
+                      Op {fmtPlan(row.planning_data, "Op") ?? "—"} · Sub{" "}
+                      {fmtPlan(row.planning_data, "Subop") ?? "—"}
                     </span>
                     {sameDay && (
                       <span className="rounded bg-warning/15 px-1.5 py-0.5 text-[9px] font-semibold text-warning-foreground">
@@ -2752,7 +2983,9 @@ function ImmediatePicker({
                     )}
                     <StatusPill status={row.status} />
                   </div>
-                  <div className="mt-1 text-[12px] leading-snug text-foreground">{row.description}</div>
+                  <div className="mt-1 text-[12px] leading-snug text-foreground">
+                    {row.description}
+                  </div>
                   <div className="mt-1 text-[10px] text-muted-foreground">
                     {formatDate(row.scheduled_date)}
                     {row.area ? ` · ${row.area}` : ""}
@@ -2770,7 +3003,9 @@ function ImmediatePicker({
 function MetaItem({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div className="tabular text-foreground">{value ?? "—"}</div>
     </div>
   );
@@ -2799,7 +3034,8 @@ function BulkModal({
   const [selectedImmediateIds, setSelectedImmediateIds] = useState<Set<string>>(new Set());
   const call = useServerFn(bulkUpdateActivities);
   const needsJust = REQUIRES_JUSTIFICATION.has(status);
-  const needsImmediateLink = status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
+  const needsImmediateLink =
+    status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
     if (needsJust && !justification.trim()) {
@@ -2849,8 +3085,8 @@ function BulkModal({
       <div className="flex items-start gap-2 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-warning-foreground">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <div>
-          <b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será registrado como
-          responsável em todas.
+          <b className="tabular">{count}</b> atividade(s) receberão o mesmo status. Você será
+          registrado como responsável em todas.
         </div>
       </div>
       <div className="mt-4 space-y-3">
@@ -2860,13 +3096,18 @@ function BulkModal({
             onChange={(e) => {
               const nextStatus = e.target.value;
               if (!REQUIRES_JUSTIFICATION.has(nextStatus)) setJustification("");
-              if (nextStatus === "CANCELADA" && !CANCELLATION_JUSTIFICATIONS.includes(justification))
+              if (
+                nextStatus === "CANCELADA" &&
+                !CANCELLATION_JUSTIFICATIONS.includes(justification)
+              )
                 setJustification("");
               setStatus(nextStatus);
             }}
             className="input-base"
           >
-            {STATUSES.filter((s) => canCancel || (s !== "CANCELADA" && !PLANNING_WORKFLOW_STATUSES.has(s))).map((s) => (
+            {STATUSES.filter(
+              (s) => canCancel || (s !== "CANCELADA" && !PLANNING_WORKFLOW_STATUSES.has(s)),
+            ).map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
@@ -2879,7 +3120,8 @@ function BulkModal({
             onChange={(e) => {
               const value = e.target.value;
               setJustification(value);
-              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION) setImmediatePickerOpen(true);
+              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
+                setImmediatePickerOpen(true);
             }}
             className="input-base"
             disabled={!needsJust}
@@ -2896,15 +3138,22 @@ function BulkModal({
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
-                <div className="text-[11px] font-semibold text-warning-foreground">Imediatas atendidas</div>
+                <div className="text-[11px] font-semibold text-warning-foreground">
+                  Imediatas atendidas
+                </div>
                 <div className="text-[11px] text-muted-foreground">
                   {selectedImmediateIds.size > 0
                     ? `${selectedImmediateIds.size} atividade(s) vinculada(s) às ${count} programadas`
                     : "Selecione a imediata que causou a parada das atividades."}
                 </div>
               </div>
-              <button type="button" onClick={() => setImmediatePickerOpen(true)} className="btn-ghost text-xs">
-                <Zap className="h-3.5 w-3.5" /> {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
+              <button
+                type="button"
+                onClick={() => setImmediatePickerOpen(true)}
+                className="btn-ghost text-xs"
+              >
+                <Zap className="h-3.5 w-3.5" />{" "}
+                {selectedImmediateIds.size ? "Alterar vínculo" : "Selecionar imediatas"}
               </button>
             </div>
           </div>
