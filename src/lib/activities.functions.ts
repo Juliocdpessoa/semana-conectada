@@ -275,10 +275,15 @@ function isPastDateEditCutoff(cutoffTime: string) {
 }
 
 async function getDateEditAccess(supabase: any, userId: string) {
-  const [{ data: profile }, { data: setting }] = await Promise.all([
-    supabase.from("profiles").select("email").eq("id", userId).maybeSingle(),
-    supabase.from("activity_edit_settings").select("date_edit_cutoff").eq("id", true).maybeSingle(),
-  ]);
+  const { data: profile } = await supabase.from("profiles").select("email,worksite_id").eq("id", userId).maybeSingle();
+  const { data: setting } = profile?.worksite_id
+    ? await supabase
+        .from("activity_edit_settings")
+        .select("date_edit_cutoff")
+        .eq("id", true)
+        .eq("worksite_id", profile.worksite_id)
+        .maybeSingle()
+    : { data: null };
   const cutoffTime = String(setting?.date_edit_cutoff ?? DEFAULT_DATE_EDIT_CUTOFF).slice(0, 5);
   const email = String(profile?.email ?? "")
     .trim()
@@ -287,6 +292,7 @@ async function getDateEditAccess(supabase: any, userId: string) {
     cutoffTime,
     locked: isPastDateEditCutoff(cutoffTime),
     canConfigure: isJulioPlanningAdmin(email),
+    worksiteId: profile?.worksite_id as string | undefined,
   };
 }
 
@@ -312,13 +318,18 @@ export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
         error: `Somente o administrador ${JULIO_ADMIN_EMAIL} pode alterar o horário de corte.`,
       };
     }
+    if (!access.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await (supabaseAdmin as any).from("activity_edit_settings").upsert({
-      id: true,
-      date_edit_cutoff: `${data.cutoffTime}:00`,
-      updated_by: context.userId,
-      updated_at: new Date().toISOString(),
-    });
+    const { error } = await (supabaseAdmin as any).from("activity_edit_settings").upsert(
+      {
+        id: true,
+        worksite_id: access.worksiteId,
+        date_edit_cutoff: `${data.cutoffTime}:00`,
+        updated_by: context.userId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "worksite_id,id" },
+    );
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, cutoffTime: data.cutoffTime };
   });
