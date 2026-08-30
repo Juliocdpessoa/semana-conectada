@@ -9,7 +9,7 @@ const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido")
 
 export const listScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         start_date: isoDate.optional(),
@@ -145,17 +145,23 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
           jobTitles: [...new Set(optionsRows.map((row) => row.employee_role).filter(Boolean))].sort(),
           dates: [...new Set(optionsRows.map((row) => row.transport_date).filter(Boolean))].sort(),
           entryTimes: [...new Set(optionsRows.map((row) => row.entry_time).filter(Boolean))].sort(),
-          departurePairs: optionsRows.map((row) => ({ entry: row.entry_time, departure: row.departure_time })),
+          departurePairs: optionsRows.map((row) => ({
+            entry: row.entry_time,
+            departure: row.departure_time,
+          })),
         },
       };
     } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar dados." };
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : "Falha ao carregar dados.",
+      };
     }
   });
 
 export const createScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         employee_ids: z.array(z.string().uuid()).min(1, "Selecione ao menos um colaborador").max(300),
@@ -193,7 +199,10 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       .eq("is_active", true);
     if (employeeError) return { ok: false as const, error: "Não foi possível validar os colaboradores." };
     if (!employees || employees.length !== uniqueIds.length) {
-      return { ok: false as const, error: "Um ou mais colaboradores não existem ou estão inativos." };
+      return {
+        ok: false as const,
+        error: "Um ou mais colaboradores não existem ou estão inativos.",
+      };
     }
 
     const dates = resolveDates(data.start_date, data.end_date, data.weekdays);
@@ -292,7 +301,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
 
 export const updateScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         id: z.string().uuid(),
@@ -323,7 +332,10 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!current) return { ok: false as const, error: "Programação não encontrada." };
     if (current.version !== data.version) {
-      return { ok: false as const, error: "Este registro foi alterado por outro usuário. Recarregue a lista." };
+      return {
+        ok: false as const,
+        error: "Este registro foi alterado por outro usuário. Recarregue a lista.",
+      };
     }
 
     const patch = {
@@ -372,14 +384,17 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
       else conflicts += 1;
     }
     if (count === 0) {
-      return { ok: false as const, error: "Os registros foram alterados por outro usuário. Recarregue a lista." };
+      return {
+        ok: false as const,
+        error: "Os registros foram alterados por outro usuário. Recarregue a lista.",
+      };
     }
     return { ok: true as const, count, conflicts };
   });
 
 export const cancelScheduledTransport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         ids: z.array(z.string().uuid()).max(5000).optional(),
@@ -448,7 +463,7 @@ const dayOffSchema = z.object({
 
 export const listEmployeeDaysOff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({}).parse(data))
+  .validator((data: unknown) => z.object({}).parse(data))
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
@@ -462,13 +477,16 @@ export const listEmployeeDaysOff = createServerFn({ method: "POST" })
       ]);
       return { ok: true as const, rows: rows as EmployeeDayOffRow[] };
     } catch (error) {
-      return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao carregar folgas." };
+      return {
+        ok: false as const,
+        error: error instanceof Error ? error.message : "Falha ao carregar folgas.",
+      };
     }
   });
 
 export const createEmployeeDayOff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => dayOffSchema.parse(data))
+  .validator((data: unknown) => dayOffSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
@@ -498,7 +516,10 @@ export const createEmployeeDayOff = createServerFn({ method: "POST" })
       .select("*")
       .single();
     if (error?.code === "23505") {
-      return { ok: false as const, error: "Este colaborador já possui uma folga registrada nessa data." };
+      return {
+        ok: false as const,
+        error: "Este colaborador já possui uma folga registrada nessa data.",
+      };
     }
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, row: created as EmployeeDayOffRow };
@@ -506,7 +527,7 @@ export const createEmployeeDayOff = createServerFn({ method: "POST" })
 
 export const updateEmployeeDayOff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     dayOffSchema.extend({ id: z.string().uuid(), version: z.number().int().min(1) }).parse(data),
   )
   .handler(async ({ data, context }) => {
@@ -541,16 +562,23 @@ export const updateEmployeeDayOff = createServerFn({ method: "POST" })
       .select("*")
       .maybeSingle();
     if (error?.code === "23505") {
-      return { ok: false as const, error: "Este colaborador já possui uma folga registrada nessa data." };
+      return {
+        ok: false as const,
+        error: "Este colaborador já possui uma folga registrada nessa data.",
+      };
     }
     if (error) return { ok: false as const, error: error.message };
-    if (!updated) return { ok: false as const, error: "A folga foi alterada por outro usuário. Recarregue a lista." };
+    if (!updated)
+      return {
+        ok: false as const,
+        error: "A folga foi alterada por outro usuário. Recarregue a lista.",
+      };
     return { ok: true as const, row: updated as EmployeeDayOffRow };
   });
 
 export const deleteEmployeeDayOff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid(), version: z.number().int().min(1) }).parse(data))
+  .validator((data: unknown) => z.object({ id: z.string().uuid(), version: z.number().int().min(1) }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
@@ -564,6 +592,10 @@ export const deleteEmployeeDayOff = createServerFn({ method: "POST" })
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
-    if (!deleted) return { ok: false as const, error: "A folga foi alterada por outro usuário. Recarregue a lista." };
+    if (!deleted)
+      return {
+        ok: false as const,
+        error: "A folga foi alterada por outro usuário. Recarregue a lista.",
+      };
     return { ok: true as const };
   });
