@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import { ShieldCheck, ClipboardCheck, BarChart3, Timer, Bus, Users } from "lucide-react";
+import { ShieldCheck, ClipboardCheck, BarChart3, Timer, Bus, Users, Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -20,6 +20,7 @@ function AuthPage() {
   const [mode, setMode] = useState<"login" | "signup" | "forgot">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [fullName, setFullName] = useState("");
   const [worksiteId, setWorksiteId] = useState("");
   const [worksites, setWorksites] = useState<WorksiteOption[]>([]);
@@ -129,8 +130,9 @@ function AuthPage() {
               Um só lugar para planejar, executar e comprovar a manutenção
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/75">
-              Programação semanal, apontamento auditado, hora extra, mudança de escala e logística de transporte — com
-              controle de acesso por perfil e histórico completo de cada alteração.
+              Programação semanal, apontamento auditado, hora extra, mudança de escala e logística
+              de transporte — com controle de acesso por perfil e histórico completo de cada
+              alteração.
             </p>
           </div>
         </div>
@@ -168,14 +170,19 @@ function AuthPage() {
               desc: "Perfis, aprovação e trilha de auditoria",
             },
           ].map((f) => (
-            <div key={f.title} className="rounded-md border border-sidebar-border/40 bg-sidebar-accent/40 p-3">
+            <div
+              key={f.title}
+              className="rounded-md border border-sidebar-border/40 bg-sidebar-accent/40 p-3"
+            >
               <div className="flex items-center gap-2">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-sidebar-accent text-sidebar-primary">
                   <f.icon className="h-3.5 w-3.5" />
                 </span>
                 <span className="text-[12px] font-semibold text-sidebar-foreground">{f.title}</span>
               </div>
-              <p className="mt-1.5 text-[11px] leading-relaxed text-sidebar-foreground/70">{f.desc}</p>
+              <p className="mt-1.5 text-[11px] leading-relaxed text-sidebar-foreground/70">
+                {f.desc}
+              </p>
             </div>
           ))}
         </div>
@@ -194,12 +201,20 @@ function AuthPage() {
             </div>
             <div>
               <div className="text-sm font-semibold text-foreground">NEXO</div>
-              <div className="text-[11px] text-muted-foreground">Gestão integrada da manutenção</div>
+              <div className="text-[11px] text-muted-foreground">
+                Gestão integrada da manutenção
+              </div>
             </div>
           </div>
 
           <div className="mb-5 flex flex-wrap gap-1.5 lg:hidden">
-            {["Programação semanal", "Apontamento", "Painel", "Hora extra", "Mudança de escala"].map((t) => (
+            {[
+              "Programação semanal",
+              "Apontamento",
+              "Painel",
+              "Hora extra",
+              "Mudança de escala",
+            ].map((t) => (
               <span
                 key={t}
                 className="rounded-full border border-border/70 bg-card px-2.5 py-1 text-[10px] font-medium text-muted-foreground"
@@ -213,7 +228,11 @@ function AuthPage() {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h2 className="text-base font-semibold text-foreground">
-                  {mode === "login" ? "Acessar plataforma" : mode === "signup" ? "Solicitar acesso" : "Recuperar senha"}
+                  {mode === "login"
+                    ? "Acessar plataforma"
+                    : mode === "signup"
+                      ? "Solicitar acesso"
+                      : "Recuperar senha"}
                 </h2>
                 <p className="mt-0.5 text-xs text-muted-foreground">
                   {mode === "login"
@@ -233,7 +252,9 @@ function AuthPage() {
                     type="button"
                     onClick={() => setMode(m)}
                     className={`rounded-[3px] px-3 py-1 text-[12px] font-medium transition ${
-                      mode === m ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                      mode === m
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {m === "login" ? "Entrar" : "Cadastrar"}
@@ -307,14 +328,25 @@ function AuthPage() {
                       </button>
                     )}
                   </div>
-                  <input
-                    type="password"
-                    required
-                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="input-base"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      required
+                      autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      className="input-base pr-10"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword((current) => !current)}
+                      className="absolute inset-y-0 right-0 grid w-10 place-items-center text-muted-foreground hover:text-foreground"
+                      aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                      title={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </button>
+                  </div>
                 </div>
               )}
 
