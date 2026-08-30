@@ -23,21 +23,31 @@ export type SessionInfo = {
 };
 
 async function loadSession(): Promise<SessionInfo | null> {
-  const { data } = await supabase.auth.getUser();
+  const { data, error: authError } = await supabase.auth.getUser();
+  if (authError) throw new Error("Não foi possível validar sua sessão. Verifique a conexão e tente novamente.");
   if (!data.user) return null;
-  const [profile, roles] = await Promise.all([
-    (supabase as any)
-      .from("profiles")
-      .select("email, full_name, approval_status, worksite_id")
-      .eq("id", data.user.id)
-      .maybeSingle(),
-    supabase.from("user_roles").select("role").eq("user_id", data.user.id),
-  ]);
+  let profile: any = null;
+  let roles: any = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    [profile, roles] = await Promise.all([
+      (supabase as any)
+        .from("profiles")
+        .select("email, full_name, approval_status, worksite_id")
+        .eq("id", data.user.id)
+        .maybeSingle(),
+      supabase.from("user_roles").select("role").eq("user_id", data.user.id),
+    ]);
+    if (!profile.error && profile.data && !roles.error) break;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+  }
+  if (profile?.error || roles?.error || !profile?.data) {
+    throw new Error("Não foi possível carregar seu perfil. Verifique a conexão e atualize a página.");
+  }
   const worksiteId = String(profile.data?.worksite_id ?? "");
   const { data: worksite } = worksiteId
     ? await (supabase as any).from("worksites").select("code,name").eq("id", worksiteId).maybeSingle()
     : { data: null };
-  const rolesRows = roles.data ?? [];
+  const rolesRows = roles?.data ?? [];
   const priority: SessionInfo["role"][] = [
     "admin",
     "manager",
@@ -57,7 +67,7 @@ async function loadSession(): Promise<SessionInfo | null> {
     fullName: profile.data?.full_name ?? "",
     role,
     roles: allRoles,
-    approvalStatus: (profile.data?.approval_status as SessionInfo["approvalStatus"]) ?? "pending",
+    approvalStatus: profile.data.approval_status as SessionInfo["approvalStatus"],
     worksiteId,
     worksiteCode: String(worksite?.code ?? ""),
     worksiteName: String(worksite?.name ?? ""),
