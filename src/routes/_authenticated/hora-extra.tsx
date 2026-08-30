@@ -198,7 +198,7 @@ function OvertimePage() {
     },
   });
 
-  const rows = requests.data ?? [];
+  const rows = useMemo(() => requests.data ?? [], [requests.data]);
   const myRows = useMemo(() => rows.filter((row) => row.requester_user_id === s.userId), [rows, s.userId]);
   const kpiBaseRows = useMemo(() => {
     if (filteredKpiRows && ["export", "list", "queue"].includes(tab)) return filteredKpiRows;
@@ -322,7 +322,9 @@ function OvertimePage() {
           onCancel={async (row) => {
             if (!confirm(`Cancelar solicitação #${row.request_number}?`)) return;
             try {
-              const res = await cancelOvertimeRequest({ data: { id: row.id, expectedVersion: row.version } });
+              const res = await cancelOvertimeRequest({
+                data: { id: row.id, expectedVersion: row.version },
+              });
               if (!res.ok) return toast.error(res.error);
               toast.success("Solicitação cancelada.");
               qc.invalidateQueries({ queryKey: ["overtime-requests"] });
@@ -608,7 +610,10 @@ function ApprovedDailyExport({
       worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       for (let rowNumber = 2; rowNumber <= logisticsValues.length + 1; rowNumber += 1) {
         for (let column = 1; column <= LOGISTICS_EXPORT_HEADERS.length; column += 1) {
-          worksheet.getRow(rowNumber).getCell(column).alignment = { vertical: "top", wrapText: true };
+          worksheet.getRow(rowNumber).getCell(column).alignment = {
+            vertical: "top",
+            wrapText: true,
+          };
         }
       }
       const buffer = await workbook.xlsx.writeBuffer();
@@ -1123,7 +1128,10 @@ function ApprovalQueue({
 }) {
   const [status, setStatus] = useState<"all" | OvertimeRow["status"]>("pending");
   const [q, setQ] = useState("");
-  const [decideRow, setDecideRow] = useState<{ row: OvertimeRow; decision: "approved" | "rejected" } | null>(null);
+  const [decideRow, setDecideRow] = useState<{
+    row: OvertimeRow;
+    decision: "approved" | "rejected";
+  } | null>(null);
   const groupedRows = useMemo(() => {
     const groups = new Map<string, OvertimeRow[]>();
     rows.forEach((row) => {
@@ -1597,7 +1605,10 @@ function OvertimeStatus({ status }: { status: OvertimeRow["status"] }) {
   const map: Record<OvertimeRow["status"], { label: string; cls: string }> = {
     pending: { label: "Pendente", cls: "border-warning/40 bg-warning/15 text-warning-foreground" },
     approved: { label: "Aprovada", cls: "border-success/40 bg-success/10 text-success" },
-    rejected: { label: "Reprovada", cls: "border-destructive/40 bg-destructive/10 text-destructive" },
+    rejected: {
+      label: "Reprovada",
+      cls: "border-destructive/40 bg-destructive/10 text-destructive",
+    },
     cancelled: { label: "Cancelada", cls: "border-border bg-muted text-muted-foreground" },
   };
   const s = map[status];
@@ -2620,7 +2631,10 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
               style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
               value={departureTimeOptions.includes(form.departure_time) ? form.departure_time : "__other__"}
               onChange={(e) =>
-                setForm({ ...form, departure_time: e.target.value === "__other__" ? "" : e.target.value })
+                setForm({
+                  ...form,
+                  departure_time: e.target.value === "__other__" ? "" : e.target.value,
+                })
               }
             >
               {departureTimeOptions.map((time) => (
@@ -2772,7 +2786,12 @@ function DecideModal({
     setSaving(true);
     try {
       const res = await call({
-        data: { id: row.id, expectedVersion: row.version, decision, comment: comment.trim() || null },
+        data: {
+          id: row.id,
+          expectedVersion: row.version,
+          decision,
+          comment: comment.trim() || null,
+        },
       });
       if (!res.ok) {
         if (res.conflict) toast.error("Esta solicitação já foi decidida por outro usuário.");
