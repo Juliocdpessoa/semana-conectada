@@ -14,7 +14,6 @@ import { toast } from "sonner";
 import {
   LogOut,
   ClipboardList,
-  History,
   Settings,
   Zap,
   BarChart3,
@@ -197,7 +196,6 @@ function AuthedLayout() {
       icon: Bus,
       show: canScheduledTransport,
     },
-    { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
 
