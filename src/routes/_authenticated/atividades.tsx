@@ -32,6 +32,7 @@ import type { SessionInfo } from "./route";
 import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { canUseRestrictedPlanningWorkflow } from "@/lib/planning-access";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -131,7 +132,11 @@ const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
 const RELEASE_TYPES = ["PT", "PTT", "ATRE", "OFICINAS"] as const;
 const PT_COLORS = ["red", "yellow", "white"] as const;
 type PtColor = (typeof PT_COLORS)[number];
-const PT_COLOR_LABELS: Record<PtColor, string> = { red: "Vermelha", yellow: "Amarela", white: "Branca" };
+const PT_COLOR_LABELS: Record<PtColor, string> = {
+  red: "Vermelha",
+  yellow: "Amarela",
+  white: "Branca",
+};
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
 
 /** HH planejado da atividade: valor da coluna Trab importada da programação. */
@@ -512,9 +517,7 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
-  const isPlanning =
-    session.roles.includes("planning") ||
-    (session.roles.includes("admin") && session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
+  const isPlanning = canUseRestrictedPlanningWorkflow(session.roles, session.email);
   const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
@@ -939,7 +942,8 @@ function AtividadesPage() {
   function toggleSelect(id: string) {
     setSelected((prev) => {
       const n = new Set(prev);
-      n.has(id) ? n.delete(id) : n.add(id);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
       return n;
     });
   }
@@ -1290,8 +1294,17 @@ function AtividadesPage() {
         row.font = { name: "Arial", size: 10, bold: true };
         row.alignment = { vertical: "middle" };
         for (let column = 1; column <= 21; column += 1) {
-          row.getCell(column).fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
-          row.getCell(column).font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+          row.getCell(column).fill = {
+            type: "pattern",
+            pattern: "solid",
+            fgColor: { argb: `FF${headerFill}` },
+          };
+          row.getCell(column).font = {
+            name: "Arial",
+            size: 10,
+            bold: true,
+            color: { argb: "FFFFFFFF" },
+          };
         }
       }
 
@@ -1354,7 +1367,12 @@ function AtividadesPage() {
       rows.forEach((values) => worksheet.addRow(values));
 
       worksheet.getRow(9).height = 18;
-      worksheet.getRow(9).font = { name: "Arial", size: 9, bold: true, color: { argb: "FFFFFFFF" } };
+      worksheet.getRow(9).font = {
+        name: "Arial",
+        size: 9,
+        bold: true,
+        color: { argb: "FFFFFFFF" },
+      };
       worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       for (let column = 1; column <= 21; column += 1) {
         const cell = worksheet.getRow(9).getCell(column);
@@ -1370,12 +1388,20 @@ function AtividadesPage() {
           const cell = row.getCell(column);
           cell.border = thinBorder;
           if (rowNumber % 2 === 0) {
-            cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${tableStripeFill}` } };
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: `FF${tableStripeFill}` },
+            };
           }
         }
         row.getCell(10).numFmt = "dd/mm/yyyy";
         for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20]) {
-          row.getCell(column).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
+          row.getCell(column).alignment = {
+            horizontal: "center",
+            vertical: "middle",
+            wrapText: true,
+          };
         }
       }
 
@@ -2212,7 +2238,12 @@ function formatDate(d: string | null) {
 }
 function formatDateTime(d: string | null) {
   if (!d) return "";
-  return new Date(d).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+  return new Date(d).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 function fmtPlan(pd: Record<string, unknown> | null, key: string): string | null {
   const v = pd?.[key];
@@ -2645,7 +2676,8 @@ function ImmediatePicker({
   function toggle(id: string) {
     setDraft((current) => {
       const next = new Set(current);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }
