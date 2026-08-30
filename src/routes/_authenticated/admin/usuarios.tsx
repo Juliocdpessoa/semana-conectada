@@ -3,11 +3,12 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { setUserApproval } from "@/lib/activities.functions";
+import { createWorksite } from "@/lib/worksites.functions";
 import { toast } from "sonner";
 import type { SessionInfo } from "../route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
-import { Users } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Building2, Users } from "lucide-react";
+import { useEffect, useState, type FormEvent } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {
@@ -97,13 +98,23 @@ function RoleEditor({ user, onSave }: { user: Row; onSave: (roles: AppRole[]) =>
 }
 
 function AdminUsers() {
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
   const qc = useQueryClient();
   const call = useServerFn(setUserApproval);
+  const createWorksiteCall = useServerFn(createWorksite);
+  const isGlobalAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
+  const [worksiteCode, setWorksiteCode] = useState("");
+  const [worksiteName, setWorksiteName] = useState("");
+  const [creatingWorksite, setCreatingWorksite] = useState(false);
   const users = useQuery({
-    queryKey: ["admin-users"],
+    queryKey: ["admin-users", session.worksiteId],
     queryFn: async () => {
       const [pRes, rRes] = await Promise.all([
-        supabase.from("profiles").select("*").order("created_at", { ascending: false }),
+        (supabase as any)
+          .from("profiles")
+          .select("*")
+          .eq("worksite_id", session.worksiteId)
+          .order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
       ]);
       const rolesByUser = new Map<string, string[]>();
@@ -133,6 +144,20 @@ function AdminUsers() {
     return true;
   }
 
+  async function addWorksite(event: FormEvent) {
+    event.preventDefault();
+    setCreatingWorksite(true);
+    const result = await createWorksiteCall({
+      data: { code: worksiteCode, name: worksiteName },
+    });
+    setCreatingWorksite(false);
+    if (!result.ok) return toast.error(result.error);
+    setWorksiteCode("");
+    setWorksiteName("");
+    toast.success(`Obra ${result.worksite.code} cadastrada.`);
+    window.location.reload();
+  }
+
   const total = users.data?.length ?? 0;
   const pending = (users.data ?? []).filter((u) => u.approval_status === "pending").length;
 
@@ -150,7 +175,53 @@ function AdminUsers() {
         }
       />
 
-      <Panel title="Lista de usuários" padded={false}>
+      {isGlobalAdmin && (
+        <Panel
+          className="mb-4"
+          title={
+            <span className="inline-flex items-center gap-2">
+              <Building2 className="h-4 w-4" /> Cadastrar obra
+            </span>
+          }
+        >
+          <form onSubmit={addWorksite} className="grid gap-3 md:grid-cols-[180px_minmax(280px,1fr)_auto] md:items-end">
+            <label className="space-y-1 text-[11px] font-medium">
+              <span>Código</span>
+              <input
+                value={worksiteCode}
+                onChange={(event) => setWorksiteCode(event.target.value.toUpperCase())}
+                maxLength={20}
+                required
+                placeholder="Ex.: RPBC"
+                className="input-field h-9 w-full"
+              />
+            </label>
+            <label className="space-y-1 text-[11px] font-medium">
+              <span>Nome da obra</span>
+              <input
+                value={worksiteName}
+                onChange={(event) => setWorksiteName(event.target.value)}
+                maxLength={160}
+                required
+                placeholder="Nome completo da obra"
+                className="input-field h-9 w-full"
+              />
+            </label>
+            <button
+              type="submit"
+              disabled={creatingWorksite}
+              className="btn-primary h-9 px-4 text-[12px] disabled:opacity-60"
+            >
+              {creatingWorksite ? "Cadastrando…" : "Cadastrar obra"}
+            </button>
+          </form>
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Novos usuários poderão selecionar a obra no cadastro. Cada obra mantém dados e colaboradores separados.
+          </p>
+        </Panel>
+      )}
+
+      <Panel title={`Usuários · ${session.worksiteCode}`} padded={false}>
         {users.data && users.data.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
