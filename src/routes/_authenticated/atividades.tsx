@@ -32,7 +32,6 @@ import type { SessionInfo } from "./route";
 import { PageHeader, KpiCard, Toolbar, EmptyState, Skeleton, StatusPill, Modal, Field } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
-import { canUseRestrictedPlanningWorkflow } from "@/lib/planning-access";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -517,7 +516,9 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canEditPlanningFields = session.roles.some((role) => role === "planning" || role === "admin");
-  const isPlanning = canUseRestrictedPlanningWorkflow(session.roles, session.email);
+  const isPlanning =
+    session.roles.includes("planning") ||
+    (session.roles.includes("admin") && session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessPreparation = canEditPlanningFields;
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
