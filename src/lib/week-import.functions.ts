@@ -40,9 +40,17 @@ const importSchema = z.object({
   rows: z.array(rowSchema).min(1).max(5000),
 });
 
-async function requirePlanning(supabase: any, userId: string) {
-  const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-  return roles?.some((r: any) => r.role === "planning" || r.role === "admin") ?? false;
+async function loadPlanningContext(supabase: any, userId: string) {
+  const [{ data: roles }, { data: profile }] = await Promise.all([
+    supabase.from("user_roles").select("role").eq("user_id", userId),
+    supabase.from("profiles").select("worksite_id, email, approval_status").eq("id", userId).maybeSingle(),
+  ]);
+  return {
+    allowed:
+      profile?.approval_status === "approved" &&
+      (roles?.some((r: any) => r.role === "planning" || r.role === "admin") ?? false),
+    worksiteId: profile?.worksite_id as string | undefined,
+  };
 }
 
 export const importWeek = createServerFn({ method: "POST" })
@@ -50,7 +58,8 @@ export const importWeek = createServerFn({ method: "POST" })
   .validator((data: unknown) => importSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (!(await requirePlanning(supabase, userId))) {
+    const access = await loadPlanningContext(supabase, userId);
+    if (!access.allowed || !access.worksiteId) {
       return {
         ok: false as const,
         error: "Somente planejamento/administrador pode importar semanas.",
@@ -60,14 +69,20 @@ export const importWeek = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
 
     // Duplicate check
-    const { data: existing } = await db.from("weeks").select("id, code").eq("code", data.code).maybeSingle();
+    const { data: existing } = await db
+      .from("weeks")
+      .select("id, code")
+      .eq("code", data.code)
+      .eq("worksite_id", access.worksiteId)
+      .maybeSingle();
     if (existing) {
       return { ok: false as const, error: `Já existe uma semana com o código ${data.code}.` };
     }
 
     const { count: weeksCount, error: countError } = await db
       .from("weeks")
-      .select("id", { count: "exact", head: true });
+      .select("id", { count: "exact", head: true })
+      .eq("worksite_id", access.worksiteId);
     if (countError) return { ok: false as const, error: countError.message };
     if ((weeksCount ?? 0) >= 4) {
       return {
@@ -80,6 +95,7 @@ export const importWeek = createServerFn({ method: "POST" })
     const { data: week, error: wErr } = await db
       .from("weeks")
       .insert({
+        worksite_id: access.worksiteId,
         code: data.code,
         label: data.label,
         start_date: data.start_date,
@@ -96,6 +112,7 @@ export const importWeek = createServerFn({ method: "POST" })
     if (wErr) return { ok: false as const, error: wErr.message };
 
     const payload = data.rows.map((r, index) => ({
+      worksite_id: access.worksiteId,
       week_id: week.id,
       source_key: `${r.source_key}|IMPORT-${r.source_row_number ?? index + 2}`,
       order_number: r.order_number ?? null,
@@ -132,7 +149,8 @@ export const activateWeek = createServerFn({ method: "POST" })
   .validator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (!(await requirePlanning(supabase, userId))) {
+    const access = await loadPlanningContext(supabase, userId);
+    if (!access.allowed || !access.worksiteId) {
       return { ok: false as const, error: "Sem permissão." };
     }
     const { error } = await (supabase as any).rpc("activate_operational_week", {
@@ -147,7 +165,8 @@ export const deleteWeek = createServerFn({ method: "POST" })
   .validator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    if (!(await requirePlanning(supabase, userId))) {
+    const access = await loadPlanningContext(supabase, userId);
+    if (!access.allowed || !access.worksiteId) {
       return { ok: false as const, error: "Sem permissão." };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -156,6 +175,7 @@ export const deleteWeek = createServerFn({ method: "POST" })
       .from("weeks")
       .select("id, is_active, lifecycle_status")
       .eq("id", data.weekId)
+      .eq("worksite_id", access.worksiteId)
       .maybeSingle();
     if (weekError) return { ok: false as const, error: weekError.message };
     if (!week) return { ok: false as const, error: "Semana não encontrada." };
