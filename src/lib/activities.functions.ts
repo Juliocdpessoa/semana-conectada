@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { JULIO_ADMIN_EMAIL, canUseRestrictedPlanningWorkflow, isJulioPlanningAdmin } from "@/lib/planning-access";
 import { z } from "zod";
 
 const updateSchema = z.object({
@@ -29,26 +30,20 @@ const CANCELLATION_JUSTIFICATIONS = new Set([
   "22 - ATIVIDADE EXECUTADA ANTERIORMENTE",
   "29 - OUTROS TIPOS DE PENDENCIAS",
 ]);
-const PLANNING_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
-
 async function canUsePlanningWorkflow(
   supabase: any,
   userId: string,
   roles: Array<{ role: string }> | null | undefined,
 ) {
-  if (roles?.some((row) => row.role === "planning")) return true;
-  if (!roles?.some((row) => row.role === "admin")) return false;
+  const roleNames = (roles ?? []).map((row) => row.role);
+  if (!roleNames.includes("admin") && !roleNames.includes("planning")) return false;
   const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
-  return (
-    String(profile?.email ?? "")
-      .trim()
-      .toLowerCase() === PLANNING_ADMIN_EMAIL
-  );
+  return canUseRestrictedPlanningWorkflow(roleNames, profile?.email);
 }
 
 export const updateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => updateSchema.parse(data))
+  .validator((data: unknown) => updateSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
@@ -68,7 +63,10 @@ export const updateActivity = createServerFn({ method: "POST" })
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
-        return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
+        return {
+          ok: false as const,
+          error: "Somente o perfil Planejamento pode atribuir este status.",
+        };
       }
     }
     if (data.status === "CANCELADA") {
@@ -78,14 +76,20 @@ export const updateActivity = createServerFn({ method: "POST" })
       const preservesExistingCancellation =
         currentActivity.status === "CANCELADA" && currentActivity.justification === normalizedJustification;
       if (!isPlanning && !preservesExistingCancellation) {
-        return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
+        return {
+          ok: false as const,
+          error: "Somente o perfil Planejamento pode cancelar atividades.",
+        };
       }
       if (!normalizedJustification || !CANCELLATION_JUSTIFICATIONS.has(normalizedJustification)) {
         return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
       }
     }
     if (requiresImmediateLink && currentActivity.is_immediate) {
-      return { ok: false as const, error: "Uma atividade imediata não pode ser vinculada a ela mesma." };
+      return {
+        ok: false as const,
+        error: "Uma atividade imediata não pode ser vinculada a ela mesma.",
+      };
     }
 
     const linkedIds = Array.from(new Set(data.immediateActivityIds));
@@ -101,35 +105,41 @@ export const updateActivity = createServerFn({ method: "POST" })
         .in("id", linkedIds);
       if (immediateError) return { ok: false as const, error: immediateError.message };
       if ((validImmediates?.length ?? 0) !== linkedIds.length) {
-        return { ok: false as const, error: "Uma ou mais imediatas selecionadas não pertencem à semana atual." };
+        return {
+          ok: false as const,
+          error: "Uma ou mais imediatas selecionadas não pertencem à semana atual.",
+        };
       }
     }
 
-    const nextPlanningData = { ...((currentActivity.planning_data ?? {}) as Record<string, unknown>) };
-    if (requiresImmediateLink) nextPlanningData.__linked_immediate_ids = linkedIds;
-    else delete nextPlanningData.__linked_immediate_ids;
+    // Use the same database transaction as bulk updates. This locks the
+    // selected row, validates its version and updates linked immediates
+    // atomically, so a partial save cannot be left behind.
+    const { error } = await (supabase as any).rpc("bulk_update_activity_reports_v2", {
+      p_rows: [{ id: data.activityId, expected_version: data.expectedVersion }],
+      p_status: data.status,
+      p_justification: normalizedJustification,
+      p_observation: data.observation,
+      p_linked_ids: requiresImmediateLink ? linkedIds : [],
+    });
+    if (error) {
+      if (/alterad[ao]s? por outro usu[aá]rio|recarregue/i.test(error.message)) {
+        const { data: current } = await supabase
+          .from("activities")
+          .select("id, version, status, justification, observation, reported_by_name")
+          .eq("id", data.activityId)
+          .maybeSingle();
+        return { ok: false as const, conflict: true, current };
+      }
+      return { ok: false as const, error: error.message };
+    }
 
-    // Fetch profile for stamping name/email server-side
-    const { data: prof } = await supabase.from("profiles").select("full_name, email").eq("id", userId).maybeSingle();
-    const reportedAt = new Date().toISOString();
-    // Optimistic concurrency: only update if version matches
-    const { data: updated, error } = await supabase
+    const { data: updated, error: updatedError } = await supabase
       .from("activities")
-      .update({
-        status: data.status,
-        justification: normalizedJustification,
-        observation: data.observation,
-        planning_data: nextPlanningData as never,
-        reported_by_user_id: userId,
-        reported_by_name: prof?.full_name ?? "",
-        reported_by_email: prof?.email ?? "",
-        reported_at: reportedAt,
-      })
-      .eq("id", data.activityId)
-      .eq("version", data.expectedVersion)
       .select("id, version, status, justification, observation, reported_by_name, reported_at")
+      .eq("id", data.activityId)
       .maybeSingle();
-    if (error) return { ok: false as const, error: error.message };
+    if (updatedError) return { ok: false as const, error: updatedError.message };
     if (!updated) {
       // Conflict: fetch current
       const { data: current } = await supabase
@@ -138,22 +148,6 @@ export const updateActivity = createServerFn({ method: "POST" })
         .eq("id", data.activityId)
         .maybeSingle();
       return { ok: false as const, conflict: true, current };
-    }
-    if (requiresImmediateLink) {
-      const { error: immediateUpdateError } = await supabase
-        .from("activities")
-        .update({
-          status: "EXECUTADO",
-          justification: null,
-          reported_by_user_id: userId,
-          reported_by_name: prof?.full_name ?? "",
-          reported_by_email: prof?.email ?? "",
-          reported_at: reportedAt,
-        })
-        .eq("week_id", currentActivity.week_id)
-        .eq("is_immediate", true)
-        .in("id", linkedIds);
-      if (immediateUpdateError) return { ok: false as const, error: immediateUpdateError.message };
     }
     return { ok: true as const, updated };
   });
@@ -179,7 +173,7 @@ const bulkSchema = z.object({
 
 export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => bulkSchema.parse(data))
+  .validator((data: unknown) => bulkSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
@@ -187,14 +181,20 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
-        return { ok: false as const, error: "Somente o perfil Planejamento pode atribuir este status." };
+        return {
+          ok: false as const,
+          error: "Somente o perfil Planejamento pode atribuir este status.",
+        };
       }
     }
     if (data.status === "CANCELADA") {
       const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
-        return { ok: false as const, error: "Somente o perfil Planejamento pode cancelar atividades." };
+        return {
+          ok: false as const,
+          error: "Somente o perfil Planejamento pode cancelar atividades.",
+        };
       }
       if (!normalizedJustification || !CANCELLATION_JUSTIFICATIONS.has(normalizedJustification)) {
         return { ok: false as const, error: "Selecione uma justificativa de cancelamento válida." };
@@ -244,7 +244,6 @@ const activityPlanningFieldsSchema = z.object({
 
 const DATE_EDIT_TIMEZONE = "America/Sao_Paulo";
 const DEFAULT_DATE_EDIT_CUTOFF = "15:00";
-const DATE_EDIT_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
 
 function currentMinutesInSaoPaulo() {
   const parts = new Intl.DateTimeFormat("en-GB", {
@@ -275,7 +274,7 @@ async function getDateEditAccess(supabase: any, userId: string) {
   return {
     cutoffTime,
     locked: isPastDateEditCutoff(cutoffTime),
-    canConfigure: email === DATE_EDIT_ADMIN_EMAIL,
+    canConfigure: isJulioPlanningAdmin(email),
   };
 }
 
@@ -292,13 +291,13 @@ const dateEditCutoffSchema = z.object({
 
 export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => dateEditCutoffSchema.parse(data))
+  .validator((data: unknown) => dateEditCutoffSchema.parse(data))
   .handler(async ({ data, context }) => {
     const access = await getDateEditAccess(context.supabase, context.userId);
     if (!access.canConfigure) {
       return {
         ok: false as const,
-        error: "Somente o administrador julio.pessoa@normatel.com.br pode alterar o horário de corte.",
+        error: `Somente o administrador ${JULIO_ADMIN_EMAIL} pode alterar o horário de corte.`,
       };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
@@ -314,13 +313,16 @@ export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
 
 export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => activityPlanningFieldsSchema.parse(data))
+  .validator((data: unknown) => activityPlanningFieldsSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     if (rolesError) return { ok: false as const, error: rolesError.message };
     if (!roles?.some((row) => row.role === "planning" || row.role === "admin")) {
-      return { ok: false as const, error: "Apenas Planejamento ou Administrador pode editar estes campos." };
+      return {
+        ok: false as const,
+        error: "Apenas Planejamento ou Administrador pode editar estes campos.",
+      };
     }
 
     const access = await getDateEditAccess(supabase, userId);
@@ -370,13 +372,16 @@ const immediateSchema = z.object({
 
 export const createImmediateActivity = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => immediateSchema.parse(data))
+  .validator((data: unknown) => immediateSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
     if (!canCreate)
-      return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
+      return {
+        ok: false as const,
+        error: "Somente planejamento/administrador pode cadastrar IMEDIATAS.",
+      };
     const sourceKey = `IMD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const { data: created, error } = await supabase
       .from("activities")
@@ -410,13 +415,16 @@ const bulkImmediateSchema = z.object({
 
 export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => bulkImmediateSchema.parse(data))
+  .validator((data: unknown) => bulkImmediateSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const canCreate = roles?.some((r) => r.role === "planning" || r.role === "admin");
     if (!canCreate)
-      return { ok: false as const, error: "Somente planejamento/administrador pode cadastrar IMEDIATAS." };
+      return {
+        ok: false as const,
+        error: "Somente planejamento/administrador pode cadastrar IMEDIATAS.",
+      };
     const now = Date.now();
     const payload = data.items.map((it, idx) => ({
       week_id: data.weekId,
@@ -446,7 +454,7 @@ const approveSchema = z.object({
 
 export const setUserApproval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => approveSchema.parse(data))
+  .validator((data: unknown) => approveSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const { data: myRoles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
