@@ -14,15 +14,26 @@ export type SessionInfo = {
   role: AppRole | null;
   roles: AppRole[];
   approvalStatus: "pending" | "approved" | "blocked";
+  worksiteId: string;
+  worksiteCode: string;
+  worksiteName: string;
 };
 
 async function loadSession(): Promise<SessionInfo | null> {
   const { data } = await supabase.auth.getUser();
   if (!data.user) return null;
   const [profile, roles] = await Promise.all([
-    supabase.from("profiles").select("email, full_name, approval_status").eq("id", data.user.id).maybeSingle(),
+    (supabase as any)
+      .from("profiles")
+      .select("email, full_name, approval_status, worksite_id")
+      .eq("id", data.user.id)
+      .maybeSingle(),
     supabase.from("user_roles").select("role").eq("user_id", data.user.id),
   ]);
+  const worksiteId = String(profile.data?.worksite_id ?? "");
+  const { data: worksite } = worksiteId
+    ? await (supabase as any).from("worksites").select("code,name").eq("id", worksiteId).maybeSingle()
+    : { data: null };
   const rolesRows = roles.data ?? [];
   const priority: SessionInfo["role"][] = [
     "admin",
@@ -44,6 +55,9 @@ async function loadSession(): Promise<SessionInfo | null> {
     role,
     roles: allRoles,
     approvalStatus: (profile.data?.approval_status as SessionInfo["approvalStatus"]) ?? "pending",
+    worksiteId,
+    worksiteCode: String(worksite?.code ?? ""),
+    worksiteName: String(worksite?.name ?? ""),
   };
 }
 
@@ -101,7 +115,12 @@ function AuthedLayout() {
     { to: "/painel", label: "Painel", icon: BarChart3, show: !overtimeOnly },
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
-    { to: "/transporte-programado", label: "Mudança de Escala", icon: Bus, show: canScheduledTransport },
+    {
+      to: "/transporte-programado",
+      label: "Mudança de Escala",
+      icon: Bus,
+      show: canScheduledTransport,
+    },
     { to: "/historico", label: "Histórico", icon: History, show: isPlanning },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
   ].filter((n) => n.show);
@@ -144,6 +163,11 @@ function AuthedLayout() {
               <div className="text-[10px] leading-tight text-primary-foreground/70">
                 {(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []).map(roleLabel).join(" + ")}
               </div>
+              {s.worksiteCode && (
+                <div className="text-[9px] leading-tight text-primary-foreground/65">
+                  {s.worksiteCode} · {s.worksiteName}
+                </div>
+              )}
             </div>
             <button
               onClick={signOut}
@@ -173,6 +197,11 @@ function AuthedLayout() {
               <div className="text-primary-foreground/70">
                 {s.email} · {roleLabel(s.role)}
               </div>
+              {s.worksiteCode && (
+                <div className="mt-0.5 text-primary-foreground/70">
+                  {s.worksiteCode} · {s.worksiteName}
+                </div>
+              )}
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
@@ -216,7 +245,9 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
     <Link
       to={to}
       className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-primary-foreground/85 hover:bg-white/10"
-      activeProps={{ className: "bg-white/15 text-primary-foreground border-l-2 border-primary-foreground" }}
+      activeProps={{
+        className: "bg-white/15 text-primary-foreground border-l-2 border-primary-foreground",
+      }}
     >
       {icon}
       {label}
