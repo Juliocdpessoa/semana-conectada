@@ -386,7 +386,7 @@ async function loadRoleAndProfile(supabase: any, userId: string) {
 
 export const listApprovedTransportRows = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({}).parse(data))
+  .validator((data: unknown) => z.object({}).parse(data))
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
@@ -425,7 +425,7 @@ export const OVERTIME_EXPORT_COLUMNS =
 
 export const listOvertimeForExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => exportListSchema.parse(data))
+  .validator((data: unknown) => exportListSchema.parse(data))
   .handler(async ({ context, data: input }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
@@ -524,7 +524,7 @@ const createSchema = z
 
 export const createOvertimeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => createSchema.parse(data))
+  .validator((data: unknown) => createSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
@@ -578,7 +578,11 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
         .eq("departure_time", data.departure_time)
         .eq("source_type", "scale_change")
         .neq("status", "cancelled");
-      if (duplicateError) return { ok: false as const, error: "Não foi possível verificar solicitações automáticas." };
+      if (duplicateError)
+        return {
+          ok: false as const,
+          error: "Não foi possível verificar solicitações automáticas.",
+        };
       if (automaticDuplicates?.length) {
         return {
           ok: false as const,
@@ -646,12 +650,15 @@ const employeeSchema = z
 
 export const upsertEmployees = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ employees: z.array(employeeSchema).min(1).max(2000) }).parse(data))
+  .validator((data: unknown) => z.object({ employees: z.array(employeeSchema).min(1).max(2000) }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
-      return { ok: false as const, error: "Somente gerente, logística ou administrador pode atualizar colaboradores." };
+      return {
+        ok: false as const,
+        error: "Somente gerente, logística ou administrador pode atualizar colaboradores.",
+      };
     }
     const badges = data.employees.map((employee) => employee.badge.toLocaleLowerCase("pt-BR")).filter(Boolean);
     const externalIds = data.employees
@@ -687,7 +694,7 @@ export const upsertEmployees = createServerFn({ method: "POST" })
 
 export const updateEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) =>
+  .validator((data: unknown) =>
     z
       .object({
         id: z.string().uuid(),
@@ -712,7 +719,10 @@ export const updateEmployee = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
-      return { ok: false as const, error: "Somente gerente, logística ou administrador pode editar colaboradores." };
+      return {
+        ok: false as const,
+        error: "Somente gerente, logística ou administrador pode editar colaboradores.",
+      };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -743,18 +753,25 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
 export const setEmployeeActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data))
+  .validator((data: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
-      return { ok: false as const, error: "Somente gerente, logística ou administrador pode alterar colaboradores." };
+      return {
+        ok: false as const,
+        error: "Somente gerente, logística ou administrador pode alterar colaboradores.",
+      };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const { data: updated, error } = await db
       .from("employees")
-      .update({ is_active: data.active, updated_by_user_id: userId, updated_by_name: info.fullName })
+      .update({
+        is_active: data.active,
+        updated_by_user_id: userId,
+        updated_by_name: info.fullName,
+      })
       .eq("id", data.id)
       .select("id")
       .maybeSingle();
@@ -765,12 +782,15 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
 
 export const deleteEmployee = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
+  .validator((data: unknown) => z.object({ id: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
-      return { ok: false as const, error: "Somente gerente, logística ou administrador pode excluir colaboradores." };
+      return {
+        ok: false as const,
+        error: "Somente gerente, logística ou administrador pode excluir colaboradores.",
+      };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -798,51 +818,38 @@ const decideSchema = z.object({
 
 export const decideOvertimeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => decideSchema.parse(data))
+  .validator((data: unknown) => decideSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
     if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
-      return { ok: false as const, error: "Somente gerente ou administrador aprovado pode decidir." };
+      return {
+        ok: false as const,
+        error: "Somente gerente ou administrador aprovado pode decidir.",
+      };
     }
     if (data.decision === "rejected" && !data.comment?.trim()) {
       return { ok: false as const, error: "Comentário é obrigatório para reprovação." };
     }
 
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const db = supabaseAdmin as any;
-    const { data: target, error: targetError } = await db
-      .from("overtime_requests")
-      .select("id, batch_id, status, version")
-      .eq("id", data.id)
-      .eq("version", data.expectedVersion)
-      .maybeSingle();
-    if (targetError) return { ok: false as const, error: targetError.message };
-    if (!target || target.status !== "pending") {
-      const { data: current } = await db
-        .from("overtime_requests")
-        .select("id, status, version, decided_by_name, decided_at")
-        .eq("id", data.id)
-        .maybeSingle();
-      return { ok: false as const, conflict: true, current };
+    const { data: updated, error } = await (supabase as any).rpc("decide_overtime_batch", {
+      p_id: data.id,
+      p_expected_version: data.expectedVersion,
+      p_decision: data.decision,
+      p_comment: data.comment?.trim() || null,
+    });
+    if (error) {
+      if (/CONFLICT:/i.test(error.message)) {
+        const { data: current } = await supabase
+          .from("overtime_requests")
+          .select("id, status, version, decided_by_name, decided_at")
+          .eq("id", data.id)
+          .maybeSingle();
+        return { ok: false as const, conflict: true, current };
+      }
+      return { ok: false as const, error: error.message };
     }
-
-    let updateQuery = db
-      .from("overtime_requests")
-      .update({
-        status: data.decision,
-        manager_comment: data.comment?.trim() || null,
-        decided_by_user_id: userId,
-        decided_by_name: info.fullName,
-        decided_by_email: info.email,
-        decided_at: new Date().toISOString(),
-        version: data.expectedVersion + 1,
-      })
-      .eq("status", "pending");
-    updateQuery = target.batch_id ? updateQuery.eq("batch_id", target.batch_id) : updateQuery.eq("id", target.id);
-    const { data: updated, error } = await updateQuery.select("id, status, version");
-    if (error) return { ok: false as const, error: error.message };
-    if (!updated?.length) return { ok: false as const, conflict: true, current: target };
+    if (!updated?.length) return { ok: false as const, conflict: true, current: null };
     return { ok: true as const, updated, count: updated.length };
   });
 
@@ -850,7 +857,7 @@ const cancelSchema = z.object({ id: z.string().uuid(), expectedVersion: z.number
 
 export const cancelOvertimeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => cancelSchema.parse(data))
+  .validator((data: unknown) => cancelSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
