@@ -832,24 +832,51 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Comentário é obrigatório para reprovação." };
     }
 
-    const { data: updated, error } = await (supabase as any).rpc("decide_overtime_batch", {
-      p_id: data.id,
-      p_expected_version: data.expectedVersion,
-      p_decision: data.decision,
-      p_comment: data.comment?.trim() || null,
-    });
-    if (error) {
-      if (/CONFLICT:/i.test(error.message)) {
-        const { data: current } = await supabase
-          .from("overtime_requests")
-          .select("id, status, version, decided_by_name, decided_at")
-          .eq("id", data.id)
-          .maybeSingle();
-        return { ok: false as const, conflict: true, current };
-      }
-      return { ok: false as const, error: error.message };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: target, error: targetError } = await db
+      .from("overtime_requests")
+      .select("id, batch_id, status, version")
+      .eq("id", data.id)
+      .maybeSingle();
+    if (targetError) return { ok: false as const, error: targetError.message };
+    if (!target || target.status !== "pending" || target.version !== data.expectedVersion) {
+      return { ok: false as const, conflict: true, current: target };
     }
-    if (!updated?.length) return { ok: false as const, conflict: true, current: null };
+
+    let batchQuery = db.from("overtime_requests").select("id, status, version");
+    batchQuery = target.batch_id ? batchQuery.eq("batch_id", target.batch_id) : batchQuery.eq("id", target.id);
+    const { data: batchRows, error: batchError } = await batchQuery;
+    if (batchError) return { ok: false as const, error: batchError.message };
+    if (
+      !batchRows?.length ||
+      batchRows.some(
+        (row: { status: string; version: number }) => row.status !== "pending" || row.version !== data.expectedVersion,
+      )
+    ) {
+      return { ok: false as const, conflict: true, current: target };
+    }
+
+    const batchIds = batchRows.map((row: { id: string }) => row.id);
+    const { data: updated, error } = await db
+      .from("overtime_requests")
+      .update({
+        status: data.decision,
+        manager_comment: data.comment?.trim() || null,
+        decided_by_user_id: userId,
+        decided_by_name: info.fullName,
+        decided_by_email: info.email,
+        decided_at: new Date().toISOString(),
+        version: data.expectedVersion + 1,
+      })
+      .in("id", batchIds)
+      .eq("status", "pending")
+      .eq("version", data.expectedVersion)
+      .select("id, status, version");
+    if (error) return { ok: false as const, error: error.message };
+    if ((updated?.length ?? 0) !== batchIds.length) {
+      return { ok: false as const, conflict: true, current: target };
+    }
     return { ok: true as const, updated, count: updated.length };
   });
 
