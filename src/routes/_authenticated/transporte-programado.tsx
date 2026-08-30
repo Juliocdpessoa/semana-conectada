@@ -46,7 +46,10 @@ export const Route = createFileRoute("/_authenticated/transporte-programado")({
   head: () => ({
     meta: [
       { title: "Mudança de Escala | NEXO" },
-      { name: "description", content: "Solicitação de mudança de escala de trabalho para equipes de manutenção." },
+      {
+        name: "description",
+        content: "Solicitação de mudança de escala de trabalho para equipes de manutenção.",
+      },
       { property: "og:title", content: "Mudança de Escala | NEXO" },
       {
         property: "og:description",
@@ -155,7 +158,7 @@ function ScheduledTransportPage() {
   const employees = employeesQuery.data ?? [];
 
   const jobTitles = (query.data?.options?.jobTitles ?? []) as string[];
-  const availableDates = (query.data?.options?.dates ?? []) as string[];
+  const availableDates = useMemo(() => (query.data?.options?.dates ?? []) as string[], [query.data?.options?.dates]);
   const availableEndDates = useMemo(
     () => availableDates.filter((date) => !filters.startDate || date >= filters.startDate),
     [availableDates, filters.startDate],
@@ -246,7 +249,10 @@ function ScheduledTransportPage() {
       worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       for (let rowNumber = 2; rowNumber <= exportRows.length + 1; rowNumber += 1) {
         for (let column = 1; column <= headers.length; column += 1) {
-          worksheet.getRow(rowNumber).getCell(column).alignment = { vertical: "top", wrapText: true };
+          worksheet.getRow(rowNumber).getCell(column).alignment = {
+            vertical: "top",
+            wrapText: true,
+          };
         }
       }
       const buffer = await workbook.xlsx.writeBuffer();
@@ -447,7 +453,10 @@ function ScheduledTransportPage() {
                   <select
                     value={filters.transport}
                     onChange={(event) =>
-                      setFilters((f) => ({ ...f, transport: event.target.value as Filters["transport"] }))
+                      setFilters((f) => ({
+                        ...f,
+                        transport: event.target.value as Filters["transport"],
+                      }))
                     }
                     className="input-base block w-full min-w-0 max-w-full text-[16px] sm:text-[12px]"
                   >
@@ -757,7 +766,7 @@ function DaysOffControl({
       return result.rows as EmployeeDayOffRow[];
     },
   });
-  const rows = rowsQuery.data ?? [];
+  const rows = useMemo(() => rowsQuery.data ?? [], [rowsQuery.data]);
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return rows.filter((row) => {
@@ -860,7 +869,10 @@ function DaysOffControl({
       worksheet.getRow(1).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
       for (let rowNumber = 2; rowNumber <= values.length + 1; rowNumber += 1) {
         for (let column = 1; column <= headers.length; column += 1) {
-          worksheet.getRow(rowNumber).getCell(column).alignment = { vertical: "top", wrapText: true };
+          worksheet.getRow(rowNumber).getCell(column).alignment = {
+            vertical: "top",
+            wrapText: true,
+          };
         }
       }
       worksheet.pageSetup.printArea = `A1:G${values.length + 1}`;
