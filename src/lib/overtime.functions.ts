@@ -369,7 +369,7 @@ export function formatDateTime(iso: string) {
 async function loadRoleAndProfile(supabase: any, userId: string) {
   const [rolesRes, profRes] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
-    supabase.from("profiles").select("full_name, email, approval_status").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("full_name, email, approval_status, worksite_id").eq("id", userId).maybeSingle(),
   ]);
   const roles = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
   return {
@@ -381,6 +381,7 @@ async function loadRoleAndProfile(supabase: any, userId: string) {
     fullName: profRes.data?.full_name ?? "",
     email: profRes.data?.email ?? "",
     approvalStatus: profRes.data?.approval_status ?? "pending",
+    worksiteId: profRes.data?.worksite_id as string | undefined,
   };
 }
 
@@ -394,6 +395,7 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
     if (!(info.isAdmin || info.isManager || info.isLogistics)) {
       return { ok: false as const, error: "Usuário sem permissão para visualizar transportes." };
     }
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const rows: any[] = [];
@@ -402,6 +404,7 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
       const { data, error } = await db
         .from("overtime_requests")
         .select("*")
+        .eq("worksite_id", info.worksiteId)
         .neq("status", "cancelled")
         .order("overtime_date", { ascending: false })
         .order("employee_name", { ascending: true })
@@ -435,6 +438,7 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
     if (!(info.isAdmin || info.isManager || info.isMeasurementControl || info.isLogistics)) {
       return { ok: false as const, error: "Usuário sem permissão para exportar horas extras." };
     }
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -444,6 +448,7 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
       let query = db
         .from("overtime_requests")
         .select(OVERTIME_EXPORT_COLUMNS)
+        .eq("worksite_id", info.worksiteId)
         .neq("status", "cancelled")
         .order("created_at", { ascending: false })
         .order("id", { ascending: false })
@@ -464,6 +469,7 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
       const { data: employees, error: employeeError } = await db
         .from("employees")
         .select("badge,address,neighborhood,city,phone,message_contact,transport_line")
+        .eq("worksite_id", info.worksiteId)
         .in("badge", registrations.slice(from, from + 500));
       if (employeeError) return { ok: false as const, error: employeeError.message };
       for (const employee of employees ?? []) employeeByBadge.set(String(employee.badge).trim(), employee);
@@ -531,6 +537,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
     if (!(info.isLeader || info.isAdmin || info.isMeasurementControl))
       return { ok: false as const, error: "Usuário sem permissão para solicitar hora extra." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -538,6 +545,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     const { data: employees, error: employeeError } = await db
       .from("employees")
       .select("id, badge, employee_id, full_name, job_title")
+      .eq("worksite_id", info.worksiteId)
       .in("id", uniqueEmployeeIds)
       .eq("is_active", true);
     if (employeeError) return { ok: false as const, error: "Não foi possível validar os colaboradores." };
@@ -557,6 +565,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
         .from("activities")
         .select("id, week_id, order_number, description, weeks!inner(is_active)")
         .eq("id", data.activity_id)
+        .eq("worksite_id", info.worksiteId)
         .eq("week_id", data.week_id)
         .eq("weeks.is_active", true)
         .maybeSingle();
@@ -573,6 +582,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
         .from("overtime_requests")
         .select("employee_master_id")
         .in("employee_master_id", uniqueEmployeeIds)
+        .eq("worksite_id", info.worksiteId)
         .eq("overtime_date", data.overtime_date)
         .eq("entry_time", data.entry_time)
         .eq("departure_time", data.departure_time)
@@ -597,6 +607,7 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
     const batchId = crypto.randomUUID();
     const transportSet = new Set(data.transport_employee_ids ?? []);
     const rows = employees.map((employee: any) => ({
+      worksite_id: info.worksiteId,
       needs_transport: transportSet.has(employee.id),
       batch_id: batchId,
       requester_user_id: userId,
@@ -671,7 +682,9 @@ export const upsertEmployees = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const rows = data.employees.map((employee) => ({
+      worksite_id: info.worksiteId,
       badge: employee.badge || `${MISSING_BADGE_PREFIX}${employee.employee_id}`,
       employee_id: employee.employee_id || `${MISSING_EMPLOYEE_ID_PREFIX}${employee.badge}`,
       admission_date: employee.admission_date,
@@ -687,7 +700,10 @@ export const upsertEmployees = createServerFn({ method: "POST" })
       updated_by_user_id: userId,
       updated_by_name: info.fullName,
     }));
-    const { data: saved, error } = await db.from("employees").upsert(rows, { onConflict: "badge" }).select("id");
+    const { data: saved, error } = await db
+      .from("employees")
+      .upsert(rows, { onConflict: "worksite_id,badge" })
+      .select("id");
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, count: saved?.length ?? 0 };
   });
@@ -726,6 +742,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { data: updated, error } = await db
       .from("employees")
       .update({
@@ -744,6 +761,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
         updated_by_name: info.fullName,
       })
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
@@ -765,6 +783,7 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { data: updated, error } = await db
       .from("employees")
       .update({
@@ -773,6 +792,7 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
         updated_by_name: info.fullName,
       })
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
@@ -794,7 +814,14 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    const { data: deleted, error } = await db.from("employees").delete().eq("id", data.id).select("id").maybeSingle();
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
+    const { data: deleted, error } = await db
+      .from("employees")
+      .delete()
+      .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
+      .select("id")
+      .maybeSingle();
     if (error) {
       if (error.code === "23503") {
         return {
@@ -834,17 +861,19 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { data: target, error: targetError } = await db
       .from("overtime_requests")
       .select("id, batch_id, status, version")
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .maybeSingle();
     if (targetError) return { ok: false as const, error: targetError.message };
     if (!target || target.status !== "pending" || target.version !== data.expectedVersion) {
       return { ok: false as const, conflict: true, current: target };
     }
 
-    let batchQuery = db.from("overtime_requests").select("id, status, version");
+    let batchQuery = db.from("overtime_requests").select("id, status, version").eq("worksite_id", info.worksiteId);
     batchQuery = target.batch_id ? batchQuery.eq("batch_id", target.batch_id) : batchQuery.eq("id", target.id);
     const { data: batchRows, error: batchError } = await batchQuery;
     if (batchError) return { ok: false as const, error: batchError.message };
@@ -870,6 +899,7 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
         version: data.expectedVersion + 1,
       })
       .in("id", batchIds)
+      .eq("worksite_id", info.worksiteId)
       .eq("status", "pending")
       .eq("version", data.expectedVersion)
       .select("id, status, version");
@@ -893,10 +923,12 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { data: updated, error } = await db
       .from("overtime_requests")
       .update({ status: "cancelled", version: data.expectedVersion + 1 })
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .eq("requester_user_id", userId)
       .eq("source_type", "manual")
       .eq("status", "pending")
