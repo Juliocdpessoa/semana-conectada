@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { setUserApproval } from "@/lib/activities.functions";
-import { createWorksite } from "@/lib/worksites.functions";
+import { createWorksite, setWorksiteMembership } from "@/lib/worksites.functions";
 import { toast } from "sonner";
 import type { SessionInfo } from "../route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
@@ -13,7 +13,7 @@ import { useEffect, useState, type FormEvent } from "react";
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (!s.roles.includes("admin")) throw redirect({ to: "/atividades" });
+    if (!s.roles.includes("admin") && !s.isWorksiteAdmin) throw redirect({ to: "/atividades" });
   },
   component: AdminUsers,
 });
@@ -26,7 +26,10 @@ type Row = {
   full_name: string;
   approval_status: "pending" | "approved" | "blocked";
   roles: AppRole[];
+  memberships: Array<{ worksite_id: string; is_worksite_admin: boolean }>;
 };
+
+type Worksite = { id: string; code: string; name: string };
 
 const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "leader", label: "Líder" },
@@ -102,20 +105,28 @@ function AdminUsers() {
   const qc = useQueryClient();
   const call = useServerFn(setUserApproval);
   const createWorksiteCall = useServerFn(createWorksite);
+  const membershipCall = useServerFn(setWorksiteMembership);
   const isGlobalAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const [worksiteCode, setWorksiteCode] = useState("");
   const [worksiteName, setWorksiteName] = useState("");
   const [creatingWorksite, setCreatingWorksite] = useState(false);
+  const [allWorksites, setAllWorksites] = useState<Worksite[]>([]);
+  const [savingMembership, setSavingMembership] = useState<string | null>(null);
+  useEffect(() => {
+    if (!isGlobalAdmin) return;
+    void (supabase as any).from("worksites").select("id,code,name").eq("is_active", true).order("code")
+      .then(({ data }: { data: Worksite[] | null }) => setAllWorksites(data ?? []));
+  }, [isGlobalAdmin]);
   const users = useQuery({
     queryKey: ["admin-users", session.worksiteId],
     queryFn: async () => {
-      const [pRes, rRes] = await Promise.all([
+      const [pRes, rRes, mRes] = await Promise.all([
         (supabase as any)
           .from("profiles")
           .select("*")
-          .eq("worksite_id", session.worksiteId)
           .order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
+        (supabase as any).from("worksite_memberships").select("user_id,worksite_id,is_worksite_admin"),
       ]);
       const rolesByUser = new Map<string, string[]>();
       (rRes.data ?? []).forEach((r) => {
@@ -123,12 +134,17 @@ function AdminUsers() {
         arr.push(r.role);
         rolesByUser.set(r.user_id, arr);
       });
-      return (pRes.data ?? []).map((p) => ({
+      const visibleProfiles = isGlobalAdmin
+        ? (pRes.data ?? [])
+        : (pRes.data ?? []).filter((p: any) => (mRes.data ?? []).some((m: any) =>
+            m.user_id === p.id && m.worksite_id === session.worksiteId));
+      return visibleProfiles.map((p: any) => ({
         id: p.id,
         email: p.email,
         full_name: p.full_name,
         approval_status: p.approval_status,
         roles: rolesByUser.get(p.id) ?? [],
+        memberships: (mRes.data ?? []).filter((m: any) => m.user_id === p.id),
       })) as Row[];
     },
   });
@@ -142,6 +158,21 @@ function AdminUsers() {
     toast.success(roles ? "Perfis atualizados." : "Usuário atualizado.");
     await qc.invalidateQueries({ queryKey: ["admin-users"] });
     return true;
+  }
+
+  async function changeMembership(user: Row, worksite: Worksite, enabled: boolean, localAdmin: boolean) {
+    const key = `${user.id}:${worksite.id}`;
+    setSavingMembership(key);
+    const result = await membershipCall({ data: {
+      targetUserId: user.id,
+      worksiteId: worksite.id,
+      enabled,
+      isWorksiteAdmin: localAdmin,
+    }});
+    setSavingMembership(null);
+    if (!result.ok) return toast.error(result.error);
+    toast.success("Acesso à obra atualizado.");
+    await qc.invalidateQueries({ queryKey: ["admin-users"] });
   }
 
   async function addWorksite(event: FormEvent) {
@@ -166,7 +197,7 @@ function AdminUsers() {
       <PageHeader
         eyebrow="Administração"
         title="Usuários"
-        description="Aprove cadastros, defina perfis e bloqueie acessos."
+        description="Aprove cadastros, defina perfis e controle o acesso às obras."
         meta={
           <>
             <span>{total} usuários</span>
@@ -207,11 +238,7 @@ function AdminUsers() {
                 className="input-field h-9 w-full"
               />
             </label>
-            <button
-              type="submit"
-              disabled={creatingWorksite}
-              className="btn-primary h-9 px-4 text-[12px] disabled:opacity-60"
-            >
+            <button type="submit" disabled={creatingWorksite} className="btn-primary h-9 px-4 text-[12px] disabled:opacity-60">
               {creatingWorksite ? "Cadastrando…" : "Cadastrar obra"}
             </button>
           </form>
@@ -231,6 +258,7 @@ function AdminUsers() {
                   <th className="px-3 py-2 text-left font-semibold">E-mail</th>
                   <th className="px-3 py-2 text-left font-semibold">Status</th>
                   <th className="px-3 py-2 text-left font-semibold">Perfil</th>
+                  {isGlobalAdmin && <th className="px-3 py-2 text-left font-semibold">Obras e administração local</th>}
                   <th className="px-3 py-2 text-right font-semibold">Ações</th>
                 </tr>
               </thead>
@@ -259,6 +287,31 @@ function AdminUsers() {
                     <td className="px-3 py-2 text-[12px]">
                       <RoleEditor user={u} onSave={(roles) => updateUser(u.id, u.approval_status, roles)} />
                     </td>
+                    {isGlobalAdmin && (
+                      <td className="min-w-[300px] px-3 py-2 align-top text-[11px]">
+                        <div className="space-y-2">
+                          {allWorksites.map((worksite) => {
+                            const membership = u.memberships.find((m) => m.worksite_id === worksite.id);
+                            const busy = savingMembership === `${u.id}:${worksite.id}`;
+                            return (
+                              <div key={worksite.id} className="flex flex-wrap items-center gap-3 rounded-md border border-border/70 px-2 py-1.5">
+                                <label className="flex cursor-pointer items-center gap-1.5 font-medium">
+                                  <input type="checkbox" checked={Boolean(membership)} disabled={busy}
+                                    onChange={(e) => void changeMembership(u, worksite, e.target.checked, false)} />
+                                  {worksite.code}
+                                </label>
+                                <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground">
+                                  <input type="checkbox" checked={membership?.is_worksite_admin ?? false}
+                                    disabled={!membership || busy}
+                                    onChange={(e) => void changeMembership(u, worksite, true, e.target.checked)} />
+                                  Administrador da obra
+                                </label>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right">
                       <div className="inline-flex gap-1.5">
                         {u.approval_status !== "approved" && (
@@ -295,3 +348,4 @@ function AdminUsers() {
     </main>
   );
 }
+
