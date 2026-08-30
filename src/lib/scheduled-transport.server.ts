@@ -5,7 +5,7 @@ export const SCHEDULED_TRANSPORT_ROLES = ["admin", "manager", "logistics", "plan
 export async function requireTransportAccess(supabase: any, userId: string) {
   const [rolesRes, profRes] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
-    supabase.from("profiles").select("full_name, email, approval_status").eq("id", userId).maybeSingle(),
+    supabase.from("profiles").select("full_name, email, approval_status, worksite_id").eq("id", userId).maybeSingle(),
   ]);
   const roles: string[] = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
   const approved = profRes.data?.approval_status === "approved";
@@ -16,14 +16,20 @@ export async function requireTransportAccess(supabase: any, userId: string) {
     roles,
     fullName: profRes.data?.full_name ?? "",
     email: profRes.data?.email ?? "",
+    worksiteId: profRes.data?.worksite_id as string | undefined,
   };
 }
 
-export async function fetchAllRows(db: any, table: string, order: { column: string; ascending: boolean }[]) {
+export async function fetchAllRows(
+  db: any,
+  table: string,
+  worksiteId: string,
+  order: { column: string; ascending: boolean }[],
+) {
   const rows: any[] = [];
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
-    let query = db.from(table).select("*");
+    let query = db.from(table).select("*").eq("worksite_id", worksiteId);
     for (const o of order) query = query.order(o.column, { ascending: o.ascending });
     const { data, error } = await query.range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
@@ -41,6 +47,7 @@ export function buildScheduleRows(params: {
   userId: string;
   fullName: string;
   email: string;
+  worksiteId: string;
   entry_time: string;
   departure_time: string;
   needs_snack: boolean;
@@ -57,6 +64,7 @@ export function buildScheduleRows(params: {
   for (const employee of params.employees) {
     for (const date of params.dates) {
       rows.push({
+        worksite_id: params.worksiteId,
         batch_id: params.batchId,
         requester_user_id: params.userId,
         requester_name: params.fullName,
