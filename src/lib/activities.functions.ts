@@ -20,7 +20,11 @@ const updateSchema = z.object({
 });
 
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
-const PLANNING_WORKFLOW_STATUSES = new Set(["AGUARDANDO PRÉ-EMISSÃO DE PT", "PT EM ASSINATURA", "PT ENVIADA P/ CAMPO"]);
+const PLANNING_WORKFLOW_STATUSES = new Set([
+  "AGUARDANDO PRÉ-EMISSÃO DE PT",
+  "PT EM ASSINATURA",
+  "PT ENVIADA P/ CAMPO",
+]);
 const CANCELLATION_JUSTIFICATIONS = new Set([
   "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
   "12 - SERVIÇO CANCELADO",
@@ -39,7 +43,10 @@ function isJulioPlanningAdmin(email: string | null | undefined) {
   );
 }
 
-function canUseRestrictedPlanningWorkflow(roles: readonly string[], email: string | null | undefined) {
+function canUseRestrictedPlanningWorkflow(
+  roles: readonly string[],
+  email: string | null | undefined,
+) {
   return roles.includes("planning") || (roles.includes("admin") && isJulioPlanningAdmin(email));
 }
 async function canUsePlanningWorkflow(
@@ -49,7 +56,11 @@ async function canUsePlanningWorkflow(
 ) {
   const roleNames = (roles ?? []).map((row) => row.role);
   if (!roleNames.includes("admin") && !roleNames.includes("planning")) return false;
-  const { data: profile } = await supabase.from("profiles").select("email").eq("id", userId).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email")
+    .eq("id", userId)
+    .maybeSingle();
   return canUseRestrictedPlanningWorkflow(roleNames, profile?.email);
 }
 
@@ -61,8 +72,11 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (REQUIRES_JUSTIFICATION.has(data.status) && !data.justification?.trim()) {
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
-    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
-    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
+    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status)
+      ? data.justification?.trim() || null
+      : null;
+    const requiresImmediateLink =
+      data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
 
     const { data: currentActivity, error: currentError } = await supabase
       .from("activities")
@@ -72,7 +86,10 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!currentActivity) return { ok: false as const, error: "Atividade não encontrada." };
     if (PLANNING_WORKFLOW_STATUSES.has(data.status) && currentActivity.status !== data.status) {
-      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return {
@@ -82,11 +99,15 @@ export const updateActivity = createServerFn({ method: "POST" })
       }
     }
     if (data.status === "CANCELADA") {
-      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       const isPlanning = await canUsePlanningWorkflow(supabase, userId, roles);
       const preservesExistingCancellation =
-        currentActivity.status === "CANCELADA" && currentActivity.justification === normalizedJustification;
+        currentActivity.status === "CANCELADA" &&
+        currentActivity.justification === normalizedJustification;
       if (!isPlanning && !preservesExistingCancellation) {
         return {
           ok: false as const,
@@ -188,9 +209,14 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .validator((data: unknown) => bulkSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status) ? data.justification?.trim() || null : null;
+    const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status)
+      ? data.justification?.trim() || null
+      : null;
     if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
-      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return {
@@ -200,7 +226,10 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       }
     }
     if (data.status === "CANCELADA") {
-      const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+      const { data: roles, error: rolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId);
       if (rolesError) return { ok: false as const, error: rolesError.message };
       if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
         return {
@@ -216,20 +245,24 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Justificativa é obrigatória para este status." };
     }
 
-    const requiresImmediateLink = data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
+    const requiresImmediateLink =
+      data.status === "NÃO EXECUTADO" && normalizedJustification?.startsWith("08 -");
     const linkedIds = Array.from(new Set(data.immediateActivityIds));
     if (requiresImmediateLink && linkedIds.length === 0) {
       return { ok: false as const, error: "Selecione ao menos uma atividade imediata atendida." };
     }
 
     const uniqueRows = Array.from(new Map(data.rows.map((row) => [row.id, row])).values());
-    const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_reports_v2", {
-      p_rows: uniqueRows.map((row) => ({ id: row.id, expected_version: row.expectedVersion })),
-      p_status: data.status,
-      p_justification: normalizedJustification,
-      p_observation: data.observation,
-      p_linked_ids: requiresImmediateLink ? linkedIds : [],
-    });
+    const { data: updatedCount, error } = await (supabase as any).rpc(
+      "bulk_update_activity_reports_v2",
+      {
+        p_rows: uniqueRows.map((row) => ({ id: row.id, expected_version: row.expectedVersion })),
+        p_status: data.status,
+        p_justification: normalizedJustification,
+        p_observation: data.observation,
+        p_linked_ids: requiresImmediateLink ? linkedIds : [],
+      },
+    );
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, count: Number(updatedCount ?? uniqueRows.length) };
   });
@@ -275,7 +308,11 @@ function isPastDateEditCutoff(cutoffTime: string) {
 }
 
 async function getDateEditAccess(supabase: any, userId: string) {
-  const { data: profile } = await supabase.from("profiles").select("email,worksite_id").eq("id", userId).maybeSingle();
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("email,worksite_id")
+    .eq("id", userId)
+    .maybeSingle();
   const { data: setting } = profile?.worksite_id
     ? await supabase
         .from("activity_edit_settings")
@@ -318,18 +355,21 @@ export const updateActivityDateEditCutoff = createServerFn({ method: "POST" })
         error: `Somente o administrador ${JULIO_ADMIN_EMAIL} pode alterar o horário de corte.`,
       };
     }
-    if (!access.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
+    if (!access.worksiteId)
+      return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const { error } = await (supabaseAdmin as any).from("activity_edit_settings").upsert(
-      {
-        id: true,
-        worksite_id: access.worksiteId,
-        date_edit_cutoff: `${data.cutoffTime}:00`,
-        updated_by: context.userId,
-        updated_at: new Date().toISOString(),
-      },
-      { onConflict: "worksite_id,id" },
-    );
+    const { error } = await (supabaseAdmin as any)
+      .from("activity_edit_settings")
+      .upsert(
+        {
+          id: true,
+          worksite_id: access.worksiteId,
+          date_edit_cutoff: `${data.cutoffTime}:00`,
+          updated_by: context.userId,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: "worksite_id,id" },
+      );
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, cutoffTime: data.cutoffTime };
   });
@@ -339,7 +379,10 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
   .validator((data: unknown) => activityPlanningFieldsSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { data: roles, error: rolesError } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const { data: roles, error: rolesError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
     if (rolesError) return { ok: false as const, error: rolesError.message };
     if (!roles?.some((row) => row.role === "planning" || row.role === "admin")) {
       return {
@@ -357,7 +400,9 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
         .in("id", ids);
       if (currentRowsError) return { ok: false as const, error: currentRowsError.message };
       const currentDates = new Map((currentRows ?? []).map((row) => [row.id, row.scheduled_date]));
-      const changesDate = data.rows.some((row) => (currentDates.get(row.id) ?? null) !== row.scheduledDate);
+      const changesDate = data.rows.some(
+        (row) => (currentDates.get(row.id) ?? null) !== row.scheduledDate,
+      );
       if (changesDate) {
         return {
           ok: false as const,
@@ -375,9 +420,12 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       release_type: row.releaseType,
       scheduled_date: row.scheduledDate,
     }));
-    const { data: updatedCount, error } = await (supabase as any).rpc("bulk_update_activity_planning_fields", {
-      p_rows: payload,
-    });
+    const { data: updatedCount, error } = await (supabase as any).rpc(
+      "bulk_update_activity_planning_fields",
+      {
+        p_rows: payload,
+      },
+    );
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const, count: Number(updatedCount ?? 0) };
   });
@@ -410,7 +458,8 @@ export const createImmediateActivity = createServerFn({ method: "POST" })
       .select("id,worksite_id")
       .eq("id", data.weekId)
       .maybeSingle();
-    if (!week?.worksite_id) return { ok: false as const, error: "Semana não encontrada na obra ativa." };
+    if (!week?.worksite_id)
+      return { ok: false as const, error: "Semana não encontrada na obra ativa." };
     const sourceKey = `IMD-${Date.now()}-${Math.floor(Math.random() * 10000)}`;
     const { data: created, error } = await supabase
       .from("activities")
@@ -460,7 +509,8 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
       .select("id,worksite_id")
       .eq("id", data.weekId)
       .maybeSingle();
-    if (!week?.worksite_id) return { ok: false as const, error: "Semana não encontrada na obra ativa." };
+    if (!week?.worksite_id)
+      return { ok: false as const, error: "Semana não encontrada na obra ativa." };
     const now = Date.now();
     const payload = data.items.map((it, idx) => ({
       worksite_id: week.worksite_id,
@@ -482,7 +532,15 @@ export const bulkCreateImmediateActivities = createServerFn({ method: "POST" })
     return { ok: true as const, count: created?.length ?? 0 };
   });
 
-const roleSchema = z.enum(["admin", "manager", "planning", "leader", "measurement_control", "logistics", "viewer"]);
+const roleSchema = z.enum([
+  "admin",
+  "manager",
+  "planning",
+  "leader",
+  "measurement_control",
+  "logistics",
+  "viewer",
+]);
 const approveSchema = z.object({
   targetUserId: z.string().uuid(),
   approvalStatus: z.enum(["approved", "blocked", "pending"]),
@@ -493,22 +551,32 @@ export const setUserApproval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => approveSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { supabase, userId } = context;
-    const { data: myRoles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
-    if (!myRoles?.some((r) => r.role === "admin")) {
-      return { ok: false as const, error: "Apenas administradores podem alterar aprovação." };
-    }
+    const { userId } = context;
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const [{ data: actor }, { data: target, error: targetError }] = await Promise.all([
-      supabaseAdmin.from("profiles").select("email, worksite_id, approval_status").eq("id", userId).maybeSingle(),
-      supabaseAdmin.from("profiles").select("id, worksite_id").eq("id", data.targetUserId).maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .select("email, worksite_id, approval_status")
+        .eq("id", userId)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("profiles")
+        .select("id, worksite_id")
+        .eq("id", data.targetUserId)
+        .maybeSingle(),
     ]);
     if (targetError) return { ok: false as const, error: targetError.message };
     if (!actor || actor.approval_status !== "approved" || !target) {
       return { ok: false as const, error: "Usuário ou administrador não encontrado." };
     }
     const isGlobalAdmin = actor.email?.toLowerCase() === "julio.pessoa@normatel.com.br";
-    if (!isGlobalAdmin && actor.worksite_id !== target.worksite_id) {
+    const { data: localAdmin } = isGlobalAdmin ? { data: null } : await (supabaseAdmin as any)
+      .from("worksite_memberships").select("user_id").eq("user_id", userId)
+      .eq("worksite_id", actor.worksite_id).eq("is_worksite_admin", true).maybeSingle();
+    const { data: targetMembership } = await (supabaseAdmin as any)
+      .from("worksite_memberships").select("user_id").eq("user_id", data.targetUserId)
+      .eq("worksite_id", actor.worksite_id).maybeSingle();
+    if (!isGlobalAdmin && (!localAdmin || !targetMembership)) {
       return { ok: false as const, error: "Você só pode aprovar usuários da sua obra." };
     }
     if (!isGlobalAdmin && data.roles?.includes("admin")) {
@@ -525,7 +593,10 @@ export const setUserApproval = createServerFn({ method: "POST" })
     if (pErr) return { ok: false as const, error: pErr.message };
     if (data.roles) {
       const uniqueRoles = [...new Set(data.roles)];
-      const { error: deleteError } = await supabaseAdmin.from("user_roles").delete().eq("user_id", data.targetUserId);
+      const { error: deleteError } = await supabaseAdmin
+        .from("user_roles")
+        .delete()
+        .eq("user_id", data.targetUserId);
       if (deleteError) return { ok: false as const, error: deleteError.message };
       const { error: rErr } = await supabaseAdmin
         .from("user_roles")
@@ -534,3 +605,4 @@ export const setUserApproval = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
