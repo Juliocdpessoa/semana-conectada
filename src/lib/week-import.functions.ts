@@ -47,11 +47,14 @@ async function requirePlanning(supabase: any, userId: string) {
 
 export const importWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => importSchema.parse(data))
+  .validator((data: unknown) => importSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (!(await requirePlanning(supabase, userId))) {
-      return { ok: false as const, error: "Somente planejamento/administrador pode importar semanas." };
+      return {
+        ok: false as const,
+        error: "Somente planejamento/administrador pode importar semanas.",
+      };
     }
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -126,20 +129,22 @@ export const importWeek = createServerFn({ method: "POST" })
 
 export const activateWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
+  .validator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (!(await requirePlanning(supabase, userId))) {
       return { ok: false as const, error: "Sem permissão." };
     }
-    const { error } = await (supabase as any).rpc("activate_operational_week", { p_week_id: data.weekId });
+    const { error } = await (supabase as any).rpc("activate_operational_week", {
+      p_week_id: data.weekId,
+    });
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
   });
 
 export const deleteWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
+  .validator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     if (!(await requirePlanning(supabase, userId))) {
