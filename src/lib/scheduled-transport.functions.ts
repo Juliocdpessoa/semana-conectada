@@ -30,6 +30,7 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para o transporte programado." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     try {
@@ -37,7 +38,7 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
       fallbackStart.setDate(fallbackStart.getDate() - 90);
       const defaultStart = `${fallbackStart.getFullYear()}-${String(fallbackStart.getMonth() + 1).padStart(2, "0")}-${String(fallbackStart.getDate()).padStart(2, "0")}`;
       const applyDateRange = (query: any) => {
-        let next = query.gte("transport_date", input.start_date || defaultStart);
+        let next = query.eq("worksite_id", info.worksiteId).gte("transport_date", input.start_date || defaultStart);
         if (input.end_date) next = next.lte("transport_date", input.end_date);
         return next;
       };
@@ -130,6 +131,7 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
         const { data, error } = await db
           .from("scheduled_transport_batches")
           .select("*")
+          .eq("worksite_id", info.worksiteId)
           .in("id", batchIds.slice(from, from + 500))
           .order("created_at", { ascending: false });
         if (error) throw error;
@@ -188,6 +190,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para o transporte programado." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
@@ -195,6 +198,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
     const { data: employees, error: employeeError } = await db
       .from("employees")
       .select("*")
+      .eq("worksite_id", info.worksiteId)
       .in("id", uniqueIds)
       .eq("is_active", true);
     if (employeeError) return { ok: false as const, error: "Não foi possível validar os colaboradores." };
@@ -211,6 +215,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
     const { data: existing, error: existingError } = await db
       .from("scheduled_transport_requests")
       .select("employee_master_id, transport_date, entry_time, departure_time")
+      .eq("worksite_id", info.worksiteId)
       .eq("status", "scheduled")
       .in("employee_master_id", uniqueIds)
       .gte("transport_date", data.start_date)
@@ -230,6 +235,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
       userId,
       fullName: info.fullName,
       email: info.email,
+      worksiteId: info.worksiteId,
       entry_time: data.entry_time,
       departure_time: data.departure_time,
       needs_snack: data.needs_snack,
@@ -266,6 +272,7 @@ export const createScheduledTransport = createServerFn({ method: "POST" })
     const batchId = rows[0].batch_id as string;
     const { error: batchError } = await db.from("scheduled_transport_batches").insert({
       id: batchId,
+      worksite_id: info.worksiteId,
       start_date: data.start_date,
       end_date: data.end_date,
       weekdays: [...data.weekdays].sort((a, b) => a - b),
@@ -321,6 +328,7 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para o transporte programado." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
 
@@ -328,6 +336,7 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
       .from("scheduled_transport_requests")
       .select("*")
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .maybeSingle();
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!current) return { ok: false as const, error: "Programação não encontrada." };
@@ -354,7 +363,11 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Somente programações ativas podem ser editadas." };
     }
 
-    let targetsQuery = db.from("scheduled_transport_requests").select("id, version").eq("status", "scheduled");
+    let targetsQuery = db
+      .from("scheduled_transport_requests")
+      .select("id, version")
+      .eq("worksite_id", info.worksiteId)
+      .eq("status", "scheduled");
     if (data.scope === "future" && current.batch_id) {
       targetsQuery = targetsQuery
         .eq("batch_id", current.batch_id)
@@ -375,6 +388,7 @@ export const updateScheduledTransport = createServerFn({ method: "POST" })
         .from("scheduled_transport_requests")
         .update(patch)
         .eq("id", target.id)
+        .eq("worksite_id", info.worksiteId)
         .eq("status", "scheduled")
         .eq("version", expectedVersion)
         .select("id")
@@ -411,6 +425,7 @@ export const cancelScheduledTransport = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para o transporte programado." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
 
@@ -424,6 +439,7 @@ export const cancelScheduledTransport = createServerFn({ method: "POST" })
         updated_by_user_id: userId,
         updated_by_name: info.fullName,
       })
+      .eq("worksite_id", info.worksiteId)
       .eq("status", "scheduled");
 
     if (data.ids && data.ids.length > 0) {
@@ -468,10 +484,11 @@ export const listEmployeeDaysOff = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para visualizar folgas." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     try {
-      const rows = await fetchAllRows(db, "employee_days_off", [
+      const rows = await fetchAllRows(db, "employee_days_off", info.worksiteId, [
         { column: "day_off_date", ascending: false },
         { column: "employee_name", ascending: true },
       ]);
@@ -491,18 +508,21 @@ export const createEmployeeDayOff = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para registrar folgas." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const { data: employee, error: employeeError } = await db
       .from("employees")
       .select("id,badge,full_name,job_title,is_active")
       .eq("id", data.employee_id)
+      .eq("worksite_id", info.worksiteId)
       .maybeSingle();
     if (employeeError) return { ok: false as const, error: employeeError.message };
     if (!employee?.is_active) return { ok: false as const, error: "Colaborador não encontrado ou inativo." };
     const { data: created, error } = await db
       .from("employee_days_off")
       .insert({
+        worksite_id: info.worksiteId,
         employee_master_id: employee.id,
         employee_registration: employee.badge,
         employee_name: employee.full_name,
@@ -534,12 +554,14 @@ export const updateEmployeeDayOff = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para editar folgas." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const { data: employee, error: employeeError } = await db
       .from("employees")
       .select("id,badge,full_name,job_title,is_active")
       .eq("id", data.employee_id)
+      .eq("worksite_id", info.worksiteId)
       .maybeSingle();
     if (employeeError) return { ok: false as const, error: employeeError.message };
     if (!employee?.is_active) return { ok: false as const, error: "Colaborador não encontrado ou inativo." };
@@ -558,6 +580,7 @@ export const updateEmployeeDayOff = createServerFn({ method: "POST" })
         version: data.version + 1,
       })
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .eq("version", data.version)
       .select("*")
       .maybeSingle();
@@ -583,11 +606,13 @@ export const deleteEmployeeDayOff = createServerFn({ method: "POST" })
     const { supabase, userId } = context;
     const info = await requireTransportAccess(supabase, userId);
     if (!info.allowed) return { ok: false as const, error: "Usuário sem permissão para excluir folgas." };
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: deleted, error } = await (supabaseAdmin as any)
       .from("employee_days_off")
       .delete()
       .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
       .eq("version", data.version)
       .select("id")
       .maybeSingle();
