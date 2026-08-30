@@ -1,11 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
 import { ShieldCheck, ClipboardCheck, BarChart3, Timer, Bus, Users } from "lucide-react";
-
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -14,6 +13,7 @@ export const Route = createFileRoute("/auth")({
 const emailSchema = z.string().trim().email({ message: "E-mail inválido" }).max(254);
 const passwordSchema = z.string().min(8, { message: "Mínimo 8 caracteres" }).max(72);
 const nameSchema = z.string().trim().min(2, { message: "Informe seu nome" }).max(100);
+type WorksiteOption = { id: string; code: string; name: string };
 
 function AuthPage() {
   const navigate = useNavigate();
@@ -21,7 +21,24 @@ function AuthPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [worksiteId, setWorksiteId] = useState("");
+  const [worksites, setWorksites] = useState<WorksiteOption[]>([]);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== "signup" || worksites.length > 0) return;
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("worksites")
+        .select("id,code,name")
+        .eq("is_active", true)
+        .order("name");
+      if (error) return toast.error("Não foi possível carregar as obras disponíveis.");
+      const options = (data ?? []) as WorksiteOption[];
+      setWorksites(options);
+      setWorksiteId((current) => current || options[0]?.id || "");
+    })();
+  }, [mode, worksites.length]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -46,6 +63,7 @@ function AuthPage() {
       if (mode === "signup") {
         const parsedName = nameSchema.safeParse(fullName);
         if (!parsedName.success) return toast.error(parsedName.error.issues[0].message);
+        if (!worksiteId) return toast.error("Selecione a obra para solicitar acesso.");
         // Garante que ninguém está logado antes de criar novo cadastro
         await supabase.auth.signOut().catch(() => {});
         const { data: signUpData, error } = await supabase.auth.signUp({
@@ -53,7 +71,7 @@ function AuthPage() {
           password: parsedPw.data,
           options: {
             emailRedirectTo: `${window.location.origin}/atividades`,
-            data: { full_name: parsedName.data },
+            data: { full_name: parsedName.data, worksite_id: worksiteId },
           },
         });
         if (error) {
@@ -111,26 +129,46 @@ function AuthPage() {
               Um só lugar para planejar, executar e comprovar a manutenção
             </h1>
             <p className="mt-3 text-sm leading-relaxed text-sidebar-foreground/75">
-              Programação semanal, apontamento auditado, hora extra, mudança de
-              escala e logística de transporte — com controle de acesso por
-              perfil e histórico completo de cada alteração.
+              Programação semanal, apontamento auditado, hora extra, mudança de escala e logística de transporte — com
+              controle de acesso por perfil e histórico completo de cada alteração.
             </p>
           </div>
         </div>
 
         <div className="relative mt-10 grid max-w-xl grid-cols-2 gap-2.5">
           {[
-            { icon: ClipboardCheck, title: "Programação semanal", desc: "Importação, versionamento e atividades imediatas" },
-            { icon: BarChart3, title: "Painel gerencial", desc: "Aderência, curva de avanço em HH e pendências" },
-            { icon: Timer, title: "Hora extra", desc: "Solicitação do líder e aprovação do gerente" },
-            { icon: Bus, title: "Mudança de escala", desc: "Transporte por colaborador e exportação Excel" },
-            { icon: Users, title: "Colaboradores", desc: "Cadastro, contatos e dados de transporte" },
-            { icon: ShieldCheck, title: "Acesso controlado", desc: "Perfis, aprovação e trilha de auditoria" },
+            {
+              icon: ClipboardCheck,
+              title: "Programação semanal",
+              desc: "Importação, versionamento e atividades imediatas",
+            },
+            {
+              icon: BarChart3,
+              title: "Painel gerencial",
+              desc: "Aderência, curva de avanço em HH e pendências",
+            },
+            {
+              icon: Timer,
+              title: "Hora extra",
+              desc: "Solicitação do líder e aprovação do gerente",
+            },
+            {
+              icon: Bus,
+              title: "Mudança de escala",
+              desc: "Transporte por colaborador e exportação Excel",
+            },
+            {
+              icon: Users,
+              title: "Colaboradores",
+              desc: "Cadastro, contatos e dados de transporte",
+            },
+            {
+              icon: ShieldCheck,
+              title: "Acesso controlado",
+              desc: "Perfis, aprovação e trilha de auditoria",
+            },
           ].map((f) => (
-            <div
-              key={f.title}
-              className="rounded-md border border-sidebar-border/40 bg-sidebar-accent/40 p-3"
-            >
+            <div key={f.title} className="rounded-md border border-sidebar-border/40 bg-sidebar-accent/40 p-3">
               <div className="flex items-center gap-2">
                 <span className="grid h-6 w-6 shrink-0 place-items-center rounded-md bg-sidebar-accent text-sidebar-primary">
                   <f.icon className="h-3.5 w-3.5" />
@@ -146,7 +184,6 @@ function AuthPage() {
           Normatel Engenharia · Uso interno
         </div>
       </aside>
-
 
       {/* Formulário */}
       <main className="flex items-center justify-center px-4 py-10 sm:px-8">
@@ -172,7 +209,6 @@ function AuthPage() {
             ))}
           </div>
 
-
           <div className="surface-card p-6">
             <div className="flex items-center justify-between gap-4">
               <div>
@@ -183,8 +219,8 @@ function AuthPage() {
                   {mode === "login"
                     ? "Informe seu e-mail e senha."
                     : mode === "signup"
-                    ? "Novo cadastro requer aprovação."
-                    : "Informe seu e-mail para receber as instruções."}
+                      ? "Novo cadastro requer aprovação."
+                      : "Informe seu e-mail para receber as instruções."}
                 </p>
               </div>
             </div>
@@ -208,27 +244,59 @@ function AuthPage() {
 
             <form onSubmit={submit} className="mt-5 space-y-4">
               {mode === "signup" && (
-                <div>
-                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Nome completo</label>
-                  <input
-                    type="text" required autoComplete="name"
-                    value={fullName} onChange={(e) => setFullName(e.target.value)}
-                    className="input-base"
-                  />
-                </div>
+                <>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Nome completo
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      autoComplete="name"
+                      value={fullName}
+                      onChange={(e) => setFullName(e.target.value)}
+                      className="input-base"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Obra
+                    </label>
+                    <select
+                      required
+                      value={worksiteId}
+                      onChange={(event) => setWorksiteId(event.target.value)}
+                      className="input-base"
+                    >
+                      <option value="">Selecione a obra</option>
+                      {worksites.map((worksite) => (
+                        <option key={worksite.id} value={worksite.id}>
+                          {worksite.code} — {worksite.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </>
               )}
               <div>
-                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">E-mail</label>
+                <label className="mb-1 block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                  E-mail
+                </label>
                 <input
-                  type="email" required autoComplete="email"
-                  value={email} onChange={(e) => setEmail(e.target.value)}
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
                   className="input-base"
                 />
               </div>
               {mode !== "forgot" && (
                 <div>
                   <div className="mb-1 flex items-center justify-between">
-                    <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">Senha</label>
+                    <label className="block text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+                      Senha
+                    </label>
                     {mode === "login" && (
                       <button
                         type="button"
@@ -240,20 +308,24 @@ function AuthPage() {
                     )}
                   </div>
                   <input
-                    type="password" required
+                    type="password"
+                    required
                     autoComplete={mode === "signup" ? "new-password" : "current-password"}
-                    value={password} onChange={(e) => setPassword(e.target.value)}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="input-base"
                   />
                 </div>
               )}
 
-              <button
-                type="submit"
-                disabled={loading}
-                className="btn-primary w-full py-2.5"
-              >
-                {loading ? "Aguarde..." : mode === "login" ? "Entrar" : mode === "signup" ? "Solicitar acesso" : "Enviar instruções"}
+              <button type="submit" disabled={loading} className="btn-primary w-full py-2.5">
+                {loading
+                  ? "Aguarde..."
+                  : mode === "login"
+                    ? "Entrar"
+                    : mode === "signup"
+                      ? "Solicitar acesso"
+                      : "Enviar instruções"}
               </button>
 
               {mode === "signup" && (
