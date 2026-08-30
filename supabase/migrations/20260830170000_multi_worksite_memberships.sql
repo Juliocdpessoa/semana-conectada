@@ -137,5 +137,13 @@ USING (
       AND public.can_admin_worksite(auth.uid(), target_membership.worksite_id)
   )
 )
-WITH CHECK (true);
+WITH CHECK (
+  public.is_global_admin(auth.uid())
+  OR EXISTS (
+    SELECT 1 FROM public.worksite_memberships target_membership
+    WHERE target_membership.user_id = profiles.id
+      AND target_membership.worksite_id = profiles.worksite_id
+      AND public.can_admin_worksite(auth.uid(), target_membership.worksite_id)
+  )
+);
 
