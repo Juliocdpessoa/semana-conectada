@@ -1,6 +1,9 @@
 import { createFileRoute, Outlet, Link, redirect, useRouter, useRouterState } from "@tanstack/react-router";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
+import { selectGlobalWorksite } from "@/lib/worksites.functions";
+import { toast } from "sonner";
 import { LogOut, ClipboardList, History, Settings, Zap, BarChart3, Menu, X, Timer, Bus } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
@@ -77,6 +80,9 @@ function AuthedLayout() {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const selectWorksite = useServerFn(selectGlobalWorksite);
+  const [worksites, setWorksites] = useState<Array<{ id: string; code: string; name: string }>>([]);
+  const [switchingWorksite, setSwitchingWorksite] = useState(false);
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
@@ -90,6 +96,7 @@ function AuthedLayout() {
   }, [pathname]);
 
   const s = session as SessionInfo;
+  const isGlobalAdmin = s.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const roleSet = new Set(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []);
   const isPlanning = roleSet.has("planning") || roleSet.has("admin");
   const isAdmin = roleSet.has("admin");
@@ -109,6 +116,32 @@ function AuthedLayout() {
   }, [overtimeOnly, pathname, router]);
 
   const canScheduledTransport = isManager || isAdmin || isLogistics;
+
+  useEffect(() => {
+    if (!isGlobalAdmin) return;
+    void (async () => {
+      const { data, error } = await (supabase as any)
+        .from("worksites")
+        .select("id,code,name")
+        .eq("is_active", true)
+        .order("code");
+      if (error) toast.error("Não foi possível carregar as obras.");
+      else setWorksites(data ?? []);
+    })();
+  }, [isGlobalAdmin]);
+
+  async function changeWorksite(worksiteId: string) {
+    if (!worksiteId || worksiteId === s.worksiteId) return;
+    setSwitchingWorksite(true);
+    const result = await selectWorksite({ data: { worksiteId } });
+    if (!result.ok) {
+      toast.error(result.error);
+      setSwitchingWorksite(false);
+      return;
+    }
+    toast.success(`Obra alterada para ${result.worksite.code}.`);
+    window.location.reload();
+  }
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
@@ -158,6 +191,24 @@ function AuthedLayout() {
 
           {/* Ações à direita */}
           <div className="ml-auto flex items-center gap-2">
+            {isGlobalAdmin && worksites.length > 0 && (
+              <label className="hidden items-center gap-1.5 md:flex">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">Obra</span>
+                <select
+                  value={s.worksiteId}
+                  onChange={(event) => void changeWorksite(event.target.value)}
+                  disabled={switchingWorksite}
+                  className="h-8 max-w-[260px] rounded-md border border-white/25 bg-white/10 px-2 text-[11px] text-white outline-none hover:bg-white/15 disabled:opacity-60"
+                  aria-label="Obra ativa"
+                >
+                  {worksites.map((worksite) => (
+                    <option key={worksite.id} value={worksite.id} className="text-foreground">
+                      {worksite.code} — {worksite.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <div className="hidden text-right md:block">
               <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
               <div className="text-[10px] leading-tight text-primary-foreground/70">
