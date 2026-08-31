@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import { ShieldCheck, ClipboardCheck, BarChart3, Timer, Bus, Users, Eye, EyeOff } from "lucide-react";
+import { ShieldCheck, ClipboardCheck, BarChart3, Timer, CalendarClock, Users, Eye, EyeOff } from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -155,7 +155,7 @@ function AuthPage() {
               desc: "Solicitação do líder e aprovação do gerente",
             },
             {
-              icon: Bus,
+              icon: CalendarClock,
               title: "Mudança de escala",
               desc: "Transporte por colaborador e exportação Excel",
             },
@@ -385,3 +385,4 @@ function AuthPage() {
     </div>
   );
 }
+
