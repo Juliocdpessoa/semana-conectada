@@ -326,7 +326,8 @@ function AuthedLayout() {
       </header>
       <BrandLogo
         alt=""
-        className="pointer-events-none fixed bottom-8 right-8 z-0 hidden w-64 select-none opacity-[0.035] grayscale lg:block"
+        aria-hidden="true"
+        className="pointer-events-none fixed bottom-5 right-5 z-0 w-32 select-none object-contain opacity-[0.055] sm:bottom-7 sm:right-7 sm:w-44 sm:opacity-[0.065] lg:w-60 lg:opacity-[0.075]"
       />
       <div className="relative z-10">
         <Outlet />
