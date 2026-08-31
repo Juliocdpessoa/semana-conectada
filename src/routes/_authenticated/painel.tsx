@@ -21,7 +21,15 @@ import {
   XCircle,
   Zap,
 } from "lucide-react";
-import { PageHeader, KpiCard, Panel, EmptyState, Field, Skeleton, StatusPill } from "@/components/ui-kit";
+import {
+  PageHeader,
+  KpiCard,
+  Panel,
+  EmptyState,
+  Field,
+  Skeleton,
+  StatusPill,
+} from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import {
@@ -43,9 +51,12 @@ export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
 });
 function PainelPage() {
-  const requestedView = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
+  const requestedView =
+    typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const initialView =
-    requestedView === "nao-executadas" || requestedView === "nao-justificadas" ? requestedView : "geral";
+    requestedView === "nao-executadas" || requestedView === "nao-justificadas"
+      ? requestedView
+      : "geral";
   const [view, setView] = useState<"geral" | "nao-executadas" | "nao-justificadas">(initialView);
 
   function changeView(next: "geral" | "nao-executadas" | "nao-justificadas") {
@@ -60,29 +71,49 @@ function PainelPage() {
 
   return (
     <>
-      <div className="mx-auto w-full max-w-[1400px] overflow-x-hidden px-3 pt-4 sm:px-6 sm:pt-6">
-        <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
-          <PanelTabBtn active={view === "geral"} onClick={() => changeView("geral")}>
-            Visão geral
-          </PanelTabBtn>
-          <PanelTabBtn active={view === "nao-executadas"} onClick={() => changeView("nao-executadas")}>
-            Não execução
-          </PanelTabBtn>
-          <PanelTabBtn active={view === "nao-justificadas"} onClick={() => changeView("nao-justificadas")}>
-            Não justificadas
-          </PanelTabBtn>
-        </div>
-      </div>
       {view === "geral" ? (
-        <OverviewPanel />
+        <OverviewPanel tabs={<PanelTabs view={view} onChange={changeView} />} />
       ) : (
-        <NonExecutionDashboard mode={view === "nao-justificadas" ? "unjustified" : "non-executed"} />
+        <NonExecutionDashboard
+          mode={view === "nao-justificadas" ? "unjustified" : "non-executed"}
+          tabs={<PanelTabs view={view} onChange={changeView} />}
+        />
       )}
     </>
   );
 }
 
-function PanelTabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+function PanelTabs({
+  view,
+  onChange,
+}: {
+  view: "geral" | "nao-executadas" | "nao-justificadas";
+  onChange: (view: "geral" | "nao-executadas" | "nao-justificadas") => void;
+}) {
+  return (
+    <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
+      <PanelTabBtn active={view === "geral"} onClick={() => onChange("geral")}>
+        Visão geral
+      </PanelTabBtn>
+      <PanelTabBtn active={view === "nao-executadas"} onClick={() => onChange("nao-executadas")}>
+        Não execução
+      </PanelTabBtn>
+      <PanelTabBtn active={view === "nao-justificadas"} onClick={() => onChange("nao-justificadas")}>
+        Não justificadas
+      </PanelTabBtn>
+    </div>
+  );
+}
+
+function PanelTabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <button
       type="button"
@@ -113,11 +144,12 @@ type Row = {
   planning_data: Record<string, unknown> | null;
 };
 
-function OverviewPanel() {
+function OverviewPanel({ tabs }: { tabs: ReactNode }) {
   const [selectedJustification, setSelectedJustification] = useState<string | null>(null);
   const activeWeek = useQuery({
     queryKey: ["active-week"],
-    queryFn: async () => (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
+    queryFn: async () =>
+      (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
   });
 
   const activities = useQuery({
@@ -184,7 +216,10 @@ function OverviewPanel() {
       }),
     [rows],
   );
-  const bySpecialty = useMemo(() => groupCounts(rows, (r) => r.specialty || "—").slice(0, 10), [rows]);
+  const bySpecialty = useMemo(
+    () => groupCounts(rows, (r) => r.specialty || "—").slice(0, 10),
+    [rows],
+  );
   const byDay = useMemo(() => {
     const map = new Map<string, { total: number; exec: number; nao: number }>();
     for (const r of rows) {
@@ -230,7 +265,10 @@ function OverviewPanel() {
     return (
       <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
         <PageHeader title="Painel gerencial" description="Indicadores da semana ativa." />
-        <EmptyState title="Nenhuma semana ativa" description="Importe ou ative uma semana no menu Planejamento." />
+        <EmptyState
+          title="Nenhuma semana ativa"
+          description="Importe ou ative uma semana no menu Planejamento."
+        />
       </main>
     );
   }
@@ -250,7 +288,11 @@ function OverviewPanel() {
       />
 
       <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <KpiCard label="Programadas" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Programadas"
+          value={kpis.total}
+          icon={<ListChecks className="h-3.5 w-3.5" />}
+        />
         <KpiCard
           label="Executadas"
           value={kpis.executado}
@@ -263,8 +305,17 @@ function OverviewPanel() {
           tone="destructive"
           icon={<XCircle className="h-3.5 w-3.5" />}
         />
-        <KpiCard label="Sem apontamento" value={kpis.semApont} icon={<Clock className="h-3.5 w-3.5" />} />
-        <KpiCard label="Imediatas" value={kpis.imediatas} tone="warning" icon={<Zap className="h-3.5 w-3.5" />} />
+        <KpiCard
+          label="Sem apontamento"
+          value={kpis.semApont}
+          icon={<Clock className="h-3.5 w-3.5" />}
+        />
+        <KpiCard
+          label="Imediatas"
+          value={kpis.imediatas}
+          tone="warning"
+          icon={<Zap className="h-3.5 w-3.5" />}
+        />
         <KpiCard
           label="Aderência"
           value={`${kpis.aderencia}%`}
@@ -273,8 +324,14 @@ function OverviewPanel() {
         />
       </section>
 
+      {tabs}
+
       <section className="mb-4">
-        <ProgressCurve rows={rows} startDate={activeWeek.data.start_date} endDate={activeWeek.data.end_date} />
+        <ProgressCurve
+          rows={rows}
+          startDate={activeWeek.data.start_date}
+          endDate={activeWeek.data.end_date}
+        />
       </section>
 
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
@@ -307,12 +364,17 @@ function OverviewPanel() {
         <Panel title="Por especialidade">
           <BarList items={bySpecialty} />
         </Panel>
-        <Panel title="Top 10 justificativas" description="Clique no motivo para visualizar as tarefas pendentes">
+        <Panel
+          title="Top 10 justificativas"
+          description="Clique no motivo para visualizar as tarefas pendentes"
+        >
           <PendingByJustification
             items={byJust}
             rows={rows}
             selected={selectedJustification}
-            onSelect={(key) => setSelectedJustification((current) => (current === key ? null : key))}
+            onSelect={(key) =>
+              setSelectedJustification((current) => (current === key ? null : key))
+            }
           />
         </Panel>
 
@@ -324,10 +386,20 @@ function OverviewPanel() {
   );
 }
 
-function MiniStat({ label, value, tone = "default" }: { label: string; value: string; tone?: "default" | "success" }) {
+function MiniStat({
+  label,
+  value,
+  tone = "default",
+}: {
+  label: string;
+  value: string;
+  tone?: "default" | "success";
+}) {
   return (
     <div className="text-right">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
       <div
         className={cn(
           "text-xl font-semibold leading-none tabular",
@@ -350,7 +422,8 @@ function BarList({
   onSelect?: (key: string) => void;
 }) {
   const max = Math.max(1, ...items.map(([, n]) => n));
-  const bg = color === "success" ? "bg-success" : color === "destructive" ? "bg-destructive" : "bg-primary";
+  const bg =
+    color === "success" ? "bg-success" : color === "destructive" ? "bg-destructive" : "bg-primary";
   if (items.length === 0) return <Empty />;
   return (
     <div className="space-y-2">
@@ -369,10 +442,15 @@ function BarList({
             <span className="min-w-0 flex-1 truncate text-foreground" title={k}>
               {k}
             </span>
-            <span className="shrink-0 tabular text-muted-foreground">{n.toLocaleString("pt-BR")}</span>
+            <span className="shrink-0 tabular text-muted-foreground">
+              {n.toLocaleString("pt-BR")}
+            </span>
           </div>
           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
-            <div className={cn("h-full rounded-full", bg)} style={{ width: `${(n / max) * 100}%` }} />
+            <div
+              className={cn("h-full rounded-full", bg)}
+              style={{ width: `${(n / max) * 100}%` }}
+            />
           </div>
         </button>
       ))}
@@ -397,11 +475,16 @@ function PendingByJustification({
     <div className="space-y-2">
       {items.map(([reason, count]) => {
         const open = selected === reason;
-        const tasks = open ? rows.filter((row) => row.status === "NÃO EXECUTADO" && row.justification === reason) : [];
+        const tasks = open
+          ? rows.filter((row) => row.status === "NÃO EXECUTADO" && row.justification === reason)
+          : [];
         return (
           <div
             key={reason}
-            className={cn("overflow-hidden rounded-md border", open ? "border-destructive/40" : "border-transparent")}
+            className={cn(
+              "overflow-hidden rounded-md border",
+              open ? "border-destructive/40" : "border-transparent",
+            )}
           >
             <button
               type="button"
@@ -416,7 +499,10 @@ function PendingByJustification({
                 </span>
               </div>
               <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                <div className="h-full rounded-full bg-destructive" style={{ width: `${(count / max) * 100}%` }} />
+                <div
+                  className="h-full rounded-full bg-destructive"
+                  style={{ width: `${(count / max) * 100}%` }}
+                />
               </div>
               <div className="mt-1 text-[10px] font-medium text-muted-foreground">
                 {open ? "Toque para recolher" : "Toque para ver as tarefas"}
@@ -429,7 +515,10 @@ function PendingByJustification({
                   {tasks.length.toLocaleString("pt-BR")} tarefa(s) encontrada(s)
                 </div>
                 {tasks.map((task) => (
-                  <div key={task.id} className="rounded-md border border-border bg-card p-3 text-[11px] shadow-sm">
+                  <div
+                    key={task.id}
+                    className="rounded-md border border-border bg-card p-3 text-[11px] shadow-sm"
+                  >
                     <div className="flex flex-wrap gap-x-3 gap-y-1 font-mono text-foreground">
                       <span>
                         <b>Ordem:</b> {task.order_number || "—"}
@@ -441,7 +530,9 @@ function PendingByJustification({
                         <b>Subop:</b> {planValue(task.planning_data, "Subop")}
                       </span>
                     </div>
-                    <div className="mt-2 text-[12px] leading-snug text-foreground">{task.description}</div>
+                    <div className="mt-2 text-[12px] leading-snug text-foreground">
+                      {task.description}
+                    </div>
                     <div className="mt-2 rounded bg-muted/60 px-2 py-1.5 text-[11px] leading-snug text-foreground">
                       <b>Observação:</b> {task.observation?.trim() || "—"}
                     </div>
@@ -559,7 +650,15 @@ function hoursOf(pd: Record<string, unknown> | null): number {
   return Number.isFinite(n) && n > 0 ? n : 0;
 }
 
-function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDate: string; endDate: string }) {
+function ProgressCurve({
+  rows,
+  startDate,
+  endDate,
+}: {
+  rows: CurveRow[];
+  startDate: string;
+  endDate: string;
+}) {
   const [metric, setMetric] = useState<"count" | "hours">("count");
 
   const days = useMemo(() => daysBetween(startDate, endDate), [startDate, endDate]);
@@ -595,14 +694,17 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       if (r.is_immediate) {
         if (r.status === "EXECUTADO") {
           const immediateDay =
-            reportedInWeek ?? (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
-          if (immediateDay) dImmediateExec.set(immediateDay, (dImmediateExec.get(immediateDay) ?? 0) + unit);
+            reportedInWeek ??
+            (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
+          if (immediateDay)
+            dImmediateExec.set(immediateDay, (dImmediateExec.get(immediateDay) ?? 0) + unit);
         }
         continue;
       }
 
       // Planned day
-      let plannedIso: string | null = r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
+      let plannedIso: string | null =
+        r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
       if (!plannedIso && r.is_immediate && reportedInWeek) plannedIso = reportedInWeek;
 
       if (plannedIso) {
@@ -612,7 +714,9 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
 
       // Executed day
       if (r.status === "EXECUTADO") {
-        const execIso = reportedInWeek ?? (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
+        const execIso =
+          reportedInWeek ??
+          (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
         if (execIso) {
           dExec.set(execIso, (dExec.get(execIso) ?? 0) + unit);
           if (plannedIso === execIso) {
@@ -676,7 +780,9 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
           (s as Record<string, unknown>).pctProj = round2((realizedAtCut / total) * 100);
         } else {
           projected = Math.min(projected + rate, total);
-          (s as Record<string, unknown>).pctProj = round2(Math.min(100, Math.max(0, (projected / total) * 100)));
+          (s as Record<string, unknown>).pctProj = round2(
+            Math.min(100, Math.max(0, (projected / total) * 100)),
+          );
         }
       }
     }
@@ -688,7 +794,10 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
       const linked = r.planning_data?.__linked_immediate_ids;
       return Array.isArray(linked) && linked.length > 0;
     }).length;
-    const immediateExecuted = Array.from(dImmediateExec.values()).reduce((sum, value) => sum + value, 0);
+    const immediateExecuted = Array.from(dImmediateExec.values()).reduce(
+      (sum, value) => sum + value,
+      0,
+    );
 
     return {
       data: series,
@@ -730,7 +839,9 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
             type="button"
             disabled={hoursDisabled}
             onClick={() => setMetric("hours")}
-            title={hoursDisabled ? "Sem horas planejadas suficientes nos dados desta semana" : undefined}
+            title={
+              hoursDisabled ? "Sem horas planejadas suficientes nos dados desta semana" : undefined
+            }
             className={cn(
               "rounded px-2 py-1 font-medium transition",
               effectiveMetric === "hours"
@@ -752,7 +863,11 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
         <>
           <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
             <CurveStat label="Planejado até corte" value={`${indicators.plannedPct.toFixed(1)}%`} />
-            <CurveStat label="Realizado" value={`${indicators.realPct.toFixed(1)}%`} tone="primary" />
+            <CurveStat
+              label="Realizado"
+              value={`${indicators.realPct.toFixed(1)}%`}
+              tone="primary"
+            />
             <CurveStat
               label="Desvio"
               value={`${indicators.deviation >= 0 ? "+" : ""}${indicators.deviation.toFixed(1)} pp`}
@@ -784,9 +899,21 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
             <div style={{ minWidth: Math.max(560, data.length * 70) }} className="h-[360px]">
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                  <CartesianGrid stroke="hsl(var(--border))" strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
-                  <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                  <CartesianGrid
+                    stroke="hsl(var(--border))"
+                    strokeDasharray="3 3"
+                    vertical={false}
+                  />
+                  <XAxis
+                    dataKey="label"
+                    tick={{ fontSize: 11 }}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tick={{ fontSize: 11 }}
+                    stroke="hsl(var(--muted-foreground))"
+                  />
                   <YAxis
                     yAxisId="right"
                     orientation="right"
@@ -803,13 +930,34 @@ function ProgressCurve({ rows, startDate, endDate }: { rows: CurveRow[]; startDa
                     }}
                     formatter={(value: number | string, name: string) => {
                       if (name.includes("%")) return [`${Number(value).toFixed(1)}%`, name];
-                      return [`${Number(value).toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`, name];
+                      return [
+                        `${Number(value).toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`,
+                        name,
+                      ];
                     }}
                   />
                   <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar yAxisId="left" dataKey="planned" name="Planejado (dia)" fill="#9CA3AF" barSize={14} />
-                  <Bar yAxisId="left" dataKey="exec" name="Executado (dia)" fill="#2563EB" barSize={14} />
-                  <Bar yAxisId="left" dataKey="remaining" name="Restante (dia)" fill="#16A34A" barSize={14} />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="planned"
+                    name="Planejado (dia)"
+                    fill="#9CA3AF"
+                    barSize={14}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="exec"
+                    name="Executado (dia)"
+                    fill="#2563EB"
+                    barSize={14}
+                  />
+                  <Bar
+                    yAxisId="left"
+                    dataKey="remaining"
+                    name="Restante (dia)"
+                    fill="#16A34A"
+                    barSize={14}
+                  />
                   <Bar
                     yAxisId="left"
                     dataKey="immediateExec"
@@ -889,8 +1037,12 @@ function CurveStat({
   }[tone];
   return (
     <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</div>
-      <div className={cn("mt-0.5 text-lg font-semibold leading-none tabular", toneCls)}>{value}</div>
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+        {label}
+      </div>
+      <div className={cn("mt-0.5 text-lg font-semibold leading-none tabular", toneCls)}>
+        {value}
+      </div>
     </div>
   );
 }
@@ -948,7 +1100,13 @@ const EMPTY_FILTERS: Filters = {
   origin: "all",
 };
 
-function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" }) {
+function NonExecutionDashboard({
+  mode,
+  tabs,
+}: {
+  mode: "non-executed" | "unjustified";
+  tabs: ReactNode;
+}) {
   const isUnjustifiedMode = mode === "unjustified";
   const weeks = useQuery({
     queryKey: ["non-execution-weeks"],
@@ -965,7 +1123,8 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [specialtySearch, setSpecialtySearch] = useState("");
   const [page, setPage] = useState(1);
-  const effectiveWeekId = selectedWeekId || weeks.data?.find((week) => week.is_active)?.id || weeks.data?.[0]?.id || "";
+  const effectiveWeekId =
+    selectedWeekId || weeks.data?.find((week) => week.is_active)?.id || weeks.data?.[0]?.id || "";
   const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
 
   const activities = useQuery({
@@ -998,7 +1157,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     () =>
       rows.filter((row) => {
         const status = normalizeStatusNe(row.status);
-        return isUnjustifiedMode ? status !== "EXECUTADO" && status !== "NAO EXECUTADO" : status === "NAO EXECUTADO";
+        return isUnjustifiedMode
+          ? status !== "EXECUTADO" && status !== "NAO EXECUTADO"
+          : status === "NAO EXECUTADO";
       }),
     [rows, isUnjustifiedMode],
   );
@@ -1006,7 +1167,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const matchesFilters = useCallback(
     (row: ActivityRow, omitted?: keyof Filters) => {
       const term = filters.search.trim().toLocaleLowerCase("pt-BR");
-      if (omitted !== "date" && filters.date.length > 0 && !filters.date.includes(row.scheduled_date || ""))
+      if (
+        omitted !== "date" &&
+        filters.date.length > 0 &&
+        !filters.date.includes(row.scheduled_date || "")
+      )
         return false;
       if (
         omitted !== "management" &&
@@ -1015,11 +1180,20 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
       )
         return false;
 
-      if (omitted !== "specialty" && filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) {
+      if (
+        omitted !== "specialty" &&
+        filters.specialty.length > 0 &&
+        !filters.specialty.includes(row.specialty || "")
+      ) {
         return false;
       }
-      if (omitted !== "reason" && filters.reason && reasonLabelNe(row) !== filters.reason) return false;
-      if (omitted !== "responsible" && filters.responsible && responsibleLabelNe(row) !== filters.responsible) {
+      if (omitted !== "reason" && filters.reason && reasonLabelNe(row) !== filters.reason)
+        return false;
+      if (
+        omitted !== "responsible" &&
+        filters.responsible &&
+        responsibleLabelNe(row) !== filters.responsible
+      ) {
         return false;
       }
       if (omitted !== "origin") {
@@ -1095,24 +1269,32 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   }, [specialtyOptions, specialtySearch]);
 
   const reasonOptions = useMemo(
-    () => uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "reason")).map(reasonLabelNe)).sort(localeSortNe),
-    [nonExecuted, matchesFilters],
-  );
-  const responsibleOptions = useMemo(
     () =>
-      uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "responsible")).map(responsibleLabelNe)).sort(
+      uniqueNe(nonExecuted.filter((row) => matchesFilters(row, "reason")).map(reasonLabelNe)).sort(
         localeSortNe,
       ),
     [nonExecuted, matchesFilters],
   );
+  const responsibleOptions = useMemo(
+    () =>
+      uniqueNe(
+        nonExecuted.filter((row) => matchesFilters(row, "responsible")).map(responsibleLabelNe),
+      ).sort(localeSortNe),
+    [nonExecuted, matchesFilters],
+  );
 
-  const filtered = useMemo(() => nonExecuted.filter((row) => matchesFilters(row)), [nonExecuted, matchesFilters]);
+  const filtered = useMemo(
+    () => nonExecuted.filter((row) => matchesFilters(row)),
+    [nonExecuted, matchesFilters],
+  );
 
   const denominator = useMemo(() => {
     return rows.filter((row) => {
       if (filters.date.length > 0 && !filters.date.includes(row.scheduled_date || "")) return false;
-      if (filters.management.length > 0 && !filters.management.includes(managementLabelNe(row))) return false;
-      if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || "")) return false;
+      if (filters.management.length > 0 && !filters.management.includes(managementLabelNe(row)))
+        return false;
+      if (filters.specialty.length > 0 && !filters.specialty.includes(row.specialty || ""))
+        return false;
       if (filters.origin === "programmed" && row.is_immediate) return false;
       if (filters.origin === "immediate" && !row.is_immediate) return false;
       return true;
@@ -1122,7 +1304,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const kpis = useMemo(() => {
     const affectedOrders = new Set(filtered.map((row) => row.order_number).filter(Boolean)).size;
     const immediate = filtered.filter((row) => row.is_immediate).length;
-    const percent = denominator.length ? Math.round((filtered.length / denominator.length) * 1000) / 10 : 0;
+    const percent = denominator.length
+      ? Math.round((filtered.length / denominator.length) * 1000) / 10
+      : 0;
     const hours = sumHoursNe(filtered);
     const totalHours = sumHoursNe(denominator);
     const hoursPercent = totalHours > 0 ? Math.round((hours / totalHours) * 1000) / 10 : 0;
@@ -1137,10 +1321,15 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     };
   }, [denominator, filtered]);
 
-  const reasonChart = useMemo(() => groupCountsNe(filtered, reasonLabelNe).slice(0, 10), [filtered]);
+  const reasonChart = useMemo(
+    () => groupCountsNe(filtered, reasonLabelNe).slice(0, 10),
+    [filtered],
+  );
   const dailyChart = useMemo(() => {
     const base = nonExecuted.filter((row) => matchesFilters(row, "date"));
-    const dates = uniqueNe(base.map((row) => row.scheduled_date).filter((value): value is string => !!value)).sort();
+    const dates = uniqueNe(
+      base.map((row) => row.scheduled_date).filter((value): value is string => !!value),
+    ).sort();
     return dates.map((date) => {
       const dayRows = base.filter((row) => row.scheduled_date === date);
       return {
@@ -1181,7 +1370,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
   const currentPage = Math.min(page, pageCount);
   const paginated = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  function updateFilter<K extends keyof Filters>(key: K, value: Filters[K], resets: (keyof Filters)[] = []) {
+  function updateFilter<K extends keyof Filters>(
+    key: K,
+    value: Filters[K],
+    resets: (keyof Filters)[] = [],
+  ) {
     setFilters((current) => {
       const next = { ...current, [key]: value };
       resets.forEach((resetKey) => {
@@ -1204,7 +1397,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     setPage(1);
   }
 
-  function toggleArrayFilter(key: "date" | "management" | "specialty", value: string, additive: boolean) {
+  function toggleArrayFilter(
+    key: "date" | "management" | "specialty",
+    value: string,
+    additive: boolean,
+  ) {
     setFilters((current) => {
       const list = current[key];
       const has = list.includes(value);
@@ -1269,7 +1466,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
     <main className="mx-auto w-full max-w-none overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
       <PageHeader
         eyebrow="Gestão de desvios"
-        title={isUnjustifiedMode ? "Análise de Atividades Não Justificadas" : "Análise de Não Execução"}
+        title={
+          isUnjustifiedMode ? "Análise de Atividades Não Justificadas" : "Análise de Não Execução"
+        }
         description={
           isUnjustifiedMode
             ? "Acompanhe as atividades que ainda não foram classificadas como EXECUTADO ou NÃO EXECUTADO."
@@ -1286,6 +1485,8 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </button>
         }
       />
+
+      {tabs}
 
       <Panel padded={false} className="mb-4">
         <div className="grid gap-3 p-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
@@ -1309,12 +1510,22 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           </Field>
           <Field label="Data">
             <select
-              value={filters.date.length === 1 ? filters.date[0] : filters.date.length > 1 ? "__multi" : ""}
-              onChange={(event) => updateFilter("date", event.target.value ? [event.target.value] : [])}
+              value={
+                filters.date.length === 1
+                  ? filters.date[0]
+                  : filters.date.length > 1
+                    ? "__multi"
+                    : ""
+              }
+              onChange={(event) =>
+                updateFilter("date", event.target.value ? [event.target.value] : [])
+              }
               className="input-base text-[12px]"
             >
               <option value="">Todos os dias</option>
-              {filters.date.length > 1 && <option value="__multi">{filters.date.length} dias selecionados</option>}
+              {filters.date.length > 1 && (
+                <option value="__multi">{filters.date.length} dias selecionados</option>
+              )}
               {dateOptions.map((date) => (
                 <option key={date} value={date}>
                   {formatDateNe(date)}
@@ -1325,9 +1536,15 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           <Field label="Gerência/Área">
             <select
               value={
-                filters.management.length === 1 ? filters.management[0] : filters.management.length > 1 ? "__multi" : ""
+                filters.management.length === 1
+                  ? filters.management[0]
+                  : filters.management.length > 1
+                    ? "__multi"
+                    : ""
               }
-              onChange={(event) => updateFilter("management", event.target.value ? [event.target.value] : [])}
+              onChange={(event) =>
+                updateFilter("management", event.target.value ? [event.target.value] : [])
+              }
               className="input-base text-[12px]"
             >
               <option value="">Todas</option>
@@ -1480,7 +1697,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           label={isUnjustifiedMode ? "Não justificadas" : "Não executadas"}
           value={kpis.nonExecuted}
           tone={isUnjustifiedMode ? "warning" : "destructive"}
-          icon={isUnjustifiedMode ? <FileWarning className="h-4 w-4" /> : <Ban className="h-4 w-4" />}
+          icon={
+            isUnjustifiedMode ? <FileWarning className="h-4 w-4" /> : <Ban className="h-4 w-4" />
+          }
         />
         <KpiCard
           label={isUnjustifiedMode ? "HH não justificado" : "HH não executado"}
@@ -1501,7 +1720,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           tone="warning"
           icon={<TrendingDown className="h-4 w-4" />}
         />
-        <KpiCard label="Ordens afetadas" value={kpis.affectedOrders} icon={<Target className="h-4 w-4" />} />
+        <KpiCard
+          label="Ordens afetadas"
+          value={kpis.affectedOrders}
+          icon={<Target className="h-4 w-4" />}
+        />
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
 
@@ -1519,7 +1742,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
         <Panel>
           <EmptyState
             icon={<Wrench className="h-4 w-4" />}
-            title={isUnjustifiedMode ? "Nenhuma atividade sem definição" : "Nenhuma atividade não executada"}
+            title={
+              isUnjustifiedMode
+                ? "Nenhuma atividade sem definição"
+                : "Nenhuma atividade não executada"
+            }
             description="Ajuste os filtros ou selecione outra semana."
           />
         </Panel>
@@ -1530,7 +1757,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
               <ReasonPanel
                 rows={reasonChart}
                 selectedReason={filters.reason}
-                onSelect={(reason) => updateFilter("reason", filters.reason === reason ? "" : reason)}
+                onSelect={(reason) =>
+                  updateFilter("reason", filters.reason === reason ? "" : reason)
+                }
               />
             </div>
           )}
@@ -1546,7 +1775,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                   <XAxis dataKey="date" tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <YAxis allowDecimals={false} tick={{ fontSize: 11, fontFamily: "inherit" }} />
                   <Tooltip
-                    formatter={(value: number, name: string) => (name === "HH" ? [`${value} h`, "HH"] : [value, name])}
+                    formatter={(value: number, name: string) =>
+                      name === "HH" ? [`${value} h`, "HH"] : [value, name]
+                    }
                   />
                   <Bar
                     dataKey="naoExecutadas"
@@ -1554,7 +1785,11 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                     fill="#C2413B"
                     radius={[4, 4, 0, 0]}
                     cursor="pointer"
-                    onClick={(entry: unknown, _index: number, event?: { ctrlKey?: boolean; metaKey?: boolean }) => {
+                    onClick={(
+                      entry: unknown,
+                      _index: number,
+                      event?: { ctrlKey?: boolean; metaKey?: boolean },
+                    ) => {
                       const iso =
                         (entry as { iso?: string; payload?: { iso?: string } })?.iso ??
                         (entry as { payload?: { iso?: string } })?.payload?.iso;
@@ -1600,7 +1835,10 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
           >
             <div className="grid gap-3 p-3 md:hidden">
               {paginated.map((row) => (
-                <article key={row.id} className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm">
+                <article
+                  key={row.id}
+                  className="rounded-lg border border-border bg-card p-3 text-[12px] shadow-sm"
+                >
                   <div className="flex items-start justify-between gap-2">
                     <div className="font-semibold">
                       {row.order_number || "Sem ordem"} · {row.description}
@@ -1620,7 +1858,9 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                       <b>Observação:</b> {row.observation}
                     </div>
                   )}
-                  <div className="mt-1 text-muted-foreground">Informado por {responsibleLabelNe(row)}</div>
+                  <div className="mt-1 text-muted-foreground">
+                    Informado por {responsibleLabelNe(row)}
+                  </div>
                 </article>
               ))}
             </div>
@@ -1649,14 +1889,18 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                 <tbody className="divide-y divide-border/60">
                   {paginated.map((row) => (
                     <tr key={row.id} className="row-zebra align-top">
-                      <td className="whitespace-nowrap px-3 py-2">{formatDateNe(row.scheduled_date)}</td>
+                      <td className="whitespace-nowrap px-3 py-2">
+                        {formatDateNe(row.scheduled_date)}
+                      </td>
                       <td className="px-3 py-2">
                         <div className="font-medium">{row.order_number || "—"}</div>
                         <div className="text-muted-foreground">Nota {row.note_number || "—"}</div>
                       </td>
                       <td className="px-3 py-2">
                         <div>{planValueNe(row.planning_data, "Op") || "—"}</div>
-                        <div className="text-muted-foreground">{planValueNe(row.planning_data, "Subop") || "—"}</div>
+                        <div className="text-muted-foreground">
+                          {planValueNe(row.planning_data, "Subop") || "—"}
+                        </div>
                       </td>
                       <td className="max-w-[320px] px-3 py-2">{row.description}</td>
                       <td className="px-3 py-2">{managementLabelNe(row)}</td>
@@ -1664,10 +1908,14 @@ function NonExecutionDashboard({ mode }: { mode: "non-executed" | "unjustified" 
                       <td className="max-w-[300px] px-3 py-2 font-medium text-destructive">
                         {isUnjustifiedMode ? row.status || "Sem apontamento" : reasonLabelNe(row)}
                       </td>
-                      <td className="max-w-[300px] px-3 py-2 text-muted-foreground">{row.observation || "—"}</td>
+                      <td className="max-w-[300px] px-3 py-2 text-muted-foreground">
+                        {row.observation || "—"}
+                      </td>
                       <td className="px-3 py-2">
                         <div>{responsibleLabelNe(row)}</div>
-                        <div className="text-[10px] text-muted-foreground">{formatDateTimeNe(row.reported_at)}</div>
+                        <div className="text-[10px] text-muted-foreground">
+                          {formatDateTimeNe(row.reported_at)}
+                        </div>
                       </td>
                       <td className="px-3 py-2">{row.is_immediate ? "Imediata" : "Programada"}</td>
                     </tr>
@@ -1732,10 +1980,14 @@ function ReasonPanel({
               onClick={() => onSelect(row.name)}
               aria-pressed={selected}
               className={`grid min-w-0 gap-2 rounded-md border px-3 py-2 text-left transition sm:grid-cols-[minmax(220px,340px)_1fr_72px_48px] sm:items-center ${
-                selected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-border hover:bg-muted/50"
+                selected
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-border hover:bg-muted/50"
               }`}
             >
-              <span className="min-w-0 text-[12px] font-medium leading-4 text-foreground">{row.name}</span>
+              <span className="min-w-0 text-[12px] font-medium leading-4 text-foreground">
+                {row.name}
+              </span>
               <span className="h-2 overflow-hidden rounded-full bg-muted">
                 <span
                   className="block h-full rounded-full bg-destructive"
@@ -1745,7 +1997,9 @@ function ReasonPanel({
               <span className="text-right text-[12px] tabular-nums text-muted-foreground">
                 {formatHoursNe(row.hours)}
               </span>
-              <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">{row.value}</span>
+              <span className="text-right text-[12px] font-semibold tabular-nums text-foreground">
+                {row.value}
+              </span>
             </button>
           );
         })}
@@ -1754,7 +2008,15 @@ function ReasonPanel({
   );
 }
 
-function ChartPanel({ title, description, children }: { title: string; description: string; children: ReactNode }) {
+function ChartPanel({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
   return (
     <Panel title={title} description={description}>
       <div className="h-[320px] w-full">{children}</div>
@@ -1793,7 +2055,9 @@ function RankingPanel({
               onClick={(event) => onSelect(row.name, event.ctrlKey || event.metaKey)}
               className={cn(
                 "block w-full rounded-md border px-2 py-1.5 text-left transition",
-                isSelected ? "border-primary bg-primary/5 ring-1 ring-primary" : "border-transparent hover:bg-muted/50",
+                isSelected
+                  ? "border-primary bg-primary/5 ring-1 ring-primary"
+                  : "border-transparent hover:bg-muted/50",
               )}
             >
               <div className="mb-1 flex items-center gap-2 text-[12px]">
@@ -1876,7 +2140,8 @@ function isMissingReasonNe(value: string | null) {
 }
 function isUnjustifiedActivityNe(row: ActivityRow) {
   const reason = normalizeReasonNe(row.justification);
-  const genericReasonWithoutDetails = ["outro", "outros"].includes(reason) && !row.observation?.trim();
+  const genericReasonWithoutDetails =
+    ["outro", "outros"].includes(reason) && !row.observation?.trim();
   return isMissingReasonNe(row.justification) || genericReasonWithoutDetails || !row.reported_at;
 }
 function responsibleLabelNe(row: ActivityRow) {
@@ -1914,5 +2179,8 @@ function formatShortDateNe(value: string) {
 }
 function formatDateTimeNe(value: string | null) {
   if (!value) return "—";
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(
+    new Date(value),
+  );
 }
+
