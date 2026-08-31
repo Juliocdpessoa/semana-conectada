@@ -324,11 +324,15 @@ function AuthedLayout() {
           </nav>
         )}
       </header>
-      <BrandLogo
-        alt=""
+      <div
         aria-hidden="true"
-        className="pointer-events-none fixed bottom-5 right-5 z-0 w-32 select-none object-contain opacity-[0.055] sm:bottom-7 sm:right-7 sm:w-44 sm:opacity-[0.065] lg:w-60 lg:opacity-[0.075]"
-      />
+        className="pointer-events-none fixed inset-0 z-0 flex select-none items-center justify-center overflow-hidden"
+      >
+        <BrandLogo
+          alt=""
+          className="w-[88vw] max-w-[1100px] object-contain opacity-[0.022] sm:w-[78vw] sm:opacity-[0.025] lg:w-[68vw] lg:opacity-[0.028]"
+        />
+      </div>
       <div className="relative z-10">
         <Outlet />
       </div>
