@@ -191,6 +191,7 @@ function AuthedLayout() {
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     {
+      // Nome, endereço e ícone representam o módulo atual; a rota antiga apenas redireciona.
       to: "/mudanca-de-escala",
       label: "Mudança de Escala",
       icon: CalendarClock,
