@@ -20,7 +20,7 @@ import {
   Menu,
   X,
   Timer,
-  Bus,
+  CalendarClock,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
@@ -153,7 +153,7 @@ function AuthedLayout() {
     isLogistics;
 
   useEffect(() => {
-    if (overtimeOnly && pathname !== "/hora-extra" && pathname !== "/transporte-programado") {
+    if (overtimeOnly && pathname !== "/hora-extra" && pathname !== "/mudanca-de-escala") {
       router.navigate({ to: "/hora-extra", replace: true });
     }
   }, [overtimeOnly, pathname, router]);
@@ -191,9 +191,9 @@ function AuthedLayout() {
     { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     {
-      to: "/transporte-programado",
+      to: "/mudanca-de-escala",
       label: "Mudança de Escala",
-      icon: Bus,
+      icon: CalendarClock,
       show: canScheduledTransport,
     },
     { to: "/admin/usuarios", label: "Administração", icon: Settings, show: isAdmin },
