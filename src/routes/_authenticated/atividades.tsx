@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 30402)
+Total output lines: 3186
+
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -1616,51 +1619,7 @@ function AtividadesPage() {
                     if (file) void preparePtImport(file);
                   }}
                 />
-              </>
-            )}
-            <button
-              onClick={() => activities.refetch()}
-              className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
-              title="Recarregar"
-            >
-              <RefreshCw className="h-3.5 w-3.5" /> Atualizar
-            </button>
-            <div className="hidden text-right sm:block">
-              <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Conclusão
-              </div>
-              <div className="text-lg font-semibold leading-none text-foreground tabular">
-                {kpis.percent}%
-              </div>
-            </div>
-          </div>
-        }
-      />
-
-      {/* Barra de progresso semanal */}
-      <div
-        className="mb-5 h-1 w-full overflow-hidden rounded-full bg-muted"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={kpis.percent}
-      >
-        <div className="h-full bg-success transition-all" style={{ width: `${kpis.percent}%` }} />
-      </div>
-
-      {canLoadDateEditSettings && (
-        <div
-          className={cn(
-            "mb-4 flex flex-wrap items-center justify-between gap-3 rounded-md border px-3 py-2 text-xs",
-            dateEditLocked
-              ? "border-destructive/30 bg-destructive/5 text-destructive"
-              : "border-success/30 bg-success/5 text-foreground",
-          )}
-        >
-          <div className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
-            <span>
-              Alteração de datas {dateEditLocked ? "bloqueada" : "liberada"}. Corte diário às{" "}
+       …402 tokens truncated…eEditLocked ? "bloqueada" : "liberada"}. Corte diário às{" "}
               <strong>{dateEditSettings.data?.cutoffTime ?? "15:00"}</strong> (horário de Brasília).
             </span>
           </div>
@@ -1798,7 +1757,7 @@ function AtividadesPage() {
               setSearch(e.target.value);
               setPage(0);
             }}
-            placeholder="Buscar por ordem, nota, operação, suboperação, descrição, área ou responsável…"
+            placeholder="Buscar por ordem, nota, nº de PT, operação, suboperação, descrição, área ou responsável…"
             className="input-base pl-8"
           />
         </div>
@@ -3183,3 +3142,4 @@ function BulkModal({
     </Modal>
   );
 }
+
