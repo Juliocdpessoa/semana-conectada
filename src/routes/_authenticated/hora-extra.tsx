@@ -25,6 +25,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
 import { DateRecordCalendar } from "@/components/date-record-calendar";
+
+// Um único calendário mantém a seleção de datas consistente em todas as abas de hora extra.
 import type { SessionInfo } from "./route";
 import {
   createOvertimeRequest,
