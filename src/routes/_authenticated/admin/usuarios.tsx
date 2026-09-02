@@ -42,12 +42,12 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
 ];
 
 function RoleEditor({ user, onSave }: { user: Row; onSave: (roles: AppRole[]) => Promise<boolean> }) {
-  const initial: AppRole[] = user.roles.length > 0 ? user.roles : ["leader"];
+  const initial: AppRole[] = user.roles;
   const [selected, setSelected] = useState<AppRole[]>(initial);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    setSelected(user.roles.length > 0 ? user.roles : ["leader"]);
+    setSelected(user.roles);
   }, [user.roles]);
 
   const savedKey = [...initial].sort().join("|");
