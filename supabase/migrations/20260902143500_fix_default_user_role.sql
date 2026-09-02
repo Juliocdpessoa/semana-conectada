@@ -51,3 +51,4 @@ WHERE NOT EXISTS (
   SELECT 1 FROM public.user_roles ur WHERE ur.user_id = p.id
 )
 ON CONFLICT (user_id, role) DO NOTHING;
+-- Fim da regularização de papéis padrão.
