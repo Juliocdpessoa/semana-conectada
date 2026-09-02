@@ -582,6 +582,16 @@ export const setUserApproval = createServerFn({ method: "POST" })
     if (!isGlobalAdmin && data.roles?.includes("admin")) {
       return { ok: false as const, error: "Somente o administrador geral pode conceder o perfil administrador." };
     }
+    if (data.approvalStatus === "approved" && !data.roles) {
+      const { count: currentRoleCount, error: roleCheckError } = await supabaseAdmin
+        .from("user_roles")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", data.targetUserId);
+      if (roleCheckError) return { ok: false as const, error: roleCheckError.message };
+      if (!currentRoleCount) {
+        return { ok: false as const, error: "Selecione e salve pelo menos um perfil antes de aprovar o usuário." };
+      }
+    }
     const { error: pErr } = await supabaseAdmin
       .from("profiles")
       .update({
