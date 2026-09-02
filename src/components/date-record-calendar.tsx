@@ -66,7 +66,7 @@ export function DateRecordCalendar({
       <PopoverContent
         align="start"
         collisionPadding={12}
-        className="w-[min(340px,calc(100vw-1.5rem))] p-0"
+        className="w-fit max-w-[calc(100vw-1.5rem)] p-0"
       >
         <Calendar
           mode="single"
@@ -83,7 +83,7 @@ export function DateRecordCalendar({
             hasRecords:
               "after:absolute after:bottom-0.5 after:left-1/2 after:h-1.5 after:w-1.5 after:-translate-x-1/2 after:rounded-full after:bg-emerald-500",
           }}
-          className="mx-auto"
+          className="m-0"
         />
         <div className="flex items-center justify-between gap-3 border-t border-border px-3 py-2 text-[11px]">
           <span className="flex items-center gap-1.5 text-muted-foreground">
