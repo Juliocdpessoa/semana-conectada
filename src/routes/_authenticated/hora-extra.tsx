@@ -24,6 +24,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
 import { cn } from "@/lib/utils";
+import { DateRecordCalendar } from "@/components/date-record-calendar";
 import type { SessionInfo } from "./route";
 import {
   createOvertimeRequest,
@@ -60,7 +61,11 @@ import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtim
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (!s.roles.some((role) => ["leader", "manager", "admin", "measurement_control", "logistics"].includes(role))) {
+    if (
+      !s.roles.some((role) =>
+        ["leader", "manager", "admin", "measurement_control", "logistics"].includes(role),
+      )
+    ) {
       throw redirect({ to: "/atividades" });
     }
   },
@@ -115,7 +120,8 @@ function OvertimePage() {
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
   const logisticsOnly = isLogistics && roleSet.size === 1;
-  const canExportOvertime = isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
+  const canExportOvertime =
+    isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
@@ -131,7 +137,7 @@ function OvertimePage() {
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
-      const dates = new Set<string>([toIsoDate(new Date())]);
+      const dates = new Set<string>();
       const result = await loadOvertimeForExport({
         data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
       });
@@ -147,7 +153,10 @@ function OvertimePage() {
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
       const result = await loadOvertimeForExport({
-        data: { dateFrom: exportDate, dateTo: exportDate },
+        data:
+          exportDate === "all"
+            ? { dateFrom: exportPeriod.from, dateTo: exportPeriod.to }
+            : { dateFrom: exportDate, dateTo: exportDate },
       });
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
@@ -199,7 +208,10 @@ function OvertimePage() {
   });
 
   const rows = useMemo(() => requests.data ?? [], [requests.data]);
-  const myRows = useMemo(() => rows.filter((row) => row.requester_user_id === s.userId), [rows, s.userId]);
+  const myRows = useMemo(
+    () => rows.filter((row) => row.requester_user_id === s.userId),
+    [rows, s.userId],
+  );
   const kpiBaseRows = useMemo(() => {
     if (filteredKpiRows && ["export", "list", "queue"].includes(tab)) return filteredKpiRows;
     if (tab === "export") return exportRequests.data ?? [];
@@ -214,8 +226,12 @@ function OvertimePage() {
     const pending = operationalRows.filter((row) => row.status === "pending").length;
     const approved = operationalRows.filter((row) => row.status === "approved").length;
     const rejected = operationalRows.filter((row) => row.status === "rejected").length;
-    const snacks = operationalRows.filter((row) => row.needs_snack && row.status === "approved").length;
-    const transports = operationalRows.filter((row) => row.needs_transport && row.status === "approved").length;
+    const snacks = operationalRows.filter(
+      (row) => row.needs_snack && row.status === "approved",
+    ).length;
+    const transports = operationalRows.filter(
+      (row) => row.needs_transport && row.status === "approved",
+    ).length;
     return { total, pending, approved, rejected, snacks, transports };
   }, [summaryRows]);
 
@@ -240,8 +256,17 @@ function OvertimePage() {
 
       {!logisticsOnly && (
         <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <KpiCard label="Total de colaboradores" value={kpis.total} icon={<ListChecks className="h-3.5 w-3.5" />} />
-          <KpiCard label="Pendentes" value={kpis.pending} tone="warning" icon={<Clock className="h-3.5 w-3.5" />} />
+          <KpiCard
+            label="Total de colaboradores"
+            value={kpis.total}
+            icon={<ListChecks className="h-3.5 w-3.5" />}
+          />
+          <KpiCard
+            label="Pendentes"
+            value={kpis.pending}
+            tone="warning"
+            icon={<Clock className="h-3.5 w-3.5" />}
+          />
           <KpiCard
             label="Aprovadas"
             value={kpis.approved}
@@ -331,7 +356,9 @@ function OvertimePage() {
               qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
               qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
             } catch (error) {
-              toast.error(error instanceof Error ? error.message : "Não foi possível cancelar a solicitação.");
+              toast.error(
+                error instanceof Error ? error.message : "Não foi possível cancelar a solicitação.",
+              );
             }
           }}
         />
@@ -368,7 +395,15 @@ function OvertimePage() {
   );
 }
 
-function TabBtn({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+function TabBtn({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <button
       onClick={onClick}
@@ -426,7 +461,9 @@ function WeeklyActivityExport() {
   async function exportWeeklyExcel() {
     const XLSX = await import("xlsx");
     if (!selectedWeek || !activities.data?.length) {
-      return toast.error("Esta semana não possui atividades apontadas como executadas ou não executadas.");
+      return toast.error(
+        "Esta semana não possui atividades apontadas como executadas ou não executadas.",
+      );
     }
     const responsibleHeader = "Responsável pela informação";
     const reportedAtHeader = "Data da informação";
@@ -437,9 +474,11 @@ function WeeklyActivityExport() {
         if (header === "Status") return activity.status;
         if (header === "Justificativa") return activity.justification ?? "";
         if (header === "Observações") return activity.observation ?? "";
-        if (header === responsibleHeader) return activity.reported_by_name || activity.reported_by_email || "";
+        if (header === responsibleHeader)
+          return activity.reported_by_name || activity.reported_by_email || "";
         if (header === reportedAtHeader) return formatReportedDate(activity.reported_at);
-        if (header === "Data início" || header === "Data fim") return formatPlanningDate(planning[header]);
+        if (header === "Data início" || header === "Data fim")
+          return formatPlanningDate(planning[header]);
         return planning[header] ?? "";
       });
     });
@@ -486,13 +525,15 @@ function WeeklyActivityExport() {
           disabled={!selectedWeek || activities.isLoading || !activities.data?.length}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
-          <Download className="h-4 w-4" /> {activities.isLoading ? "Carregando…" : "Exportar semana"}
+          <Download className="h-4 w-4" />{" "}
+          {activities.isLoading ? "Carregando…" : "Exportar semana"}
         </button>
       </div>
       <div className="border-t border-border p-3 text-[12px] text-muted-foreground">
         {activities.isLoading
           ? "Carregando atividades apontadas…"
-          : (activities.data?.length ?? 0) + " atividade(s) com apontamento EXECUTADO ou NÃO EXECUTADO."}
+          : (activities.data?.length ?? 0) +
+            " atividade(s) com apontamento EXECUTADO ou NÃO EXECUTADO."}
       </div>
     </Panel>
   );
@@ -517,7 +558,9 @@ function ApprovedDailyExport({
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
-  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(transportOnly ? "yes" : "all");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
+    transportOnly ? "yes" : "all",
+  );
   const effectiveDate = selectedDate || availableDates[0] || "";
 
   const dateRows = useMemo(
@@ -534,7 +577,10 @@ function ApprovedDailyExport({
     [exportableRows, effectiveDate, transportFilter, transportOnly],
   );
   const availableEntryTimes = useMemo(
-    () => [...new Set(dateRows.map((row) => row.entry_time ?? "").filter((time) => time !== ""))].sort(),
+    () =>
+      [
+        ...new Set(dateRows.map((row) => row.entry_time ?? "").filter((time) => time !== "")),
+      ].sort(),
     [dateRows],
   );
   const entryRows = useMemo(
@@ -542,12 +588,18 @@ function ApprovedDailyExport({
     [dateRows, selectedEntryTime],
   );
   const availableDepartureTimes = useMemo(
-    () => [...new Set(entryRows.map((row) => row.departure_time ?? "").filter((time) => time !== ""))].sort(),
+    () =>
+      [
+        ...new Set(entryRows.map((row) => row.departure_time ?? "").filter((time) => time !== "")),
+      ].sort(),
     [entryRows],
   );
 
   const dailyRows = useMemo(
-    () => entryRows.filter((row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime),
+    () =>
+      entryRows.filter(
+        (row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime,
+      ),
     [entryRows, selectedDepartureTime],
   );
   const pageSize = 30;
@@ -557,7 +609,10 @@ function ApprovedDailyExport({
   const paginatedDailyRows = dailyRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   useEffect(() => onFilteredRowsChange(dailyRows), [dailyRows, onFilteredRowsChange]);
-  useEffect(() => setPage(1), [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter]);
+  useEffect(
+    () => setPage(1),
+    [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter],
+  );
 
   async function exportDailyExcel() {
     const XLSX = await import("xlsx");
@@ -570,7 +625,10 @@ function ApprovedDailyExport({
     const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
 
     if (!transportOnly) {
-      const sheet = XLSX.utils.aoa_to_sheet([[...REGULAR_OVERTIME_EXPORT_HEADERS], ...regularValues]);
+      const sheet = XLSX.utils.aoa_to_sheet([
+        [...REGULAR_OVERTIME_EXPORT_HEADERS],
+        ...regularValues,
+      ]);
       sheet["!cols"] = REGULAR_OVERTIME_EXPORT_WIDTHS.map((wch) => ({ wch }));
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
@@ -630,7 +688,9 @@ function ApprovedDailyExport({
       URL.revokeObjectURL(url);
       toast.success(dailyRows.length + " colaborador(es) exportado(s) em tabela.");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível gerar a tabela de transportes.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível gerar a tabela de transportes.",
+      );
     }
   }
 
@@ -643,23 +703,16 @@ function ApprovedDailyExport({
       <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:flex-wrap sm:items-end">
         <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Data da hora extra">
-            <select
+            <DateRecordCalendar
               value={effectiveDate}
-              onChange={(event) => {
-                onSelectedDateChange(event.target.value);
+              availableDates={availableDates}
+              onChange={(date) => {
+                onSelectedDateChange(date);
                 setSelectedEntryTime("");
                 setSelectedDepartureTime("");
               }}
-              className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-            >
-              {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
-              {availableDates.length > 0 && <option value="all">Todos os dias</option>}
-              {availableDates.map((date) => (
-                <option key={date} value={date}>
-                  {formatDate(date)}
-                </option>
-              ))}
-            </select>
+              disabled={availableDates.length === 0}
+            />
           </Field>
         </div>
         <div className="w-full min-w-0 sm:max-w-[180px]">
@@ -720,7 +773,8 @@ function ApprovedDailyExport({
           disabled={!effectiveDate || dailyRows.length === 0}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
-          <Download className="h-4 w-4" /> {effectiveDate === "all" ? "Exportar todos" : "Exportar Excel do dia"}
+          <Download className="h-4 w-4" />{" "}
+          {effectiveDate === "all" ? "Exportar todos" : "Exportar Excel do dia"}
         </button>
       </div>
 
@@ -741,7 +795,8 @@ function ApprovedDailyExport({
               >
                 <div className="font-semibold text-foreground">{row.employee_name}</div>
                 <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
-                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} · {row.employee_role}
+                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} ·{" "}
+                  {row.employee_role}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
@@ -767,7 +822,8 @@ function ApprovedDailyExport({
                   <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
                 </div>
                 <div className="mt-1 break-words">
-                  <b>Origem:</b> {row.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
+                  <b>Origem:</b>{" "}
+                  {row.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
                 </div>
                 <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
@@ -812,7 +868,9 @@ function ApprovedDailyExport({
                     <td className="whitespace-nowrap px-3 py-2">{row.entry_time || "—"}</td>
                     <td className="whitespace-nowrap px-3 py-2">{row.departure_time}</td>
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">
+                      {formatDateTime(row.created_at)}
+                    </td>
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
@@ -854,17 +912,27 @@ function TransportView({
   );
   const [selectedDate, setSelectedDate] = useState("");
   const [search, setSearch] = useState("");
-  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(defaultOnlyTransport ? "yes" : "all");
+  const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
+    defaultOnlyTransport ? "yes" : "all",
+  );
   const effectiveDate = selectedDate || availableDates[0] || "";
 
-  const dateRows = useMemo(() => rows.filter((row) => row.overtime_date === effectiveDate), [rows, effectiveDate]);
+  const dateRows = useMemo(
+    () => rows.filter((row) => row.overtime_date === effectiveDate),
+    [rows, effectiveDate],
+  );
   const filtered = useMemo(() => {
     const term = search.trim().toLocaleLowerCase("pt-BR");
     return dateRows.filter((row) => {
       if (transportFilter === "yes" && !row.needs_transport) return false;
       if (transportFilter === "no" && row.needs_transport) return false;
       if (!term) return true;
-      return [row.employee_name, row.employee_registration, row.employee_external_id ?? "", row.order_number ?? ""]
+      return [
+        row.employee_name,
+        row.employee_registration,
+        row.employee_external_id ?? "",
+        row.order_number ?? "",
+      ]
         .join(" ")
         .toLocaleLowerCase("pt-BR")
         .includes(term);
@@ -874,7 +942,10 @@ function TransportView({
   const [page, setPage] = useState(1);
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const paginatedTransportRows = filtered.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedTransportRows = filtered.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   useEffect(() => setPage(1), [effectiveDate, search, transportFilter]);
 
@@ -883,13 +954,17 @@ function TransportView({
 
   async function exportExcel() {
     const XLSX = await import("xlsx");
-    if (filtered.length === 0) return toast.error("Não há colaboradores para exportar com os filtros atuais.");
+    if (filtered.length === 0)
+      return toast.error("Não há colaboradores para exportar com os filtros atuais.");
     const values = filtered.map(mapTransportExportRow);
     const sheet = XLSX.utils.aoa_to_sheet([[...TRANSPORT_EXPORT_HEADERS], ...values]);
     sheet["!cols"] = TRANSPORT_EXPORT_WIDTHS.map((wch) => ({ wch }));
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Transportes");
-    XLSX.writeFile(workbook, "transportes-" + (effectiveDate === "all" ? "todos-os-dias" : effectiveDate) + ".xlsx");
+    XLSX.writeFile(
+      workbook,
+      "transportes-" + (effectiveDate === "all" ? "todos-os-dias" : effectiveDate) + ".xlsx",
+    );
     toast.success(filtered.length + " colaborador(es) exportado(s).");
   }
 
@@ -901,18 +976,13 @@ function TransportView({
     >
       <div className="grid gap-3 border-b border-border p-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end">
         <Field label="Data da hora extra">
-          <select
+          <DateRecordCalendar
             value={effectiveDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-          >
-            {availableDates.length === 0 && <option value="">Nenhuma data disponível</option>}
-            {availableDates.map((date) => (
-              <option key={date} value={date}>
-                {formatDate(date)}
-              </option>
-            ))}
-          </select>
+            availableDates={availableDates}
+            onChange={setSelectedDate}
+            allowAll={false}
+            disabled={availableDates.length === 0}
+          />
         </Field>
         <Field label="Buscar">
           <input
@@ -944,24 +1014,32 @@ function TransportView({
       </div>
 
       <div className="border-b border-border bg-muted/30 px-3 py-2 text-[12px] text-muted-foreground">
-        {effectiveDate ? formatDate(effectiveDate) : "—"} · <b className="text-foreground">{totalDay}</b>{" "}
-        colaborador(es) registrado(s) · <b className="text-foreground">{transportDay}</b> precisam de transporte
+        {effectiveDate ? formatDate(effectiveDate) : "—"} ·{" "}
+        <b className="text-foreground">{totalDay}</b> colaborador(es) registrado(s) ·{" "}
+        <b className="text-foreground">{transportDay}</b> precisam de transporte
       </div>
 
       {loading ? (
         <div className="p-6 text-[12px] text-muted-foreground">Carregando…</div>
       ) : filtered.length === 0 ? (
         <div className="p-6">
-          <EmptyState icon={<Bus className="h-4 w-4" />} title="Nenhum colaborador com os filtros atuais" />
+          <EmptyState
+            icon={<Bus className="h-4 w-4" />}
+            title="Nenhum colaborador com os filtros atuais"
+          />
         </div>
       ) : (
         <>
           <div className="grid gap-3 p-3 md:hidden">
             {paginatedTransportRows.map((row) => (
-              <article key={row.id} className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px]">
+              <article
+                key={row.id}
+                className="min-w-0 rounded-lg border border-border bg-card p-3 text-[12px]"
+              >
                 <div className="font-semibold">{row.employee_name}</div>
                 <div className="mt-0.5 break-words text-[11px] text-muted-foreground">
-                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} · {row.employee_role}
+                  Chapa {row.employee_registration || "—"} · ID {row.employee_external_id || "—"} ·{" "}
+                  {row.employee_role}
                 </div>
                 <div className="mt-2 grid grid-cols-2 gap-2">
                   <div>
@@ -1058,10 +1136,9 @@ function MyRequests({
 }) {
   const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
   const availableDates = useMemo(() => {
-    const dates = [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
-    const today = toIsoDate(new Date());
-    if (!dates.includes(today)) dates.unshift(today);
-    return dates;
+    return [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) =>
+      b.localeCompare(a),
+    );
   }, [rows]);
   const filteredRows = useMemo(
     () => (selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows),
@@ -1087,18 +1164,12 @@ function MyRequests({
     <Panel title="Minhas solicitações" padded={false}>
       <div className="border-b border-border p-3">
         <Field label="Filtrar por data">
-          <select
-            value={selectedDate}
-            onChange={(event) => setSelectedDate(event.target.value)}
-            className="input-base block min-w-0 w-full max-w-full text-[12px] sm:max-w-xs"
-          >
-            <option value="">Todos os dias</option>
-            {availableDates.map((date) => (
-              <option key={date} value={date}>
-                {formatDate(date)}
-              </option>
-            ))}
-          </select>
+          <DateRecordCalendar
+            value={selectedDate || "all"}
+            availableDates={availableDates}
+            onChange={(date) => setSelectedDate(date === "all" ? "" : date)}
+            className="sm:max-w-xs"
+          />
         </Field>
       </div>
       {filteredRows.length === 0 ? (
@@ -1150,22 +1221,24 @@ function ApprovalQueue({
       return {
         ...representative,
         request_number: Math.min(...members.map((member) => member.request_number)),
-        employee_name: members.length === 1 ? members[0].employee_name : `${members.length} colaboradores`,
+        employee_name:
+          members.length === 1 ? members[0].employee_name : `${members.length} colaboradores`,
         employee_registration: `${members.length} colaborador(es)`,
         employee_role:
           members.length === 1
             ? members[0].employee_role
             : `${new Set(members.map((member) => member.employee_role)).size} função(ões)`,
-        groupMembers: [...members].sort((a, b) => a.employee_name.localeCompare(b.employee_name, "pt-BR")),
+        groupMembers: [...members].sort((a, b) =>
+          a.employee_name.localeCompare(b.employee_name, "pt-BR"),
+        ),
         status,
       };
     });
   }, [rows]);
   const availableDates = useMemo(() => {
-    const dates = [...new Set(groupedRows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
-    const today = toIsoDate(new Date());
-    if (!dates.includes(today)) dates.unshift(today);
-    return dates;
+    return [...new Set(groupedRows.map((row) => row.overtime_date))].sort((a, b) =>
+      b.localeCompare(a),
+    );
   }, [groupedRows]);
 
   const filtered = useMemo(() => {
@@ -1175,7 +1248,10 @@ function ApprovalQueue({
       if (q) {
         const t = q.toLowerCase();
         const team = (r.groupMembers ?? [])
-          .map((member) => `${member.employee_name} ${member.employee_registration} ${member.employee_role}`)
+          .map(
+            (member) =>
+              `${member.employee_name} ${member.employee_registration} ${member.employee_role}`,
+          )
           .join(" ");
         const hay =
           `${r.employee_name} ${r.employee_registration} ${team} ${r.requester_name} ${r.order_number ?? ""} ${r.service_description}`.toLowerCase();
@@ -1184,9 +1260,15 @@ function ApprovalQueue({
       return true;
     });
   }, [groupedRows, status, selectedDate, q]);
-  const filteredCollaborators = useMemo(() => filtered.flatMap((row) => row.groupMembers ?? [row]), [filtered]);
+  const filteredCollaborators = useMemo(
+    () => filtered.flatMap((row) => row.groupMembers ?? [row]),
+    [filtered],
+  );
 
-  useEffect(() => onFilteredRowsChange(filteredCollaborators), [filteredCollaborators, onFilteredRowsChange]);
+  useEffect(
+    () => onFilteredRowsChange(filteredCollaborators),
+    [filteredCollaborators, onFilteredRowsChange],
+  );
 
   return (
     <>
@@ -1217,18 +1299,11 @@ function ApprovalQueue({
             </select>
           </Field>
           <Field label="Data da hora extra">
-            <select
-              value={selectedDate}
-              onChange={(event) => onSelectedDateChange(event.target.value)}
-              className="input-base block min-w-0 w-full max-w-full text-[12px]"
-            >
-              <option value="">Todos os dias</option>
-              {availableDates.map((date) => (
-                <option key={date} value={date}>
-                  {formatDate(date)}
-                </option>
-              ))}
-            </select>
+            <DateRecordCalendar
+              value={selectedDate || "all"}
+              availableDates={availableDates}
+              onChange={(date) => onSelectedDateChange(date === "all" ? "" : date)}
+            />
           </Field>
         </div>
         {filtered.length === 0 ? (
@@ -1330,14 +1405,19 @@ function RequestsTable({
     <>
       <div className="grid gap-3 p-3 md:hidden">
         {paginatedRows.map((r) => (
-          <article key={r.id} className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
+          <article
+            key={r.id}
+            className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm"
+          >
             <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
               <div className="min-w-0">
                 <div className="min-w-0 break-words text-[11px] font-semibold leading-4 text-muted-foreground">
                   <span className="inline-block">#{r.request_number}</span> ·{" "}
                   <span className="inline-block">{formatDate(r.overtime_date)}</span>
                 </div>
-                {!groupedTeamView && <h3 className="break-words text-sm font-semibold">{r.employee_name}</h3>}
+                {!groupedTeamView && (
+                  <h3 className="break-words text-sm font-semibold">{r.employee_name}</h3>
+                )}
                 {!groupedTeamView && (
                   <p className="break-words text-[11px] text-muted-foreground">
                     {r.employee_registration} · {r.employee_role}
@@ -1359,9 +1439,12 @@ function RequestsTable({
                 <dd className="break-words font-medium">{r.order_number || "—"}</dd>
               </div>
               <div>
-                <dt className="text-[10px] uppercase text-muted-foreground">Entrada / Saída / Lanche</dt>
+                <dt className="text-[10px] uppercase text-muted-foreground">
+                  Entrada / Saída / Lanche
+                </dt>
                 <dd>
-                  {r.entry_time || "—"} · {r.departure_time} · Lanche: {r.needs_snack ? "Sim" : "Não"}
+                  {r.entry_time || "—"} · {r.departure_time} · Lanche:{" "}
+                  {r.needs_snack ? "Sim" : "Não"}
                 </dd>
               </div>
               {!groupedTeamView && (
@@ -1411,7 +1494,9 @@ function RequestsTable({
                           Matrícula {member.employee_registration || "—"}
                         </div>
                         <div className="break-words font-semibold">{member.employee_name}</div>
-                        <div className="mt-0.5 break-words text-muted-foreground">{member.employee_role}</div>
+                        <div className="mt-0.5 break-words text-muted-foreground">
+                          {member.employee_role}
+                        </div>
                         <div className="mt-0.5 text-muted-foreground">
                           Transporte: {member.needs_transport ? "Sim" : "Não"}
                         </div>
@@ -1421,31 +1506,35 @@ function RequestsTable({
                 </div>
               </div>
             )}
-            {r.status === "pending" && (onApprove || onReject || (onCancel && r.source_type !== "scale_change")) && (
-              <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
-                {onApprove && (
-                  <button onClick={() => onApprove(r)} className="btn-success min-h-10 justify-center text-[12px]">
-                    Aprovar
-                  </button>
-                )}
-                {onReject && (
-                  <button
-                    onClick={() => onReject(r)}
-                    className="min-h-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-[12px] font-medium text-destructive"
-                  >
-                    Reprovar
-                  </button>
-                )}
-                {onCancel && r.source_type !== "scale_change" && (
-                  <button
-                    onClick={() => onCancel(r)}
-                    className="col-span-2 min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium"
-                  >
-                    Cancelar
-                  </button>
-                )}
-              </div>
-            )}
+            {r.status === "pending" &&
+              (onApprove || onReject || (onCancel && r.source_type !== "scale_change")) && (
+                <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
+                  {onApprove && (
+                    <button
+                      onClick={() => onApprove(r)}
+                      className="btn-success min-h-10 justify-center text-[12px]"
+                    >
+                      Aprovar
+                    </button>
+                  )}
+                  {onReject && (
+                    <button
+                      onClick={() => onReject(r)}
+                      className="min-h-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-[12px] font-medium text-destructive"
+                    >
+                      Reprovar
+                    </button>
+                  )}
+                  {onCancel && r.source_type !== "scale_change" && (
+                    <button
+                      onClick={() => onCancel(r)}
+                      className="col-span-2 min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium"
+                    >
+                      Cancelar
+                    </button>
+                  )}
+                </div>
+              )}
           </article>
         ))}
       </div>
@@ -1455,7 +1544,9 @@ function RequestsTable({
             <tr>
               <th className="px-3 py-2 text-left font-semibold">#</th>
               <th className="px-3 py-2 text-left font-semibold">Data</th>
-              {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Colaborador</th>}
+              {!groupedTeamView && (
+                <th className="px-3 py-2 text-left font-semibold">Colaborador</th>
+              )}
               {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Matrícula</th>}
               {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Função</th>}
               <th className="px-3 py-2 text-left font-semibold">Ordem</th>
@@ -1475,9 +1566,13 @@ function RequestsTable({
               <Fragment key={r.id}>
                 <tr className="row-zebra align-top">
                   <td className="px-3 py-2 tabular font-medium">#{r.request_number}</td>
-                  <td className="px-3 py-2 tabular whitespace-nowrap">{formatDate(r.overtime_date)}</td>
+                  <td className="px-3 py-2 tabular whitespace-nowrap">
+                    {formatDate(r.overtime_date)}
+                  </td>
                   {!groupedTeamView && <td className="px-3 py-2">{r.employee_name}</td>}
-                  {!groupedTeamView && <td className="px-3 py-2 tabular">{r.employee_registration}</td>}
+                  {!groupedTeamView && (
+                    <td className="px-3 py-2 tabular">{r.employee_registration}</td>
+                  )}
                   {!groupedTeamView && <td className="px-3 py-2">{r.employee_role}</td>}
                   <td className="px-3 py-2 tabular">
                     {r.order_number || <span className="text-muted-foreground">—</span>}
@@ -1491,7 +1586,9 @@ function RequestsTable({
                   <td className="whitespace-nowrap px-3 py-2">
                     {r.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
                   </td>
-                  {showRequester && <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>}
+                  {showRequester && (
+                    <td className="px-3 py-2">{r.requester_name || r.requester_email}</td>
+                  )}
                   <td className="px-3 py-2">
                     <OvertimeStatus status={r.status} />
                   </td>
@@ -1501,7 +1598,9 @@ function RequestsTable({
                         <div className="font-medium">{r.decided_by_name}</div>
                         <div className="text-muted-foreground">{formatDateTime(r.decided_at)}</div>
                         {r.manager_comment && (
-                          <div className="mt-1 max-w-[240px] text-muted-foreground">"{r.manager_comment}"</div>
+                          <div className="mt-1 max-w-[240px] text-muted-foreground">
+                            "{r.manager_comment}"
+                          </div>
                         )}
                       </>
                     ) : (
@@ -1511,7 +1610,10 @@ function RequestsTable({
                   <td className="px-3 py-2 text-right">
                     <div className="inline-flex flex-wrap justify-end gap-1">
                       {onApprove && r.status === "pending" && (
-                        <button onClick={() => onApprove(r)} className="btn-success py-1 text-[11px]">
+                        <button
+                          onClick={() => onApprove(r)}
+                          className="btn-success py-1 text-[11px]"
+                        >
                           Aprovar
                         </button>
                       )}
@@ -1537,7 +1639,9 @@ function RequestsTable({
                 {groupedTeamView && r.groupMembers && r.groupMembers.length > 0 && (
                   <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
                     <td
-                      colSpan={groupedTeamView ? (showRequester ? 12 : 11) : showRequester ? 14 : 13}
+                      colSpan={
+                        groupedTeamView ? (showRequester ? 12 : 11) : showRequester ? 14 : 13
+                      }
                       className="px-3 pb-3 pt-0"
                     >
                       <div className="overflow-hidden rounded-md border border-border bg-card">
@@ -1554,10 +1658,12 @@ function RequestsTable({
                             </div>
                             <div className="shrink-0 text-right text-[11px] text-muted-foreground">
                               <p>
-                                {formatDate(r.overtime_date)} · {r.entry_time || "—"} às {r.departure_time}
+                                {formatDate(r.overtime_date)} · {r.entry_time || "—"} às{" "}
+                                {r.departure_time}
                               </p>
                               <p className="font-medium text-foreground">
-                                {r.groupMembers.length} {r.groupMembers.length === 1 ? "colaborador" : "colaboradores"}
+                                {r.groupMembers.length}{" "}
+                                {r.groupMembers.length === 1 ? "colaborador" : "colaboradores"}
                               </p>
                             </div>
                           </div>
@@ -1654,7 +1760,10 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
     refetchOnWindowFocus: false,
     queryFn: () => loadEmployees(false),
   });
-  const filtered = useMemo(() => filterEmployees(employees.data ?? [], search), [employees.data, search]);
+  const filtered = useMemo(
+    () => filterEmployees(employees.data ?? [], search),
+    [employees.data, search],
+  );
   const totalEmployees = employees.data?.length ?? 0;
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const currentPage = Math.min(page, pageCount);
@@ -1674,7 +1783,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
       qc.invalidateQueries({ queryKey: ["employees"] });
       qc.invalidateQueries({ queryKey: ["active-employees"] });
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível alterar o colaborador.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível alterar o colaborador.",
+      );
     } finally {
       setChangingId(null);
     }
@@ -1693,7 +1804,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
         qc.invalidateQueries({ queryKey: ["active-employees"] }),
       ]);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível excluir o colaborador.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível excluir o colaborador.",
+      );
     } finally {
       setChangingId(null);
     }
@@ -1713,7 +1826,8 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
             />
           </div>
           <div className="shrink-0 text-[11px] text-muted-foreground">
-            Total: <span className="font-semibold text-foreground">{totalEmployees}</span> colaboradores
+            Total: <span className="font-semibold text-foreground">{totalEmployees}</span>{" "}
+            colaboradores
             {search && ` · ${filtered.length} encontrados`}
           </div>
         </div>
@@ -1739,7 +1853,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
         )}
       </div>
       {employees.isLoading ? (
-        <div className="p-6 text-center text-[12px] text-muted-foreground">Carregando colaboradores…</div>
+        <div className="p-6 text-center text-[12px] text-muted-foreground">
+          Carregando colaboradores…
+        </div>
       ) : filtered.length === 0 ? (
         <div className="p-6">
           <EmptyState
@@ -1763,7 +1879,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   <span
                     className={cn(
                       "rounded px-2 py-1 text-[10px] font-medium",
-                      employee.is_active ? "bg-success/10 text-success" : "bg-muted text-muted-foreground",
+                      employee.is_active
+                        ? "bg-success/10 text-success"
+                        : "bg-muted text-muted-foreground",
                     )}
                   >
                     {employee.is_active ? "Ativo" : "Inativo"}
@@ -1790,7 +1908,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   </div>
                   <div>
                     <span className="text-muted-foreground">Endereço: </span>
-                    {[employee.address, employee.neighborhood, employee.city].filter(Boolean).join(" - ") || "—"}
+                    {[employee.address, employee.neighborhood, employee.city]
+                      .filter(Boolean)
+                      .join(" - ") || "—"}
                   </div>
                   <div>
                     <span className="text-muted-foreground">Linha: </span>
@@ -1810,7 +1930,11 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                       onClick={() => changeStatus(employee)}
                       className="flex min-h-9 flex-1 items-center justify-center gap-1 rounded border border-border text-[11px] hover:bg-muted disabled:opacity-60"
                     >
-                      {employee.is_active ? <UserX className="h-3.5 w-3.5" /> : <UserCheck className="h-3.5 w-3.5" />}
+                      {employee.is_active ? (
+                        <UserX className="h-3.5 w-3.5" />
+                      ) : (
+                        <UserCheck className="h-3.5 w-3.5" />
+                      )}
                       {employee.is_active ? "Inativar" : "Reativar"}
                     </button>
                     <button
@@ -1839,7 +1963,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                   <th className="px-3 py-2">Endereço</th>
                   <th className="px-3 py-2">Linha</th>
                   <th className="px-3 py-2">Status</th>
-                  {!readOnly && <th className="sticky right-0 z-30 bg-muted px-3 py-2 text-right">Ação</th>}
+                  {!readOnly && (
+                    <th className="sticky right-0 z-30 bg-muted px-3 py-2 text-right">Ação</th>
+                  )}
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1853,7 +1979,9 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                     <td className="px-3 py-2">{employee.phone || "—"}</td>
                     <td className="px-3 py-2">{employee.message_contact || "—"}</td>
                     <td className="max-w-[360px] px-3 py-2">
-                      {[employee.address, employee.neighborhood, employee.city].filter(Boolean).join(" - ") || "—"}
+                      {[employee.address, employee.neighborhood, employee.city]
+                        .filter(Boolean)
+                        .join(" - ") || "—"}
                     </td>
                     <td className="px-3 py-2">{employee.transport_line || "—"}</td>
                     <td className="px-3 py-2">{employee.is_active ? "Ativo" : "Inativo"}</td>
@@ -1963,8 +2091,8 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
           }
         >
           <p className="text-[12px] text-muted-foreground">
-            Esta ação remove o cadastro do colaborador e não pode ser desfeita. Cadastros vinculados a registros
-            históricos devem ser inativados em vez de excluídos.
+            Esta ação remove o cadastro do colaborador e não pode ser desfeita. Cadastros vinculados
+            a registros históricos devem ser inativados em vez de excluídos.
           </p>
         </Modal>
       )}
@@ -1985,7 +2113,9 @@ function EditEmployeeModal({
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     badge: employee.badge.startsWith("__missing_badge__:") ? "" : employee.badge,
-    employee_id: employee.employee_id.startsWith("__missing_employee_id__:") ? "" : employee.employee_id,
+    employee_id: employee.employee_id.startsWith("__missing_employee_id__:")
+      ? ""
+      : employee.employee_id,
     admission_date: employee.admission_date?.slice(0, 10) ?? "",
     full_name: employee.full_name,
     job_title: employee.job_title,
@@ -2000,9 +2130,12 @@ function EditEmployeeModal({
     setForm((current) => ({ ...current, [key]: event.target.value }));
 
   async function save() {
-    if (!form.full_name.trim() || !form.job_title.trim()) return toast.error("Nome e função são obrigatórios.");
-    if (!form.badge.trim() && !form.employee_id.trim()) return toast.error("Informe a Chapa ou o ID.");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.admission_date)) return toast.error("Informe uma data de admissão válida.");
+    if (!form.full_name.trim() || !form.job_title.trim())
+      return toast.error("Nome e função são obrigatórios.");
+    if (!form.badge.trim() && !form.employee_id.trim())
+      return toast.error("Informe a Chapa ou o ID.");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.admission_date))
+      return toast.error("Informe uma data de admissão válida.");
     setSaving(true);
     try {
       const res = await call({ data: { id: employee.id, ...form } });
@@ -2010,7 +2143,9 @@ function EditEmployeeModal({
       toast.success("Colaborador atualizado.");
       onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o colaborador.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar o colaborador.",
+      );
     } finally {
       setSaving(false);
     }
@@ -2024,10 +2159,17 @@ function EditEmployeeModal({
       onClose={onClose}
       footer={
         <>
-          <button onClick={onClose} className="rounded border border-border px-3 py-1.5 text-[12px] hover:bg-muted">
+          <button
+            onClick={onClose}
+            className="rounded border border-border px-3 py-1.5 text-[12px] hover:bg-muted"
+          >
             Cancelar
           </button>
-          <button onClick={save} disabled={saving} className="btn-primary text-[12px] disabled:opacity-60">
+          <button
+            onClick={save}
+            disabled={saving}
+            className="btn-primary text-[12px] disabled:opacity-60"
+          >
             {saving ? "Salvando…" : "Salvar alterações"}
           </button>
         </>
@@ -2035,16 +2177,28 @@ function EditEmployeeModal({
     >
       <div className="grid gap-3 sm:grid-cols-2">
         <Field label="Nome completo" required>
-          <input className="input-base text-[12px]" value={form.full_name} onChange={set("full_name")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.full_name}
+            onChange={set("full_name")}
+          />
         </Field>
         <Field label="Função" required>
-          <input className="input-base text-[12px]" value={form.job_title} onChange={set("job_title")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.job_title}
+            onChange={set("job_title")}
+          />
         </Field>
         <Field label="Chapa">
           <input className="input-base text-[12px]" value={form.badge} onChange={set("badge")} />
         </Field>
         <Field label="ID">
-          <input className="input-base text-[12px]" value={form.employee_id} onChange={set("employee_id")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.employee_id}
+            onChange={set("employee_id")}
+          />
         </Field>
         <Field label="Admissão" required>
           <input
@@ -2058,16 +2212,32 @@ function EditEmployeeModal({
           <input className="input-base text-[12px]" value={form.phone} onChange={set("phone")} />
         </Field>
         <Field label="Contato (recado)">
-          <input className="input-base text-[12px]" value={form.message_contact} onChange={set("message_contact")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.message_contact}
+            onChange={set("message_contact")}
+          />
         </Field>
         <Field label="Linha de transporte">
-          <input className="input-base text-[12px]" value={form.transport_line} onChange={set("transport_line")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.transport_line}
+            onChange={set("transport_line")}
+          />
         </Field>
         <Field label="Endereço">
-          <input className="input-base text-[12px]" value={form.address} onChange={set("address")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.address}
+            onChange={set("address")}
+          />
         </Field>
         <Field label="Bairro">
-          <input className="input-base text-[12px]" value={form.neighborhood} onChange={set("neighborhood")} />
+          <input
+            className="input-base text-[12px]"
+            value={form.neighborhood}
+            onChange={set("neighborhood")}
+          />
         </Field>
         <Field label="Cidade">
           <input className="input-base text-[12px]" value={form.city} onChange={set("city")} />
@@ -2084,7 +2254,11 @@ function formatEmployeeSpreadsheetDate(value: unknown) {
     return `${day}/${month}/${value.getUTCFullYear()}`;
   }
   const numericValue =
-    typeof value === "number" ? value : /^\d+(?:\.\d+)?$/.test(String(value).trim()) ? Number(value) : null;
+    typeof value === "number"
+      ? value
+      : /^\d+(?:\.\d+)?$/.test(String(value).trim())
+        ? Number(value)
+        : null;
   if (numericValue !== null && numericValue > 0) {
     const parsed = new Date(Date.UTC(1899, 11, 30) + Math.round(numericValue * 86_400_000));
     if (!Number.isNaN(parsed.getTime())) {
@@ -2119,21 +2293,33 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         raw: true,
       });
       if (!rows.length) throw new Error("A planilha está vazia.");
-      const receivedHeaders = rows[0].slice(0, EMPLOYEE_TEMPLATE_HEADERS.length).map((value) => String(value).trim());
-      const validHeaders = EMPLOYEE_TEMPLATE_HEADERS.every((header, index) => receivedHeaders[index] === header);
+      const receivedHeaders = rows[0]
+        .slice(0, EMPLOYEE_TEMPLATE_HEADERS.length)
+        .map((value) => String(value).trim());
+      const validHeaders = EMPLOYEE_TEMPLATE_HEADERS.every(
+        (header, index) => receivedHeaders[index] === header,
+      );
       if (!validHeaders) {
-        throw new Error(`Cabeçalhos inválidos. Use exatamente: ${EMPLOYEE_TEMPLATE_HEADERS.join(", ")}.`);
+        throw new Error(
+          `Cabeçalhos inválidos. Use exatamente: ${EMPLOYEE_TEMPLATE_HEADERS.join(", ")}.`,
+        );
       }
       const employeeRows = rows
         .slice(1)
         .map((row) =>
           row
             .slice(0, EMPLOYEE_TEMPLATE_HEADERS.length)
-            .map((value, index) => (index === 2 ? formatEmployeeSpreadsheetDate(value) : String(value ?? "").trim())),
+            .map((value, index) =>
+              index === 2 ? formatEmployeeSpreadsheetDate(value) : String(value ?? "").trim(),
+            ),
         )
         .filter((row) => row.some(Boolean));
       if (!employeeRows.length) throw new Error("A planilha não possui colaboradores preenchidos.");
-      setRaw([Array.from(EMPLOYEE_TEMPLATE_HEADERS), ...employeeRows].map((row) => row.join("\t")).join("\n"));
+      setRaw(
+        [Array.from(EMPLOYEE_TEMPLATE_HEADERS), ...employeeRows]
+          .map((row) => row.join("\t"))
+          .join("\n"),
+      );
       toast.success(`${employeeRows.length} colaborador(es) carregado(s) da planilha.`);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Não foi possível ler a planilha.");
@@ -2143,7 +2329,8 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   }
 
   async function save() {
-    if (!parsed.records.length) return toast.error("Importe ou cole ao menos um colaborador válido.");
+    if (!parsed.records.length)
+      return toast.error("Importe ou cole ao menos um colaborador válido.");
     if (parsed.errors.length) return toast.error("Corrija as linhas inválidas antes de salvar.");
     setSaving(true);
     try {
@@ -2161,8 +2348,8 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
     <Modal onClose={onClose} title="Importar / atualizar colaboradores" size="lg">
       <div className="rounded border border-primary/20 bg-primary/5 p-3 text-[12px]">
         <b>Como usar:</b> copie as linhas do Excel e cole abaixo, nesta ordem:{" "}
-        <b>Chapa, ID, Data de Admissão, Nome, Função</b>. A data aceita dd/mm/aaaa ou aaaa-mm-dd. Chapas existentes
-        serão atualizadas e reativadas.
+        <b>Chapa, ID, Data de Admissão, Nome, Função</b>. A data aceita dd/mm/aaaa ou aaaa-mm-dd.
+        Chapas existentes serão atualizadas e reativadas.
       </div>
       <div className="mt-3 rounded border border-border p-3">
         <label
@@ -2185,8 +2372,8 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
           />
         </label>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          Aceita arquivos .xlsx ou .xls gerados pelo botão Baixar modelo. Os cabeçalhos e a ordem são validados antes da
-          importação.
+          Aceita arquivos .xlsx ou .xls gerados pelo botão Baixar modelo. Os cabeçalhos e a ordem
+          são validados antes da importação.
         </p>
       </div>
       <div className="mt-3 text-center text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
@@ -2202,9 +2389,13 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
         }
       />
       <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
-        <span className="rounded bg-success/10 px-2 py-1 text-success">{parsed.records.length} linha(s) válida(s)</span>
+        <span className="rounded bg-success/10 px-2 py-1 text-success">
+          {parsed.records.length} linha(s) válida(s)
+        </span>
         {parsed.errors.length > 0 && (
-          <span className="rounded bg-destructive/10 px-2 py-1 text-destructive">{parsed.errors.length} erro(s)</span>
+          <span className="rounded bg-destructive/10 px-2 py-1 text-destructive">
+            {parsed.errors.length} erro(s)
+          </span>
         )}
       </div>
       {parsed.errors.length > 0 && (
@@ -2269,7 +2460,16 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
   const [transportEmployeeIds, setTransportEmployeeIds] = useState<string[]>([]);
   const draftLoaded = useRef(false);
-  const departureTimeOptions = ["18:30", "19:30", "20:00", "20:30", "04:30", "05:30", "06:30", "07:30"];
+  const departureTimeOptions = [
+    "18:30",
+    "19:30",
+    "20:00",
+    "20:30",
+    "04:30",
+    "05:30",
+    "06:30",
+    "07:30",
+  ];
   const entryTimeOptions = ["17:18", ...departureTimeOptions];
   const [form, setForm] = useState({
     activity_id: null as string | null,
@@ -2295,10 +2495,14 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           form?: Partial<typeof form>;
         };
         if (Array.isArray(parsed.selectedEmployeeIds)) {
-          setSelectedEmployeeIds(parsed.selectedEmployeeIds.filter((id): id is string => typeof id === "string"));
+          setSelectedEmployeeIds(
+            parsed.selectedEmployeeIds.filter((id): id is string => typeof id === "string"),
+          );
         }
         if (Array.isArray(parsed.transportEmployeeIds)) {
-          setTransportEmployeeIds(parsed.transportEmployeeIds.filter((id): id is string => typeof id === "string"));
+          setTransportEmployeeIds(
+            parsed.transportEmployeeIds.filter((id): id is string => typeof id === "string"),
+          );
         }
         if (parsed.form && typeof parsed.form === "object") {
           setForm((current) => ({ ...current, ...parsed.form }));
@@ -2339,8 +2543,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   ];
   const currentYear = new Date().getFullYear();
   const dateYears = Array.from({ length: 4 }, (_, index) => String(currentYear - 1 + index));
-  const dateDays = Array.from({ length: new Date(Number(dateYear), Number(dateMonth), 0).getDate() }, (_, index) =>
-    String(index + 1).padStart(2, "0"),
+  const dateDays = Array.from(
+    { length: new Date(Number(dateYear), Number(dateMonth), 0).getDate() },
+    (_, index) => String(index + 1).padStart(2, "0"),
   );
 
   function setDatePart(part: "year" | "month" | "day", value: string) {
@@ -2360,7 +2565,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     refetchOnWindowFocus: false,
     queryFn: () => loadEmployees(true),
   });
-  const selectedEmployees = (employees.data ?? []).filter((employee) => selectedEmployeeIds.includes(employee.id));
+  const selectedEmployees = (employees.data ?? []).filter((employee) =>
+    selectedEmployeeIds.includes(employee.id),
+  );
   const filteredEmployees = useMemo(() => {
     const term = employeeSearch.trim().toLocaleLowerCase("pt-BR");
     if (term.length < 2) return [];
@@ -2385,7 +2592,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   const activeWeek = useQuery({
     queryKey: ["active-week"],
     queryFn: async () => {
-      const { data, error } = await supabase.from("weeks").select("id").eq("is_active", true).maybeSingle();
+      const { data, error } = await supabase
+        .from("weeks")
+        .select("id")
+        .eq("is_active", true)
+        .maybeSingle();
       if (error) throw error;
       return data;
     },
@@ -2420,7 +2631,12 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
   }
-  function pickActivity(a: { id: string; week_id: string; order_number: string | null; description: string }) {
+  function pickActivity(a: {
+    id: string;
+    week_id: string;
+    order_number: string | null;
+    description: string;
+  }) {
     setForm((f) => ({
       ...f,
       activity_id: a.id,
@@ -2432,7 +2648,8 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
   async function submit() {
     if (selectedEmployeeIds.length === 0) return toast.error("Selecione ao menos um colaborador.");
-    if (!form.overtime_date || !form.departure_time) return toast.error("Informe a data e o horário da hora extra.");
+    if (!form.overtime_date || !form.departure_time)
+      return toast.error("Informe a data e o horário da hora extra.");
     if (!form.service_description.trim() || !form.justification.trim())
       return toast.error("Descreva o serviço e a justificativa.");
     setSaving(true);
@@ -2440,7 +2657,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       const res = await call({
         data: {
           employee_ids: selectedEmployeeIds,
-          transport_employee_ids: transportEmployeeIds.filter((id) => selectedEmployeeIds.includes(id)),
+          transport_employee_ids: transportEmployeeIds.filter((id) =>
+            selectedEmployeeIds.includes(id),
+          ),
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
@@ -2457,7 +2676,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       sessionStorage.removeItem(draftStorageKey);
       onCreated();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível enviar as solicitações.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível enviar as solicitações.",
+      );
     } finally {
       setSaving(false);
     }
@@ -2483,7 +2704,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             onChange={(e) => setEmployeeSearch(e.target.value)}
           />
         </div>
-        {employees.isLoading && <div className="mt-2 text-[12px] text-muted-foreground">Carregando colaboradores…</div>}
+        {employees.isLoading && (
+          <div className="mt-2 text-[12px] text-muted-foreground">Carregando colaboradores…</div>
+        )}
         {employeeSearch.trim().length >= 2 && (
           <div className="mt-2 max-h-48 divide-y divide-border overflow-auto rounded border border-border bg-card">
             {filteredEmployees.map((employee) => {
@@ -2509,7 +2732,9 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
               );
             })}
             {filteredEmployees.length === 0 && (
-              <div className="p-3 text-[12px] text-muted-foreground">Nenhum colaborador ativo encontrado.</div>
+              <div className="p-3 text-[12px] text-muted-foreground">
+                Nenhum colaborador ativo encontrado.
+              </div>
             )}
           </div>
         )}
@@ -2597,7 +2822,13 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           <Field label="Horário de entrada (opcional)">
             <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
-              value={customEntryTime ? "__other__" : entryTimeOptions.includes(form.entry_time) ? form.entry_time : ""}
+              value={
+                customEntryTime
+                  ? "__other__"
+                  : entryTimeOptions.includes(form.entry_time)
+                    ? form.entry_time
+                    : ""
+              }
               onChange={(e) => {
                 const isOther = e.target.value === "__other__";
                 setCustomEntryTime(isOther);
@@ -2629,7 +2860,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             <select
               className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
               style={{ width: "100%", minWidth: 0, maxWidth: "100%", boxSizing: "border-box" }}
-              value={departureTimeOptions.includes(form.departure_time) ? form.departure_time : "__other__"}
+              value={
+                departureTimeOptions.includes(form.departure_time)
+                  ? form.departure_time
+                  : "__other__"
+              }
               onChange={(e) =>
                 setForm({
                   ...form,
@@ -2776,10 +3011,13 @@ function DecideModal({
   const isReject = decision === "rejected";
 
   async function submit() {
-    if (isReject && !comment.trim()) return toast.error("Comentário é obrigatório para reprovação.");
+    if (isReject && !comment.trim())
+      return toast.error("Comentário é obrigatório para reprovação.");
     if (
       !confirm(
-        isReject ? `Reprovar solicitação #${row.request_number}?` : `Aprovar solicitação #${row.request_number}?`,
+        isReject
+          ? `Reprovar solicitação #${row.request_number}?`
+          : `Aprovar solicitação #${row.request_number}?`,
       )
     )
       return;
@@ -2820,11 +3058,12 @@ function DecideModal({
           <b>#{row.request_number}</b> · {formatDate(row.overtime_date)}
         </div>
         <div className="mt-1">
-          <b>Colaborador:</b> {row.employee_name} · {row.employee_registration} · {row.employee_role}
+          <b>Colaborador:</b> {row.employee_name} · {row.employee_registration} ·{" "}
+          {row.employee_role}
         </div>
         <div>
-          <b>Ordem:</b> {row.order_number || "—"} · <b>Entrada:</b> {row.entry_time || "—"} · <b>Saída:</b>{" "}
-          {row.departure_time} · <b>Lanche:</b> {row.needs_snack ? "Sim" : "Não"}
+          <b>Ordem:</b> {row.order_number || "—"} · <b>Entrada:</b> {row.entry_time || "—"} ·{" "}
+          <b>Saída:</b> {row.departure_time} · <b>Lanche:</b> {row.needs_snack ? "Sim" : "Não"}
         </div>
         <div className="mt-1">
           <b>Serviço:</b> {row.service_description}
@@ -2832,11 +3071,21 @@ function DecideModal({
         <div className="mt-1">
           <b>Justificativa:</b> {row.justification}
         </div>
-        <div className="mt-1 text-muted-foreground">Solicitado por {row.requester_name || row.requester_email}</div>
+        <div className="mt-1 text-muted-foreground">
+          Solicitado por {row.requester_name || row.requester_email}
+        </div>
       </div>
       <div className="mt-3">
-        <Field label={isReject ? "Comentário (obrigatório)" : "Comentário (opcional)"} required={isReject}>
-          <textarea rows={3} className="input-base" value={comment} onChange={(e) => setComment(e.target.value)} />
+        <Field
+          label={isReject ? "Comentário (obrigatório)" : "Comentário (opcional)"}
+          required={isReject}
+        >
+          <textarea
+            rows={3}
+            className="input-base"
+            value={comment}
+            onChange={(e) => setComment(e.target.value)}
+          />
         </Field>
       </div>
       <div className="mt-4 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
@@ -2863,3 +3112,4 @@ function DecideModal({
     </Modal>
   );
 }
+
