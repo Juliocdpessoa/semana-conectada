@@ -32,6 +32,8 @@ import {
   createOvertimeRequest,
   decideOvertimeRequest,
   cancelOvertimeRequest,
+  updateOvertimeRequest,
+  deleteOvertimeRequest,
   upsertEmployees,
   setEmployeeActive,
   deleteEmployee,
@@ -121,6 +123,7 @@ function OvertimePage() {
   const canRequest = roleSet.has("leader") || isAdmin || roleSet.has("measurement_control");
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
+  const canManageDailyRequests = isLogistics || isAdmin;
   const logisticsOnly = isLogistics && roleSet.size === 1;
   const canExportOvertime =
     isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
@@ -165,6 +168,8 @@ function OvertimePage() {
     },
   });
   const [showNew, setShowNew] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<OvertimeRow | null>(null);
+  const [deletingRequest, setDeletingRequest] = useState<OvertimeRow | null>(null);
   const [summaryDate, setSummaryDate] = useState(() => toIsoDate(new Date()));
   const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
 
@@ -337,6 +342,9 @@ function OvertimePage() {
           availableDates={exportDateOptions.data ?? [exportDate]}
           onSelectedDateChange={setExportDate}
           onFilteredRowsChange={setFilteredKpiRows}
+          canManageRequests={canManageDailyRequests}
+          onEdit={setEditingRequest}
+          onDelete={setDeletingRequest}
         />
       )}
 
@@ -346,6 +354,8 @@ function OvertimePage() {
         <MyRequests
           rows={myRows}
           onFilteredRowsChange={setFilteredKpiRows}
+          onEdit={setEditingRequest}
+          onDelete={setDeletingRequest}
           onCancel={async (row) => {
             if (!confirm(`Cancelar solicitação #${row.request_number}?`)) return;
             try {
@@ -390,6 +400,30 @@ function OvertimePage() {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
             qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
+          }}
+        />
+      )}
+      {editingRequest && (
+        <EditOvertimeRequestModal
+          row={editingRequest}
+          onClose={() => setEditingRequest(null)}
+          onSaved={() => {
+            setEditingRequest(null);
+            qc.invalidateQueries({ queryKey: ["overtime-requests"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
+          }}
+        />
+      )}
+      {deletingRequest && (
+        <DeleteOvertimeRequestModal
+          row={deletingRequest}
+          onClose={() => setDeletingRequest(null)}
+          onDeleted={() => {
+            setDeletingRequest(null);
+            qc.invalidateQueries({ queryKey: ["overtime-requests"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
           }}
         />
       )}
@@ -549,6 +583,9 @@ function ApprovedDailyExport({
   availableDates,
   onSelectedDateChange,
   onFilteredRowsChange,
+  canManageRequests = false,
+  onEdit,
+  onDelete,
 }: {
   rows: OvertimeRow[];
   transportOnly?: boolean;
@@ -556,10 +593,14 @@ function ApprovedDailyExport({
   availableDates: string[];
   onSelectedDateChange: (date: string) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
+  canManageRequests?: boolean;
+  onEdit?: (row: OvertimeRow) => void;
+  onDelete?: (row: OvertimeRow) => void;
 }) {
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
+  const [employeeSearch, setEmployeeSearch] = useState("");
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
     transportOnly ? "yes" : "all",
   );
@@ -600,9 +641,15 @@ function ApprovedDailyExport({
   const dailyRows = useMemo(
     () =>
       entryRows.filter(
-        (row) => !selectedDepartureTime || row.departure_time === selectedDepartureTime,
+        (row) => {
+          if (selectedDepartureTime && row.departure_time !== selectedDepartureTime) return false;
+          const term = employeeSearch.trim().toLocaleLowerCase("pt-BR");
+          if (!term) return true;
+          return [row.employee_name, row.employee_registration, row.employee_external_id ?? ""]
+            .some((value) => String(value).toLocaleLowerCase("pt-BR").includes(term));
+        },
       ),
-    [entryRows, selectedDepartureTime],
+    [entryRows, selectedDepartureTime, employeeSearch],
   );
   const pageSize = 30;
   const [page, setPage] = useState(1);
@@ -613,7 +660,7 @@ function ApprovedDailyExport({
   useEffect(() => onFilteredRowsChange(dailyRows), [dailyRows, onFilteredRowsChange]);
   useEffect(
     () => setPage(1),
-    [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter],
+    [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter, employeeSearch],
   );
 
   async function exportDailyExcel() {
@@ -703,6 +750,19 @@ function ApprovedDailyExport({
       padded={false}
     >
       <div className="flex flex-col gap-3 border-b border-border p-3 sm:flex-row sm:flex-wrap sm:items-end">
+        <div className="w-full min-w-0 sm:max-w-xs">
+          <Field label="Buscar colaborador">
+            <div className="relative min-w-0">
+              <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+              <input
+                value={employeeSearch}
+                onChange={(event) => setEmployeeSearch(event.target.value)}
+                placeholder="Nome, matrícula ou ID…"
+                className="input-base block min-w-0 w-full max-w-full pl-7 text-[12px]"
+              />
+            </div>
+          </Field>
+        </div>
         <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Data da hora extra">
             <DateRecordCalendar
@@ -830,6 +890,16 @@ function ApprovedDailyExport({
                 <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
                 </div>
+                {canManageRequests && row.source_type === "manual" && (
+                  <div className="mt-3 flex gap-2 border-t border-border pt-3">
+                    <button onClick={() => onEdit?.(row)} className="btn-secondary min-h-9 flex-1 justify-center text-[11px]">
+                      <Pencil className="h-3.5 w-3.5" /> Editar
+                    </button>
+                    <button onClick={() => onDelete?.(row)} className="min-h-9 flex-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10">
+                      Excluir
+                    </button>
+                  </div>
+                )}
               </article>
             ))}
           </div>
@@ -852,6 +922,7 @@ function ApprovedDailyExport({
                     "Transporte",
                     "Origem",
                     "Justificativa",
+                    ...(canManageRequests ? ["Ações"] : []),
                   ].map((header) => (
                     <th key={header} className="px-3 py-2 text-left font-semibold">
                       {header}
@@ -880,6 +951,20 @@ function ApprovedDailyExport({
                       {row.source_type === "scale_change" ? "Mudança de Escala" : "Manual"}
                     </td>
                     <td className="max-w-[280px] px-3 py-2">{row.justification}</td>
+                    {canManageRequests && (
+                      <td className="whitespace-nowrap px-3 py-2 text-right">
+                        {row.source_type === "manual" ? (
+                          <div className="inline-flex gap-1.5">
+                            <button onClick={() => onEdit?.(row)} className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted">
+                              Editar
+                            </button>
+                            <button onClick={() => onDelete?.(row)} className="rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
+                              Excluir
+                            </button>
+                          </div>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -1130,10 +1215,14 @@ function TransportView({
 function MyRequests({
   rows,
   onCancel,
+  onEdit,
+  onDelete,
   onFilteredRowsChange,
 }: {
   rows: OvertimeRow[];
   onCancel: (r: OvertimeRow) => void;
+  onEdit: (r: OvertimeRow) => void;
+  onDelete: (r: OvertimeRow) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
 }) {
   const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
@@ -1179,7 +1268,13 @@ function MyRequests({
           <EmptyState icon={<Timer className="h-4 w-4" />} title="Nenhuma solicitação nesta data" />
         </div>
       ) : (
-        <RequestsTable rows={filteredRows} showRequester={false} onCancel={onCancel} />
+        <RequestsTable
+          rows={filteredRows}
+          showRequester={false}
+          onCancel={onCancel}
+          onEdit={onEdit}
+          onDelete={onDelete}
+        />
       )}
     </Panel>
   );
@@ -1386,6 +1481,8 @@ function RequestsTable({
   onApprove,
   onReject,
   onCancel,
+  onEdit,
+  onDelete,
   groupedTeamView = false,
 }: {
   rows: DisplayOvertimeRow[];
@@ -1393,6 +1490,8 @@ function RequestsTable({
   onApprove?: (r: OvertimeRow) => void;
   onReject?: (r: OvertimeRow) => void;
   onCancel?: (r: OvertimeRow) => void;
+  onEdit?: (r: OvertimeRow) => void;
+  onDelete?: (r: OvertimeRow) => void;
   groupedTeamView?: boolean;
 }) {
   const pageSize = 30;
@@ -1509,7 +1608,7 @@ function RequestsTable({
               </div>
             )}
             {r.status === "pending" &&
-              (onApprove || onReject || (onCancel && r.source_type !== "scale_change")) && (
+              (onApprove || onReject || onEdit || onDelete || (onCancel && r.source_type !== "scale_change")) && (
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
                   {onApprove && (
                     <button
@@ -1533,6 +1632,16 @@ function RequestsTable({
                       className="col-span-2 min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium"
                     >
                       Cancelar
+                    </button>
+                  )}
+                  {onEdit && r.source_type === "manual" && (
+                    <button onClick={() => onEdit(r)} className="min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium hover:bg-muted">
+                      Editar
+                    </button>
+                  )}
+                  {onDelete && r.source_type === "manual" && (
+                    <button onClick={() => onDelete(r)} className="min-h-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-[12px] font-medium text-destructive hover:bg-destructive/15">
+                      Excluir
                     </button>
                   )}
                 </div>
@@ -1633,6 +1742,16 @@ function RequestsTable({
                           className="inline-flex items-center gap-1 rounded-md border border-border bg-card px-2 py-1 text-[11px] font-medium text-muted-foreground hover:bg-muted"
                         >
                           Cancelar
+                        </button>
+                      )}
+                      {onEdit && r.status === "pending" && r.source_type === "manual" && (
+                        <button onClick={() => onEdit(r)} className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted">
+                          <Pencil className="h-3 w-3" /> Editar
+                        </button>
+                      )}
+                      {onDelete && r.status === "pending" && r.source_type === "manual" && (
+                        <button onClick={() => onDelete(r)} className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
+                          <Trash2 className="h-3 w-3" /> Excluir
                         </button>
                       )}
                     </div>
@@ -1745,6 +1864,33 @@ async function downloadEmployeeTemplate() {
   XLSX.writeFile(workbook, "modelo_importacao_colaboradores.xlsx");
 }
 
+async function exportEmployees(rows: EmployeeRow[]) {
+  const XLSX = await import("xlsx");
+  const values = rows.map((employee) => [
+    employee.badge,
+    employee.employee_id,
+    formatDate(employee.admission_date),
+    employee.full_name,
+    employee.job_title,
+    employee.address || "",
+    employee.neighborhood || "",
+    employee.city || "",
+    employee.phone || "",
+    employee.message_contact || "",
+    employee.transport_line || "",
+    employee.is_active ? "Ativo" : "Inativo",
+  ]);
+  const worksheet = XLSX.utils.aoa_to_sheet([
+    [...EMPLOYEE_TEMPLATE_HEADERS, "Status"],
+    ...values,
+  ]);
+  worksheet["!cols"] = [16, 16, 20, 38, 28, 42, 24, 22, 20, 24, 16, 14].map((wch) => ({ wch }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores");
+  XLSX.writeFile(workbook, "colaboradores.xlsx");
+  toast.success(`${rows.length} colaborador(es) exportado(s).`);
+}
+
 function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const pageSize = 30;
   const qc = useQueryClient();
@@ -1835,6 +1981,16 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
         </div>
         {!readOnly && (
           <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+            <button
+              type="button"
+              disabled={!employees.data?.length}
+              onClick={() => void exportEmployees(employees.data ?? [])}
+              className="min-h-10 w-full justify-center rounded border border-border px-3 text-[12px] hover:bg-muted disabled:opacity-50 sm:w-auto"
+            >
+              <span className="flex items-center justify-center gap-1.5">
+                <Download className="h-3.5 w-3.5" /> Exportar Excel
+              </span>
+            </button>
             <button
               type="button"
               onClick={downloadEmployeeTemplate}
@@ -2453,6 +2609,142 @@ function BulkEmployeeModal({ onClose, onSaved }: { onClose: () => void; onSaved:
   );
 }
 
+/* ---------- Edit / delete overtime request ---------- */
+function EditOvertimeRequestModal({
+  row,
+  onClose,
+  onSaved,
+}: {
+  row: OvertimeRow;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const call = useServerFn(updateOvertimeRequest);
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState({
+    overtime_date: row.overtime_date,
+    entry_time: row.entry_time ?? "",
+    departure_time: row.departure_time,
+    needs_snack: row.needs_snack,
+    needs_transport: row.needs_transport,
+    order_number: row.order_number ?? "",
+    service_description: row.service_description,
+    justification: row.justification,
+  });
+
+  async function save() {
+    if (!form.overtime_date || !form.departure_time || !form.service_description.trim() || !form.justification.trim()) {
+      return toast.error("Preencha data, saída, serviço e justificativa.");
+    }
+    setSaving(true);
+    try {
+      const result = await call({
+        data: {
+          id: row.id,
+          expectedVersion: row.version,
+          overtime_date: form.overtime_date,
+          entry_time: form.entry_time || null,
+          departure_time: form.departure_time,
+          needs_snack: form.needs_snack,
+          needs_transport: form.needs_transport,
+          order_number: form.order_number.trim() || null,
+          service_description: form.service_description.trim(),
+          justification: form.justification.trim(),
+        },
+      });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Solicitação atualizada.");
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a solicitação.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Modal
+      title="Editar solicitação"
+      description={`${row.employee_name} · solicitação #${row.request_number}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={saving} className="btn-secondary min-h-10 px-4 text-[12px]">Cancelar</button>
+          <button type="button" onClick={save} disabled={saving} className="btn-primary min-h-10 px-4 text-[12px] disabled:opacity-60">
+            {saving ? "Salvando…" : "Salvar alterações"}
+          </button>
+        </>
+      }
+    >
+      <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
+        <Field label="Data" required>
+          <input type="date" value={form.overtime_date} onChange={(e) => setForm((v) => ({ ...v, overtime_date: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+        </Field>
+        <Field label="Número da ordem">
+          <input value={form.order_number} onChange={(e) => setForm((v) => ({ ...v, order_number: e.target.value }))} className="input-base w-full text-[12px]" />
+        </Field>
+        <Field label="Horário de entrada">
+          <input type="time" value={form.entry_time} onChange={(e) => setForm((v) => ({ ...v, entry_time: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+        </Field>
+        <Field label="Horário de saída" required>
+          <input type="time" value={form.departure_time} onChange={(e) => setForm((v) => ({ ...v, departure_time: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+        </Field>
+        <div className="sm:col-span-2">
+          <Field label="Serviço / atividade" required>
+            <textarea rows={3} value={form.service_description} onChange={(e) => setForm((v) => ({ ...v, service_description: e.target.value }))} className="input-base w-full resize-y text-[12px]" />
+          </Field>
+        </div>
+        <div className="sm:col-span-2">
+          <Field label="Justificativa" required>
+            <textarea rows={3} value={form.justification} onChange={(e) => setForm((v) => ({ ...v, justification: e.target.value }))} className="input-base w-full resize-y text-[12px]" />
+          </Field>
+        </div>
+        <label className="flex min-h-10 items-center gap-2 rounded border border-border px-3 text-[12px]">
+          <input type="checkbox" checked={form.needs_snack} onChange={(e) => setForm((v) => ({ ...v, needs_snack: e.target.checked }))} className="h-4 w-4 accent-primary" /> Precisa de lanche
+        </label>
+        <label className="flex min-h-10 items-center gap-2 rounded border border-border px-3 text-[12px]">
+          <input type="checkbox" checked={form.needs_transport} onChange={(e) => setForm((v) => ({ ...v, needs_transport: e.target.checked }))} className="h-4 w-4 accent-primary" /> Precisa de transporte
+        </label>
+      </div>
+    </Modal>
+  );
+}
+
+function DeleteOvertimeRequestModal({ row, onClose, onDeleted }: { row: OvertimeRow; onClose: () => void; onDeleted: () => void }) {
+  const call = useServerFn(deleteOvertimeRequest);
+  const [deleting, setDeleting] = useState(false);
+  async function remove() {
+    setDeleting(true);
+    try {
+      const result = await call({ data: { id: row.id, expectedVersion: row.version } });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Solicitação excluída.");
+      onDeleted();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível excluir a solicitação.");
+    } finally {
+      setDeleting(false);
+    }
+  }
+  return (
+    <Modal
+      title="Excluir solicitação"
+      description={`${row.employee_name} · solicitação #${row.request_number}`}
+      onClose={onClose}
+      footer={
+        <>
+          <button type="button" onClick={onClose} disabled={deleting} className="btn-secondary min-h-10 px-4 text-[12px]">Voltar</button>
+          <button type="button" onClick={remove} disabled={deleting} className="min-h-10 rounded bg-destructive px-4 text-[12px] font-medium text-destructive-foreground disabled:opacity-60">
+            {deleting ? "Excluindo…" : "Excluir definitivamente"}
+          </button>
+        </>
+      }
+    >
+      <p className="text-[12px] text-muted-foreground">Esta ação remove apenas este colaborador da solicitação e não pode ser desfeita.</p>
+    </Modal>
+  );
+}
+
 /* ---------- New Request Modal ---------- */
 function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
   const draftStorageKey = "nexo:overtime-request-draft";
@@ -2763,12 +3055,21 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
                     />
                     Transporte
                   </label>
+                  {transportEmployeeIds.includes(employee.id) && (
+                    <button
+                      type="button"
+                      onClick={() => toggleTransport(employee.id)}
+                      className="text-[11px] text-muted-foreground hover:text-destructive"
+                    >
+                      Remover transporte
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => toggleEmployee(employee.id)}
-                    className="text-[11px] text-muted-foreground hover:text-destructive"
+                    className="text-[10px] text-muted-foreground hover:text-destructive"
                   >
-                    Remover
+                    Retirar colaborador
                   </button>
                 </span>
               </div>
@@ -3114,4 +3415,5 @@ function DecideModal({
     </Modal>
   );
 }
+
 
