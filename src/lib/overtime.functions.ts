@@ -944,3 +944,100 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
+
+const updateOvertimeSchema = z.object({
+  id: z.string().uuid(),
+  expectedVersion: z.number().int().min(1),
+  overtime_date: z.string().refine(isValidDate, "Data inválida"),
+  entry_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+  departure_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido"),
+  needs_snack: z.boolean(),
+  needs_transport: z.boolean(),
+  order_number: z.string().trim().max(64).nullable(),
+  service_description: z.string().trim().min(3).max(1000),
+  justification: z.string().trim().min(3).max(1000),
+});
+
+async function loadEditableOvertimeRequest(db: any, info: Awaited<ReturnType<typeof loadRoleAndProfile>>, userId: string, id: string) {
+  if (!info.worksiteId) return { error: "Usuário sem obra vinculada." } as const;
+  const { data: request, error } = await db
+    .from("overtime_requests")
+    .select("id,requester_user_id,status,source_type,version")
+    .eq("id", id)
+    .eq("worksite_id", info.worksiteId)
+    .maybeSingle();
+  if (error) return { error: error.message } as const;
+  if (!request) return { error: "Solicitação não encontrada." } as const;
+  if (request.source_type !== "manual") {
+    return { error: "Solicitações da Mudança de Escala devem ser alteradas naquele módulo." } as const;
+  }
+  const elevated = info.isLogistics || info.isAdmin;
+  const canRequest = info.isLeader || info.isAdmin || info.isMeasurementControl;
+  const ownPending = canRequest && request.requester_user_id === userId && request.status === "pending";
+  if (!elevated && !ownPending) {
+    return { error: "Você só pode alterar solicitações próprias que ainda estejam pendentes." } as const;
+  }
+  return { request } as const;
+}
+
+export const updateOvertimeRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => updateOvertimeSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const access = await loadEditableOvertimeRequest(db, info, userId, data.id);
+    if ("error" in access) return { ok: false as const, error: access.error };
+    if (access.request.version !== data.expectedVersion) {
+      return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+    }
+    const { data: updated, error } = await db
+      .from("overtime_requests")
+      .update({
+        overtime_date: data.overtime_date,
+        entry_time: data.entry_time,
+        departure_time: data.departure_time,
+        needs_snack: data.needs_snack,
+        needs_transport: data.needs_transport,
+        order_number: data.order_number || null,
+        service_description: data.service_description,
+        justification: data.justification,
+        version: data.expectedVersion + 1,
+      })
+      .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
+      .eq("version", data.expectedVersion)
+      .select("id,version")
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!updated) return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+    return { ok: true as const, updated };
+  });
+
+export const deleteOvertimeRequest = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => cancelSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const access = await loadEditableOvertimeRequest(db, info, userId, data.id);
+    if ("error" in access) return { ok: false as const, error: access.error };
+    const { data: deleted, error } = await db
+      .from("overtime_requests")
+      .delete()
+      .eq("id", data.id)
+      .eq("worksite_id", info.worksiteId)
+      .eq("version", data.expectedVersion)
+      .select("id")
+      .maybeSingle();
+    if (error) return { ok: false as const, error: error.message };
+    if (!deleted) return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+    return { ok: true as const };
+  });
+
