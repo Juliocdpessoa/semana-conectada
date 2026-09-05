@@ -3055,21 +3055,12 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
                     />
                     Transporte
                   </label>
-                  {transportEmployeeIds.includes(employee.id) && (
-                    <button
-                      type="button"
-                      onClick={() => toggleTransport(employee.id)}
-                      className="text-[11px] text-muted-foreground hover:text-destructive"
-                    >
-                      Remover transporte
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={() => toggleEmployee(employee.id)}
                     className="text-[10px] text-muted-foreground hover:text-destructive"
                   >
-                    Retirar colaborador
+                    Remover colaborador
                   </button>
                 </span>
               </div>
