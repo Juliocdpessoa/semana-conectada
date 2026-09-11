@@ -421,7 +421,44 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const exportListSchema = z.object({
   dateFrom: isoDate.optional(),
   dateTo: isoDate.optional(),
+  includeEmployeeDetails: z.boolean().optional().default(false),
 });
+
+export const listOvertimeExportDates = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => exportListSchema.pick({ dateFrom: true, dateTo: true }).parse(data))
+  .handler(async ({ context, data: input }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved") {
+      return { ok: false as const, error: "Usuário não aprovado." };
+    }
+    if (!(info.isAdmin || info.isManager || info.isMeasurementControl || info.isLogistics)) {
+      return { ok: false as const, error: "Usuário sem permissão para exportar horas extras." };
+    }
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const dates = new Set<string>();
+    const pageSize = 500;
+    for (let from = 0; ; from += pageSize) {
+      let query = db
+        .from("overtime_requests")
+        .select("overtime_date")
+        .eq("worksite_id", info.worksiteId)
+        .neq("status", "cancelled")
+        .order("overtime_date", { ascending: false })
+        .range(from, from + pageSize - 1);
+      if (input.dateFrom) query = query.gte("overtime_date", input.dateFrom);
+      if (input.dateTo) query = query.lte("overtime_date", input.dateTo);
+      const { data, error } = await query;
+      if (error) return { ok: false as const, error: error.message };
+      for (const row of data ?? []) dates.add(String(row.overtime_date));
+      if (!data?.length || data.length < pageSize) break;
+    }
+    return { ok: true as const, dates: [...dates].sort((a, b) => b.localeCompare(a)) };
+  });
 
 export const OVERTIME_EXPORT_COLUMNS =
   "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id";
@@ -443,7 +480,7 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const rows: any[] = [];
-    const pageSize = 1000;
+    const pageSize = 500;
     for (let from = 0; ; from += pageSize) {
       let query = db
         .from("overtime_requests")
@@ -461,6 +498,8 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
       rows.push(...data);
       if (data.length < pageSize) break;
     }
+    if (!input.includeEmployeeDetails) return { ok: true as const, rows };
+
     const registrations = [
       ...new Set(rows.map((row) => String(row.employee_registration || "").trim()).filter(Boolean)),
     ];
@@ -1040,4 +1079,3 @@ export const deleteOvertimeRequest = createServerFn({ method: "POST" })
     if (!deleted) return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
     return { ok: true as const };
   });
-
