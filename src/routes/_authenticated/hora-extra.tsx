@@ -39,6 +39,7 @@ import {
   deleteEmployee,
   updateEmployee,
   listOvertimeForExport,
+  listOvertimeExportDates,
   WEEKLY_ACTIVITY_EXPORT_COLUMNS,
   EMPLOYEE_TEMPLATE_HEADERS,
   sanitizeEmployeeRow,
@@ -78,6 +79,45 @@ export const Route = createFileRoute("/_authenticated/hora-extra")({
 
 const EMPLOYEE_SELECT =
   "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active";
+
+const EXPORT_QUERY_RETRY_DELAY_MS = 600;
+const EXPORT_QUERY_TIMEOUT_MS = 20_000;
+
+function exportQueryRetryDelay(attempt: number) {
+  return Math.min(EXPORT_QUERY_RETRY_DELAY_MS * 2 ** attempt, 3_000);
+}
+
+async function withExportTimeout<T>(operation: Promise<T>): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      operation,
+      new Promise<never>((_, reject) => {
+        timeoutId = setTimeout(
+          () => reject(new Error("A consulta demorou mais que o esperado. Tente novamente.")),
+          EXPORT_QUERY_TIMEOUT_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function runExportRead<T>(operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await withExportTimeout(operation());
+    } catch (error) {
+      lastError = error;
+      if (attempt < 2) {
+        await new Promise((resolve) => setTimeout(resolve, exportQueryRetryDelay(attempt)));
+      }
+    }
+  }
+  throw lastError;
+}
 
 async function loadEmployees(activeOnly: boolean) {
   const all: EmployeeRow[] = [];
@@ -131,38 +171,59 @@ function OvertimePage() {
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
+  const loadOvertimeExportDates = useServerFn(listOvertimeExportDates);
   const [period] = useState<Period>(() => defaultPeriod());
   // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
   // o filtro de período global não se aplica a essa aba.
   const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
   const [exportDate, setExportDate] = useState(() => toIsoDate(new Date()));
   const exportDateOptions = useQuery({
-    queryKey: ["overtime-export-dates", exportPeriod.from, exportPeriod.to],
-    staleTime: 60 * 1000,
+    queryKey: [
+      "overtime-export-dates",
+      s.userId,
+      s.worksiteId,
+      exportPeriod.from,
+      exportPeriod.to,
+    ],
+    staleTime: 5 * 60 * 1000,
+    retry: 2,
+    retryDelay: exportQueryRetryDelay,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
-      const dates = new Set<string>();
-      const result = await loadOvertimeForExport({
-        data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
-      });
+      const result = await withExportTimeout(
+        loadOvertimeExportDates({
+          data: { dateFrom: exportPeriod.from, dateTo: exportPeriod.to },
+        }),
+      );
       if (!result.ok) throw new Error(result.error);
-      for (const row of result.rows ?? []) dates.add(row.overtime_date);
-      return [...dates].sort((a, b) => b.localeCompare(a));
+      return result.dates ?? [];
     },
   });
   const exportRequests = useQuery({
-    queryKey: ["overtime-export-rows", exportDate],
+    queryKey: ["overtime-export-rows", s.userId, s.worksiteId, exportDate, isLogistics],
     staleTime: 60 * 1000,
+    retry: 2,
+    retryDelay: exportQueryRetryDelay,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
-      const result = await loadOvertimeForExport({
-        data:
-          exportDate === "all"
-            ? { dateFrom: exportPeriod.from, dateTo: exportPeriod.to }
-            : { dateFrom: exportDate, dateTo: exportDate },
-      });
+      const result = await withExportTimeout(
+        loadOvertimeForExport({
+          data:
+            exportDate === "all"
+              ? {
+                  dateFrom: exportPeriod.from,
+                  dateTo: exportPeriod.to,
+                  includeEmployeeDetails: false,
+                }
+              : {
+                  dateFrom: exportDate,
+                  dateTo: exportDate,
+                  includeEmployeeDetails: false,
+                },
+        }),
+      );
       if (!result.ok) throw new Error(result.error);
       return result.rows as OvertimeRow[];
     },
@@ -340,6 +401,12 @@ function OvertimePage() {
           transportOnly={isLogistics}
           selectedDate={exportDate}
           availableDates={exportDateOptions.data ?? [exportDate]}
+          loading={exportRequests.isLoading || exportDateOptions.isLoading}
+          error={exportRequests.error ?? exportDateOptions.error}
+          onRetry={() => {
+            void exportDateOptions.refetch();
+            void exportRequests.refetch();
+          }}
           onSelectedDateChange={setExportDate}
           onFilteredRowsChange={setFilteredKpiRows}
           canManageRequests={canManageDailyRequests}
@@ -581,6 +648,9 @@ function ApprovedDailyExport({
   transportOnly = false,
   selectedDate,
   availableDates,
+  loading = false,
+  error = null,
+  onRetry,
   onSelectedDateChange,
   onFilteredRowsChange,
   canManageRequests = false,
@@ -591,13 +661,18 @@ function ApprovedDailyExport({
   transportOnly?: boolean;
   selectedDate: string;
   availableDates: string[];
+  loading?: boolean;
+  error?: Error | null;
+  onRetry?: () => void;
   onSelectedDateChange: (date: string) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
   canManageRequests?: boolean;
   onEdit?: (row: OvertimeRow) => void;
   onDelete?: (row: OvertimeRow) => void;
 }) {
+  const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
+  const [exporting, setExporting] = useState(false);
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -664,29 +739,50 @@ function ApprovedDailyExport({
   );
 
   async function exportDailyExcel() {
-    const XLSX = await import("xlsx");
     if (!effectiveDate || dailyRows.length === 0) {
       toast.error("Não há solicitações de hora extra para exportar com os filtros atuais.");
       return;
     }
 
-    const exportDateLabel = effectiveDate === "all" ? "todos-os-dias" : effectiveDate;
-    const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
-
-    if (!transportOnly) {
-      const sheet = XLSX.utils.aoa_to_sheet([
-        [...REGULAR_OVERTIME_EXPORT_HEADERS],
-        ...regularValues,
-      ]);
-      sheet["!cols"] = REGULAR_OVERTIME_EXPORT_WIDTHS.map((wch) => ({ wch }));
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
-      XLSX.writeFile(workbook, "horas-extras-" + exportDateLabel + ".xlsx");
-      toast.success(dailyRows.length + " registro(s) exportado(s).");
-      return;
-    }
-
+    setExporting(true);
     try {
+      const exportDateLabel = effectiveDate === "all" ? "todos-os-dias" : effectiveDate;
+      if (!transportOnly) {
+        const XLSX = await import("xlsx");
+        const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
+        const sheet = XLSX.utils.aoa_to_sheet([
+          [...REGULAR_OVERTIME_EXPORT_HEADERS],
+          ...regularValues,
+        ]);
+        sheet["!cols"] = REGULAR_OVERTIME_EXPORT_WIDTHS.map((wch) => ({ wch }));
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
+        XLSX.writeFile(workbook, "horas-extras-" + exportDateLabel + ".xlsx");
+        toast.success(dailyRows.length + " registro(s) exportado(s).");
+        return;
+      }
+
+      const detailResult = await runExportRead(() =>
+        loadOvertimeForExport({
+          data:
+            effectiveDate === "all"
+              ? {
+                  dateFrom: shiftDays(-60),
+                  dateTo: shiftDays(60),
+                  includeEmployeeDetails: true,
+                }
+              : {
+                  dateFrom: effectiveDate,
+                  dateTo: effectiveDate,
+                  includeEmployeeDetails: true,
+                },
+        }),
+      );
+      if (!detailResult.ok) throw new Error(detailResult.error);
+      const filteredIds = new Set(dailyRows.map((row) => row.id));
+      const detailedRows = (detailResult.rows as OvertimeRow[]).filter((row) =>
+        filteredIds.has(row.id),
+      );
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
@@ -694,7 +790,7 @@ function ApprovedDailyExport({
       const worksheet = workbook.addWorksheet("Transportes", {
         views: [{ state: "frozen", ySplit: 1, showGridLines: false }],
       });
-      const logisticsValues = dailyRows.map(mapLogisticsExportRow);
+      const logisticsValues = detailedRows.map(mapLogisticsExportRow);
       worksheet.addTable({
         name: "TabelaTransportes",
         ref: "A1",
@@ -735,11 +831,13 @@ function ApprovedDailyExport({
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
-      toast.success(dailyRows.length + " colaborador(es) exportado(s) em tabela.");
+      toast.success(detailedRows.length + " colaborador(es) exportado(s) em tabela.");
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível gerar a tabela de transportes.",
       );
+    } finally {
+      setExporting(false);
     }
   }
 
@@ -832,15 +930,37 @@ function ApprovedDailyExport({
         <button
           type="button"
           onClick={exportDailyExcel}
-          disabled={!effectiveDate || dailyRows.length === 0}
+          disabled={!effectiveDate || dailyRows.length === 0 || exporting}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
           <Download className="h-4 w-4" />{" "}
-          {effectiveDate === "all" ? "Exportar todos" : "Exportar Excel do dia"}
+          {exporting
+            ? "Preparando Excel…"
+            : effectiveDate === "all"
+              ? "Exportar todos"
+              : "Exportar Excel do dia"}
         </button>
       </div>
 
-      {dailyRows.length === 0 ? (
+      {error ? (
+        <div className="p-6 text-center">
+          <div className="text-[13px] font-semibold text-destructive">
+            Não foi possível carregar a exportação diária
+          </div>
+          <div className="mt-1 text-[12px] text-muted-foreground">
+            Verifique a conexão e tente novamente.
+          </div>
+          {onRetry && (
+            <button type="button" onClick={onRetry} className="btn-secondary mt-3 text-[12px]">
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      ) : loading ? (
+        <div className="p-6 text-center text-[12px] text-muted-foreground">
+          Carregando horas extras do dia…
+        </div>
+      ) : dailyRows.length === 0 ? (
         <div className="p-6">
           <EmptyState
             icon={<Timer className="h-4 w-4" />}
@@ -3406,5 +3526,4 @@ function DecideModal({
     </Modal>
   );
 }
-
 
