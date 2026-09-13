@@ -129,7 +129,9 @@ export const REGULAR_OVERTIME_EXPORT_HEADERS = [
   "Justificativa",
 ] as const;
 
-export const REGULAR_OVERTIME_EXPORT_WIDTHS = [14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 48, 48] as const;
+export const REGULAR_OVERTIME_EXPORT_WIDTHS = [
+  14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 48, 48,
+] as const;
 
 export const LOGISTICS_EXPORT_HEADERS = [
   "Matrícula",
@@ -166,7 +168,9 @@ export const TRANSPORT_EXPORT_HEADERS = [
   "Status",
 ] as const;
 
-export const TRANSPORT_EXPORT_WIDTHS = [12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 20, 16] as const;
+export const TRANSPORT_EXPORT_WIDTHS = [
+  12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 20, 16,
+] as const;
 
 export function mapRegularOvertimeExportRow(row: OvertimeRow) {
   return [
@@ -209,7 +213,9 @@ export function mapTransportExportRow(row: OvertimeRow) {
     row.employee_external_id || "",
     row.employee_name,
     row.employee_role,
-    [row.employee_address, row.employee_neighborhood, row.employee_city].filter(Boolean).join(" - "),
+    [row.employee_address, row.employee_neighborhood, row.employee_city]
+      .filter(Boolean)
+      .join(" - "),
     row.employee_phone || "",
     row.employee_message_contact || "",
     row.employee_transport_line || "",
@@ -239,7 +245,13 @@ export function formatPlanningDate(value: unknown) {
   if (iso) return iso[3] + "/" + iso[2] + "/" + iso[1];
   const br = /^(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(text);
   if (br) {
-    return String(Number(br[1])).padStart(2, "0") + "/" + String(Number(br[2])).padStart(2, "0") + "/" + br[3];
+    return (
+      String(Number(br[1])).padStart(2, "0") +
+      "/" +
+      String(Number(br[2])).padStart(2, "0") +
+      "/" +
+      br[3]
+    );
   }
   return text;
 }
@@ -266,7 +278,9 @@ export function sanitizeEmployeeRow(employee: EmployeeRow): EmployeeRow {
   return {
     ...employee,
     badge: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
-    employee_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
+    employee_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX)
+      ? ""
+      : employee.employee_id,
   };
 }
 
@@ -369,7 +383,11 @@ export function formatDateTime(iso: string) {
 async function loadRoleAndProfile(supabase: any, userId: string) {
   const [rolesRes, profRes] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
-    supabase.from("profiles").select("full_name, email, approval_status, worksite_id").eq("id", userId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("full_name, email, approval_status, worksite_id")
+      .eq("id", userId)
+      .maybeSingle(),
   ]);
   const roles = (rolesRes.data ?? []).map((r: { role: string }) => r.role);
   return {
@@ -391,7 +409,8 @@ export const listApprovedTransportRows = createServerFn({ method: "POST" })
   .handler(async ({ context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    if (info.approvalStatus !== "approved")
+      return { ok: false as const, error: "Usuário não aprovado." };
     if (!(info.isAdmin || info.isManager || info.isLogistics)) {
       return { ok: false as const, error: "Usuário sem permissão para visualizar transportes." };
     }
@@ -421,8 +440,44 @@ const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const exportListSchema = z.object({
   dateFrom: isoDate.optional(),
   dateTo: isoDate.optional(),
+  requestIds: z.array(z.string().uuid()).max(20000).optional(),
+  entryTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  departureTime: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  transport: z.enum(["all", "yes", "no"]).optional().default("all"),
+  employeeSearch: z.string().trim().max(120).optional().default(""),
   includeEmployeeDetails: z.boolean().optional().default(false),
 });
+
+const exportPageSchema = exportListSchema
+  .omit({ requestIds: true, includeEmployeeDetails: true })
+  .extend({
+    page: z.number().int().min(1),
+    pageSize: z.number().int().min(1).max(100).default(30),
+    includeMetadata: z.boolean().optional().default(true),
+  });
+
+function applyOvertimeExportFilters(query: any, input: z.infer<typeof exportListSchema>) {
+  let filtered = query;
+  if (input.dateFrom) filtered = filtered.gte("overtime_date", input.dateFrom);
+  if (input.dateTo) filtered = filtered.lte("overtime_date", input.dateTo);
+  if (input.entryTime) filtered = filtered.eq("entry_time", input.entryTime);
+  if (input.departureTime) filtered = filtered.eq("departure_time", input.departureTime);
+  if (input.transport === "yes") filtered = filtered.eq("needs_transport", true);
+  if (input.transport === "no") filtered = filtered.eq("needs_transport", false);
+  const search = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+  if (search) {
+    filtered = filtered.or(
+      `employee_name.ilike.%${search}%,employee_registration.ilike.%${search}%,employee_external_id.ilike.%${search}%`,
+    );
+  }
+  return filtered;
+}
 
 export const listOvertimeExportDates = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -463,6 +518,90 @@ export const listOvertimeExportDates = createServerFn({ method: "POST" })
 export const OVERTIME_EXPORT_COLUMNS =
   "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id";
 
+export const listOvertimeExportPage = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => exportPageSchema.parse(data))
+  .handler(async ({ context, data: input }) => {
+    const { supabase, userId } = context;
+    const info = await loadRoleAndProfile(supabase, userId);
+    if (info.approvalStatus !== "approved")
+      return { ok: false as const, error: "Usuário não aprovado." };
+    if (!(info.isAdmin || info.isManager || info.isMeasurementControl || info.isLogistics)) {
+      return { ok: false as const, error: "Usuário sem permissão para exportar horas extras." };
+    }
+    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const baseInput = { ...input, entryTime: undefined, departureTime: undefined };
+    const metadataRows: Array<{
+      entry_time: string | null;
+      departure_time: string;
+      status: string;
+      needs_snack: boolean;
+      needs_transport: boolean;
+    }> = [];
+    if (input.includeMetadata) {
+      for (let from = 0; ; from += 1000) {
+        let metadataQuery = db
+          .from("overtime_requests")
+          .select("entry_time,departure_time,status,needs_snack,needs_transport")
+          .eq("worksite_id", info.worksiteId)
+          .neq("status", "cancelled")
+          .order("id", { ascending: false })
+          .range(from, from + 999);
+        metadataQuery = applyOvertimeExportFilters(metadataQuery, baseInput);
+        const { data, error } = await metadataQuery;
+        if (error) return { ok: false as const, error: error.message };
+        metadataRows.push(...(data ?? []));
+        if (!data?.length || data.length < 1000) break;
+      }
+    }
+
+    const entryTimes = [
+      ...new Set(metadataRows.map((row) => row.entry_time).filter(Boolean)),
+    ].sort();
+    const entryRows = input.entryTime
+      ? metadataRows.filter((row) => row.entry_time === input.entryTime)
+      : metadataRows;
+    const departureTimes = [
+      ...new Set(entryRows.map((row) => row.departure_time).filter(Boolean)),
+    ].sort();
+    const summaryRows = entryRows.filter(
+      (row) => !input.departureTime || row.departure_time === input.departureTime,
+    );
+    const kpis = {
+      total: summaryRows.length,
+      pending: summaryRows.filter((row) => row.status === "pending").length,
+      approved: summaryRows.filter((row) => row.status === "approved").length,
+      rejected: summaryRows.filter((row) => row.status === "rejected").length,
+      snacks: summaryRows.filter((row) => row.status === "approved" && row.needs_snack).length,
+      transports: summaryRows.filter((row) => row.status === "approved" && row.needs_transport)
+        .length,
+    };
+
+    const from = (input.page - 1) * input.pageSize;
+    let pageQuery = db
+      .from("overtime_requests")
+      .select(OVERTIME_EXPORT_COLUMNS, { count: "exact" })
+      .eq("worksite_id", info.worksiteId)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + input.pageSize - 1);
+    pageQuery = applyOvertimeExportFilters(pageQuery, input);
+    const { data, error, count } = await pageQuery;
+    if (error) return { ok: false as const, error: error.message };
+    return {
+      ok: true as const,
+      rows: data ?? [],
+      total: count ?? 0,
+      entryTimes: input.includeMetadata ? entryTimes : null,
+      departureTimes: input.includeMetadata ? departureTimes : null,
+      kpis: input.includeMetadata ? kpis : null,
+    };
+  });
+
 export const listOvertimeForExport = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => exportListSchema.parse(data))
@@ -481,22 +620,38 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
     const rows: any[] = [];
     const pageSize = 500;
-    for (let from = 0; ; from += pageSize) {
-      let query = db
-        .from("overtime_requests")
-        .select(OVERTIME_EXPORT_COLUMNS)
-        .eq("worksite_id", info.worksiteId)
-        .neq("status", "cancelled")
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: false })
-        .range(from, from + pageSize - 1);
-      if (input.dateFrom) query = query.gte("overtime_date", input.dateFrom);
-      if (input.dateTo) query = query.lte("overtime_date", input.dateTo);
-      const { data, error } = await query;
-      if (error) return { ok: false as const, error: error.message };
-      if (!data?.length) break;
-      rows.push(...data);
-      if (data.length < pageSize) break;
+    if (input.requestIds) {
+      for (let from = 0; from < input.requestIds.length; from += 250) {
+        const ids = input.requestIds.slice(from, from + 250);
+        if (ids.length === 0) continue;
+        const { data, error } = await db
+          .from("overtime_requests")
+          .select(OVERTIME_EXPORT_COLUMNS)
+          .eq("worksite_id", info.worksiteId)
+          .neq("status", "cancelled")
+          .in("id", ids);
+        if (error) return { ok: false as const, error: error.message };
+        rows.push(...(data ?? []));
+      }
+      const orderById = new Map(input.requestIds.map((id, index) => [id, index]));
+      rows.sort((a, b) => (orderById.get(a.id) ?? 0) - (orderById.get(b.id) ?? 0));
+    } else {
+      for (let from = 0; ; from += pageSize) {
+        let query = db
+          .from("overtime_requests")
+          .select(OVERTIME_EXPORT_COLUMNS)
+          .eq("worksite_id", info.worksiteId)
+          .neq("status", "cancelled")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, from + pageSize - 1);
+        query = applyOvertimeExportFilters(query, input);
+        const { data, error } = await query;
+        if (error) return { ok: false as const, error: error.message };
+        if (!data?.length) break;
+        rows.push(...data);
+        if (data.length < pageSize) break;
+      }
     }
     if (!input.includeEmployeeDetails) return { ok: true as const, rows };
 
@@ -511,7 +666,8 @@ export const listOvertimeForExport = createServerFn({ method: "POST" })
         .eq("worksite_id", info.worksiteId)
         .in("badge", registrations.slice(from, from + 500));
       if (employeeError) return { ok: false as const, error: employeeError.message };
-      for (const employee of employees ?? []) employeeByBadge.set(String(employee.badge).trim(), employee);
+      for (const employee of employees ?? [])
+        employeeByBadge.set(String(employee.badge).trim(), employee);
     }
     const enrichedRows = rows.map((row) => {
       const employee = employeeByBadge.get(String(row.employee_registration || "").trim());
@@ -535,7 +691,9 @@ function isValidDate(value: string) {
   const month = Number(match[2]);
   const day = Number(match[3]);
   const date = new Date(Date.UTC(year, month - 1, day));
-  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  return (
+    date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day
+  );
 }
 
 const createSchema = z
@@ -573,7 +731,8 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    if (info.approvalStatus !== "approved")
+      return { ok: false as const, error: "Usuário não aprovado." };
     if (!(info.isLeader || info.isAdmin || info.isMeasurementControl))
       return { ok: false as const, error: "Usuário sem permissão para solicitar hora extra." };
     if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
@@ -587,11 +746,13 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       .eq("worksite_id", info.worksiteId)
       .in("id", uniqueEmployeeIds)
       .eq("is_active", true);
-    if (employeeError) return { ok: false as const, error: "Não foi possível validar os colaboradores." };
+    if (employeeError)
+      return { ok: false as const, error: "Não foi possível validar os colaboradores." };
     if (!employees || employees.length !== uniqueEmployeeIds.length) {
       return {
         ok: false as const,
-        error: "Um ou mais colaboradores não existem ou estão inativos. Atualize a lista e tente novamente.",
+        error:
+          "Um ou mais colaboradores não existem ou estão inativos. Atualize a lista e tente novamente.",
       };
     }
 
@@ -608,8 +769,10 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
         .eq("week_id", data.week_id)
         .eq("weeks.is_active", true)
         .maybeSingle();
-      if (activityError) return { ok: false as const, error: "Não foi possível validar a atividade." };
-      if (!activity) return { ok: false as const, error: "A atividade não pertence à semana ativa." };
+      if (activityError)
+        return { ok: false as const, error: "Não foi possível validar a atividade." };
+      if (!activity)
+        return { ok: false as const, error: "A atividade não pertence à semana ativa." };
       activityId = activity.id;
       weekId = activity.week_id;
       orderNumber = activity.order_number;
@@ -653,7 +816,9 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       requester_name: info.fullName,
       requester_email: info.email,
       employee_master_id: employee.id,
-      employee_external_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX) ? "" : employee.employee_id,
+      employee_external_id: employee.employee_id.startsWith(MISSING_EMPLOYEE_ID_PREFIX)
+        ? ""
+        : employee.employee_id,
       employee_name: employee.full_name,
       employee_registration: employee.badge.startsWith(MISSING_BADGE_PREFIX) ? "" : employee.badge,
       employee_role: employee.job_title,
@@ -668,7 +833,10 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       justification: data.justification,
       status: "pending",
     }));
-    const { data: created, error } = await db.from("overtime_requests").insert(rows).select("id, request_number");
+    const { data: created, error } = await db
+      .from("overtime_requests")
+      .insert(rows)
+      .select("id, request_number");
     if (error) return { ok: false as const, error: error.message };
     return {
       ok: true as const,
@@ -700,17 +868,24 @@ const employeeSchema = z
 
 export const upsertEmployees = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: unknown) => z.object({ employees: z.array(employeeSchema).min(1).max(2000) }).parse(data))
+  .validator((data: unknown) =>
+    z.object({ employees: z.array(employeeSchema).min(1).max(2000) }).parse(data),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+    if (
+      info.approvalStatus !== "approved" ||
+      !(info.isAdmin || info.isManager || info.isLogistics)
+    ) {
       return {
         ok: false as const,
         error: "Somente gerente, logística ou administrador pode atualizar colaboradores.",
       };
     }
-    const badges = data.employees.map((employee) => employee.badge.toLocaleLowerCase("pt-BR")).filter(Boolean);
+    const badges = data.employees
+      .map((employee) => employee.badge.toLocaleLowerCase("pt-BR"))
+      .filter(Boolean);
     const externalIds = data.employees
       .map((employee) => employee.employee_id.toLocaleLowerCase("pt-BR"))
       .filter(Boolean);
@@ -773,7 +948,10 @@ export const updateEmployee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+    if (
+      info.approvalStatus !== "approved" ||
+      !(info.isAdmin || info.isManager || info.isLogistics)
+    ) {
       return {
         ok: false as const,
         error: "Somente gerente, logística ou administrador pode editar colaboradores.",
@@ -810,11 +988,16 @@ export const updateEmployee = createServerFn({ method: "POST" })
 
 export const setEmployeeActive = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: unknown) => z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data))
+  .validator((data: unknown) =>
+    z.object({ id: z.string().uuid(), active: z.boolean() }).parse(data),
+  )
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+    if (
+      info.approvalStatus !== "approved" ||
+      !(info.isAdmin || info.isManager || info.isLogistics)
+    ) {
       return {
         ok: false as const,
         error: "Somente gerente, logística ou administrador pode alterar colaboradores.",
@@ -845,7 +1028,10 @@ export const deleteEmployee = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager || info.isLogistics)) {
+    if (
+      info.approvalStatus !== "approved" ||
+      !(info.isAdmin || info.isManager || info.isLogistics)
+    ) {
       return {
         ok: false as const,
         error: "Somente gerente, logística ou administrador pode excluir colaboradores.",
@@ -912,14 +1098,20 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
       return { ok: false as const, conflict: true, current: target };
     }
 
-    let batchQuery = db.from("overtime_requests").select("id, status, version").eq("worksite_id", info.worksiteId);
-    batchQuery = target.batch_id ? batchQuery.eq("batch_id", target.batch_id) : batchQuery.eq("id", target.id);
+    let batchQuery = db
+      .from("overtime_requests")
+      .select("id, status, version")
+      .eq("worksite_id", info.worksiteId);
+    batchQuery = target.batch_id
+      ? batchQuery.eq("batch_id", target.batch_id)
+      : batchQuery.eq("id", target.id);
     const { data: batchRows, error: batchError } = await batchQuery;
     if (batchError) return { ok: false as const, error: batchError.message };
     if (
       !batchRows?.length ||
       batchRows.some(
-        (row: { status: string; version: number }) => row.status !== "pending" || row.version !== data.expectedVersion,
+        (row: { status: string; version: number }) =>
+          row.status !== "pending" || row.version !== data.expectedVersion,
       )
     ) {
       return { ok: false as const, conflict: true, current: target };
@@ -978,7 +1170,8 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
     if (!updated) {
       return {
         ok: false as const,
-        error: "Solicitações geradas pela Mudança de Escala devem ser canceladas no módulo de Mudança de Escala.",
+        error:
+          "Solicitações geradas pela Mudança de Escala devem ser canceladas no módulo de Mudança de Escala.",
       };
     }
     return { ok: true as const };
@@ -988,7 +1181,10 @@ const updateOvertimeSchema = z.object({
   id: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
   overtime_date: z.string().refine(isValidDate, "Data inválida"),
-  entry_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/).nullable(),
+  entry_time: z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .nullable(),
   departure_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido"),
   needs_snack: z.boolean(),
   needs_transport: z.boolean(),
@@ -997,7 +1193,12 @@ const updateOvertimeSchema = z.object({
   justification: z.string().trim().min(3).max(1000),
 });
 
-async function loadEditableOvertimeRequest(db: any, info: Awaited<ReturnType<typeof loadRoleAndProfile>>, userId: string, id: string) {
+async function loadEditableOvertimeRequest(
+  db: any,
+  info: Awaited<ReturnType<typeof loadRoleAndProfile>>,
+  userId: string,
+  id: string,
+) {
   if (!info.worksiteId) return { error: "Usuário sem obra vinculada." } as const;
   const { data: request, error } = await db
     .from("overtime_requests")
@@ -1008,13 +1209,18 @@ async function loadEditableOvertimeRequest(db: any, info: Awaited<ReturnType<typ
   if (error) return { error: error.message } as const;
   if (!request) return { error: "Solicitação não encontrada." } as const;
   if (request.source_type !== "manual") {
-    return { error: "Solicitações da Mudança de Escala devem ser alteradas naquele módulo." } as const;
+    return {
+      error: "Solicitações da Mudança de Escala devem ser alteradas naquele módulo.",
+    } as const;
   }
   const elevated = info.isLogistics || info.isAdmin;
   const canRequest = info.isLeader || info.isAdmin || info.isMeasurementControl;
-  const ownPending = canRequest && request.requester_user_id === userId && request.status === "pending";
+  const ownPending =
+    canRequest && request.requester_user_id === userId && request.status === "pending";
   if (!elevated && !ownPending) {
-    return { error: "Você só pode alterar solicitações próprias que ainda estejam pendentes." } as const;
+    return {
+      error: "Você só pode alterar solicitações próprias que ainda estejam pendentes.",
+    } as const;
   }
   return { request } as const;
 }
@@ -1025,13 +1231,18 @@ export const updateOvertimeRequest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    if (info.approvalStatus !== "approved")
+      return { ok: false as const, error: "Usuário não aprovado." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const access = await loadEditableOvertimeRequest(db, info, userId, data.id);
     if ("error" in access) return { ok: false as const, error: access.error };
     if (access.request.version !== data.expectedVersion) {
-      return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+      return {
+        ok: false as const,
+        conflict: true,
+        error: "A solicitação foi alterada por outro usuário. Atualize a tela.",
+      };
     }
     const { data: updated, error } = await db
       .from("overtime_requests")
@@ -1052,7 +1263,12 @@ export const updateOvertimeRequest = createServerFn({ method: "POST" })
       .select("id,version")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
-    if (!updated) return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+    if (!updated)
+      return {
+        ok: false as const,
+        conflict: true,
+        error: "A solicitação foi alterada por outro usuário. Atualize a tela.",
+      };
     return { ok: true as const, updated };
   });
 
@@ -1062,7 +1278,8 @@ export const deleteOvertimeRequest = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved") return { ok: false as const, error: "Usuário não aprovado." };
+    if (info.approvalStatus !== "approved")
+      return { ok: false as const, error: "Usuário não aprovado." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
     const access = await loadEditableOvertimeRequest(db, info, userId, data.id);
@@ -1076,6 +1293,11 @@ export const deleteOvertimeRequest = createServerFn({ method: "POST" })
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
-    if (!deleted) return { ok: false as const, conflict: true, error: "A solicitação foi alterada por outro usuário. Atualize a tela." };
+    if (!deleted)
+      return {
+        ok: false as const,
+        conflict: true,
+        error: "A solicitação foi alterada por outro usuário. Atualize a tela.",
+      };
     return { ok: true as const };
   });
