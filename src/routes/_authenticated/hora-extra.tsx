@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   Timer,
@@ -39,6 +39,7 @@ import {
   deleteEmployee,
   updateEmployee,
   listOvertimeForExport,
+  listOvertimeExportPage,
   listOvertimeExportDates,
   WEEKLY_ACTIVITY_EXPORT_COLUMNS,
   EMPLOYEE_TEMPLATE_HEADERS,
@@ -80,14 +81,12 @@ export const Route = createFileRoute("/_authenticated/hora-extra")({
 const EMPLOYEE_SELECT =
   "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active";
 
-const EXPORT_QUERY_RETRY_DELAY_MS = 600;
 const EXPORT_QUERY_TIMEOUT_MS = 20_000;
 
-function exportQueryRetryDelay(attempt: number) {
-  return Math.min(EXPORT_QUERY_RETRY_DELAY_MS * 2 ** attempt, 3_000);
-}
-
-async function withExportTimeout<T>(operation: Promise<T>): Promise<T> {
+async function withExportTimeout<T>(
+  operation: Promise<T>,
+  timeoutMs = EXPORT_QUERY_TIMEOUT_MS,
+): Promise<T> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -95,28 +94,13 @@ async function withExportTimeout<T>(operation: Promise<T>): Promise<T> {
       new Promise<never>((_, reject) => {
         timeoutId = setTimeout(
           () => reject(new Error("A consulta demorou mais que o esperado. Tente novamente.")),
-          EXPORT_QUERY_TIMEOUT_MS,
+          timeoutMs,
         );
       }),
     ]);
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
   }
-}
-
-async function runExportRead<T>(operation: () => Promise<T>): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    try {
-      return await withExportTimeout(operation());
-    } catch (error) {
-      lastError = error;
-      if (attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, exportQueryRetryDelay(attempt)));
-      }
-    }
-  }
-  throw lastError;
 }
 
 async function loadEmployees(activeOnly: boolean) {
@@ -139,6 +123,23 @@ async function loadEmployees(activeOnly: boolean) {
 }
 
 type Period = { from: string; to: string };
+type OvertimeKpis = {
+  total: number;
+  pending: number;
+  approved: number;
+  rejected: number;
+  snacks: number;
+  transports: number;
+};
+
+const EMPTY_OVERTIME_KPIS: OvertimeKpis = {
+  total: 0,
+  pending: 0,
+  approved: 0,
+  rejected: 0,
+  snacks: 0,
+  transports: 0,
+};
 
 function toIsoDate(date: Date) {
   return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
@@ -170,7 +171,6 @@ function OvertimePage() {
   const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
-  const loadOvertimeForExport = useServerFn(listOvertimeForExport);
   const loadOvertimeExportDates = useServerFn(listOvertimeExportDates);
   const [period] = useState<Period>(() => defaultPeriod());
   // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
@@ -178,16 +178,9 @@ function OvertimePage() {
   const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
   const [exportDate, setExportDate] = useState(() => toIsoDate(new Date()));
   const exportDateOptions = useQuery({
-    queryKey: [
-      "overtime-export-dates",
-      s.userId,
-      s.worksiteId,
-      exportPeriod.from,
-      exportPeriod.to,
-    ],
+    queryKey: ["overtime-export-dates", s.userId, s.worksiteId, exportPeriod.from, exportPeriod.to],
     staleTime: 5 * 60 * 1000,
-    retry: 2,
-    retryDelay: exportQueryRetryDelay,
+    retry: false,
     refetchOnWindowFocus: false,
     enabled: canExportOvertime && tab === "export",
     queryFn: async () => {
@@ -200,39 +193,12 @@ function OvertimePage() {
       return result.dates ?? [];
     },
   });
-  const exportRequests = useQuery({
-    queryKey: ["overtime-export-rows", s.userId, s.worksiteId, exportDate, isLogistics],
-    staleTime: 60 * 1000,
-    retry: 2,
-    retryDelay: exportQueryRetryDelay,
-    refetchOnWindowFocus: false,
-    enabled: canExportOvertime && tab === "export",
-    queryFn: async () => {
-      const result = await withExportTimeout(
-        loadOvertimeForExport({
-          data:
-            exportDate === "all"
-              ? {
-                  dateFrom: exportPeriod.from,
-                  dateTo: exportPeriod.to,
-                  includeEmployeeDetails: false,
-                }
-              : {
-                  dateFrom: exportDate,
-                  dateTo: exportDate,
-                  includeEmployeeDetails: false,
-                },
-        }),
-      );
-      if (!result.ok) throw new Error(result.error);
-      return result.rows as OvertimeRow[];
-    },
-  });
   const [showNew, setShowNew] = useState(false);
   const [editingRequest, setEditingRequest] = useState<OvertimeRow | null>(null);
   const [deletingRequest, setDeletingRequest] = useState<OvertimeRow | null>(null);
   const [summaryDate, setSummaryDate] = useState(() => toIsoDate(new Date()));
   const [filteredKpiRows, setFilteredKpiRows] = useState<OvertimeRow[] | null>(null);
+  const [exportKpis, setExportKpis] = useState<OvertimeKpis>(EMPTY_OVERTIME_KPIS);
 
   function selectTab(nextTab: typeof tab) {
     setFilteredKpiRows(null);
@@ -282,12 +248,11 @@ function OvertimePage() {
   );
   const kpiBaseRows = useMemo(() => {
     if (filteredKpiRows && ["export", "list", "queue"].includes(tab)) return filteredKpiRows;
-    if (tab === "export") return exportRequests.data ?? [];
     if (tab === "list") return myRows;
     return rows;
-  }, [filteredKpiRows, tab, exportRequests.data, myRows, rows]);
+  }, [filteredKpiRows, tab, myRows, rows]);
   const summaryRows = kpiBaseRows;
-  const kpis = useMemo(() => {
+  const calculatedKpis = useMemo(() => {
     // Na exportação, resume todos os registros; em Minhas solicitações, somente os do usuário atual.
     const operationalRows = summaryRows.filter((row) => row.status !== "cancelled");
     const total = operationalRows.length;
@@ -302,6 +267,7 @@ function OvertimePage() {
     ).length;
     return { total, pending, approved, rejected, snacks, transports };
   }, [summaryRows]);
+  const kpis = tab === "export" ? exportKpis : calculatedKpis;
 
   return (
     <main className="mx-auto w-full max-w-none overflow-x-hidden px-3 py-4 sm:px-6 sm:py-6">
@@ -397,18 +363,19 @@ function OvertimePage() {
 
       {tab === "export" && canExportOvertime && (
         <ApprovedDailyExport
-          rows={exportRequests.data ?? []}
+          cacheScope={`${s.userId}:${s.worksiteId}`}
           transportOnly={isLogistics}
           selectedDate={exportDate}
           availableDates={exportDateOptions.data ?? [exportDate]}
-          loading={exportRequests.isLoading || exportDateOptions.isLoading}
-          error={exportRequests.error ?? exportDateOptions.error}
+          dateFrom={exportPeriod.from}
+          dateTo={exportPeriod.to}
+          loadingDates={exportDateOptions.isLoading}
+          datesError={exportDateOptions.error}
           onRetry={() => {
             void exportDateOptions.refetch();
-            void exportRequests.refetch();
           }}
           onSelectedDateChange={setExportDate}
-          onFilteredRowsChange={setFilteredKpiRows}
+          onKpiChange={setExportKpis}
           canManageRequests={canManageDailyRequests}
           onEdit={setEditingRequest}
           onDelete={setDeletingRequest}
@@ -433,6 +400,9 @@ function OvertimePage() {
               toast.success("Solicitação cancelada.");
               qc.invalidateQueries({ queryKey: ["overtime-requests"] });
               qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+              qc.invalidateQueries({ queryKey: ["overtime-export-page"] });
+              qc.invalidateQueries({ queryKey: ["overtime-export-metadata"] });
+              qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
               qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
             } catch (error) {
               toast.error(
@@ -452,6 +422,9 @@ function OvertimePage() {
           onDecided={() => {
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-page"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-metadata"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
             qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
@@ -466,6 +439,9 @@ function OvertimePage() {
             setShowNew(false);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-page"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-metadata"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
             qc.invalidateQueries({ queryKey: ["overtime-transport-rows"] });
           }}
         />
@@ -478,6 +454,8 @@ function OvertimePage() {
             setEditingRequest(null);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-page"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-metadata"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
           }}
         />
@@ -490,6 +468,8 @@ function OvertimePage() {
             setDeletingRequest(null);
             qc.invalidateQueries({ queryKey: ["overtime-requests"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-rows"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-page"] });
+            qc.invalidateQueries({ queryKey: ["overtime-export-metadata"] });
             qc.invalidateQueries({ queryKey: ["overtime-export-dates"] });
           }}
         />
@@ -644,34 +624,38 @@ function WeeklyActivityExport() {
 
 /* ---------- Approved daily export ---------- */
 function ApprovedDailyExport({
-  rows,
+  cacheScope,
   transportOnly = false,
   selectedDate,
   availableDates,
-  loading = false,
-  error = null,
+  dateFrom,
+  dateTo,
+  loadingDates = false,
+  datesError = null,
   onRetry,
   onSelectedDateChange,
-  onFilteredRowsChange,
+  onKpiChange,
   canManageRequests = false,
   onEdit,
   onDelete,
 }: {
-  rows: OvertimeRow[];
+  cacheScope: string;
   transportOnly?: boolean;
   selectedDate: string;
   availableDates: string[];
-  loading?: boolean;
-  error?: Error | null;
+  dateFrom: string;
+  dateTo: string;
+  loadingDates?: boolean;
+  datesError?: Error | null;
   onRetry?: () => void;
   onSelectedDateChange: (date: string) => void;
-  onFilteredRowsChange: (rows: OvertimeRow[]) => void;
+  onKpiChange: (kpis: OvertimeKpis) => void;
   canManageRequests?: boolean;
   onEdit?: (row: OvertimeRow) => void;
   onDelete?: (row: OvertimeRow) => void;
 }) {
   const loadOvertimeForExport = useServerFn(listOvertimeForExport);
-  const exportableRows = useMemo(() => rows.filter((row) => row.status !== "cancelled"), [rows]);
+  const loadOvertimeExportPage = useServerFn(listOvertimeExportPage);
   const [exporting, setExporting] = useState(false);
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
@@ -679,67 +663,137 @@ function ApprovedDailyExport({
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
     transportOnly ? "yes" : "all",
   );
+  const deferredEmployeeSearch = useDeferredValue(employeeSearch);
   const effectiveDate = selectedDate || availableDates[0] || "";
-
-  const dateRows = useMemo(
-    () =>
-      exportableRows.filter(
-        (row) =>
-          (effectiveDate === "all" || row.overtime_date === effectiveDate) &&
-          (transportOnly || transportFilter === "yes"
-            ? row.needs_transport
-            : transportFilter === "no"
-              ? !row.needs_transport
-              : true),
-      ),
-    [exportableRows, effectiveDate, transportFilter, transportOnly],
-  );
-  const availableEntryTimes = useMemo(
-    () =>
-      [
-        ...new Set(dateRows.map((row) => row.entry_time ?? "").filter((time) => time !== "")),
-      ].sort(),
-    [dateRows],
-  );
-  const entryRows = useMemo(
-    () => dateRows.filter((row) => !selectedEntryTime || row.entry_time === selectedEntryTime),
-    [dateRows, selectedEntryTime],
-  );
-  const availableDepartureTimes = useMemo(
-    () =>
-      [
-        ...new Set(entryRows.map((row) => row.departure_time ?? "").filter((time) => time !== "")),
-      ].sort(),
-    [entryRows],
-  );
-
-  const dailyRows = useMemo(
-    () =>
-      entryRows.filter(
-        (row) => {
-          if (selectedDepartureTime && row.departure_time !== selectedDepartureTime) return false;
-          const term = employeeSearch.trim().toLocaleLowerCase("pt-BR");
-          if (!term) return true;
-          return [row.employee_name, row.employee_registration, row.employee_external_id ?? ""]
-            .some((value) => String(value).toLocaleLowerCase("pt-BR").includes(term));
-        },
-      ),
-    [entryRows, selectedDepartureTime, employeeSearch],
-  );
   const pageSize = 30;
   const [page, setPage] = useState(1);
-  const pageCount = Math.max(1, Math.ceil(dailyRows.length / pageSize));
+  const [filterMetadata, setFilterMetadata] = useState<{
+    entryTimes: string[];
+    departureTimes: string[];
+    kpis: OvertimeKpis;
+  }>({ entryTimes: [], departureTimes: [], kpis: EMPTY_OVERTIME_KPIS });
+  const dateScope =
+    effectiveDate === "all"
+      ? { dateFrom, dateTo }
+      : { dateFrom: effectiveDate, dateTo: effectiveDate };
+  const pageQuery = useQuery({
+    queryKey: [
+      "overtime-export-page",
+      cacheScope,
+      effectiveDate,
+      dateFrom,
+      dateTo,
+      selectedEntryTime,
+      selectedDepartureTime,
+      transportFilter,
+      deferredEmployeeSearch,
+      page,
+    ],
+    enabled: Boolean(effectiveDate),
+    staleTime: 30 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const result = await withExportTimeout(
+        loadOvertimeExportPage({
+          data: {
+            ...dateScope,
+            entryTime: selectedEntryTime || undefined,
+            departureTime: selectedDepartureTime || undefined,
+            transport: transportOnly ? "yes" : transportFilter,
+            employeeSearch: deferredEmployeeSearch,
+            page,
+            pageSize,
+            includeMetadata: false,
+          },
+        }),
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result;
+    },
+  });
+  const metadataQuery = useQuery({
+    queryKey: [
+      "overtime-export-metadata",
+      cacheScope,
+      effectiveDate,
+      dateFrom,
+      dateTo,
+      selectedEntryTime,
+      selectedDepartureTime,
+      transportFilter,
+      deferredEmployeeSearch,
+    ],
+    enabled: Boolean(effectiveDate),
+    staleTime: 30 * 1000,
+    retry: false,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const result = await withExportTimeout(
+        loadOvertimeExportPage({
+          data: {
+            ...dateScope,
+            entryTime: selectedEntryTime || undefined,
+            departureTime: selectedDepartureTime || undefined,
+            transport: transportOnly ? "yes" : transportFilter,
+            employeeSearch: deferredEmployeeSearch,
+            page: 1,
+            pageSize: 1,
+            includeMetadata: true,
+          },
+        }),
+      );
+      if (!result.ok) throw new Error(result.error);
+      return result;
+    },
+  });
+  const dailyRows = (pageQuery.data?.rows ?? []) as OvertimeRow[];
+  const availableEntryTimes = filterMetadata.entryTimes;
+  const availableDepartureTimes = filterMetadata.departureTimes;
+  const totalRows = pageQuery.data?.total ?? 0;
+  const pageCount = Math.max(1, Math.ceil(totalRows / pageSize));
   const currentPage = Math.min(page, pageCount);
-  const paginatedDailyRows = dailyRows.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const paginatedDailyRows = dailyRows;
 
-  useEffect(() => onFilteredRowsChange(dailyRows), [dailyRows, onFilteredRowsChange]);
+  useEffect(() => {
+    if (!metadataQuery.data?.kpis) return;
+    const nextMetadata = {
+      entryTimes: (metadataQuery.data.entryTimes ?? []) as string[],
+      departureTimes: (metadataQuery.data.departureTimes ?? []) as string[],
+      kpis: metadataQuery.data.kpis as OvertimeKpis,
+    };
+    setFilterMetadata(nextMetadata);
+    onKpiChange(nextMetadata.kpis);
+  }, [metadataQuery.data, onKpiChange]);
+  useEffect(() => {
+    if (!metadataQuery.data?.kpis) return;
+    const entryTimes = (metadataQuery.data.entryTimes ?? []) as string[];
+    const departureTimes = (metadataQuery.data.departureTimes ?? []) as string[];
+    if (selectedEntryTime && !entryTimes.includes(selectedEntryTime)) {
+      setSelectedEntryTime("");
+      setSelectedDepartureTime("");
+      return;
+    }
+    if (selectedDepartureTime && !departureTimes.includes(selectedDepartureTime)) {
+      setSelectedDepartureTime("");
+    }
+  }, [metadataQuery.data, selectedDepartureTime, selectedEntryTime]);
+  useEffect(() => {
+    if (!pageQuery.isLoading && page > pageCount) setPage(pageCount);
+  }, [page, pageCount, pageQuery.isLoading]);
   useEffect(
     () => setPage(1),
-    [effectiveDate, selectedEntryTime, selectedDepartureTime, transportFilter, employeeSearch],
+    [
+      effectiveDate,
+      selectedEntryTime,
+      selectedDepartureTime,
+      transportFilter,
+      deferredEmployeeSearch,
+    ],
   );
 
   async function exportDailyExcel() {
-    if (!effectiveDate || dailyRows.length === 0) {
+    if (!effectiveDate || totalRows === 0) {
       toast.error("Não há solicitações de hora extra para exportar com os filtros atuais.");
       return;
     }
@@ -747,9 +801,24 @@ function ApprovedDailyExport({
     setExporting(true);
     try {
       const exportDateLabel = effectiveDate === "all" ? "todos-os-dias" : effectiveDate;
+      const exportResult = await withExportTimeout(
+        loadOvertimeForExport({
+          data: {
+            ...dateScope,
+            entryTime: selectedEntryTime || undefined,
+            departureTime: selectedDepartureTime || undefined,
+            transport: transportOnly ? "yes" : transportFilter,
+            employeeSearch: deferredEmployeeSearch,
+            includeEmployeeDetails: transportOnly,
+          },
+        }),
+        60_000,
+      );
+      if (!exportResult.ok) throw new Error(exportResult.error);
+      const exportRows = exportResult.rows as OvertimeRow[];
       if (!transportOnly) {
         const XLSX = await import("xlsx");
-        const regularValues = dailyRows.map(mapRegularOvertimeExportRow);
+        const regularValues = exportRows.map(mapRegularOvertimeExportRow);
         const sheet = XLSX.utils.aoa_to_sheet([
           [...REGULAR_OVERTIME_EXPORT_HEADERS],
           ...regularValues,
@@ -758,31 +827,10 @@ function ApprovedDailyExport({
         const workbook = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(workbook, sheet, "Horas extras");
         XLSX.writeFile(workbook, "horas-extras-" + exportDateLabel + ".xlsx");
-        toast.success(dailyRows.length + " registro(s) exportado(s).");
+        toast.success(exportRows.length + " registro(s) exportado(s).");
         return;
       }
-
-      const detailResult = await runExportRead(() =>
-        loadOvertimeForExport({
-          data:
-            effectiveDate === "all"
-              ? {
-                  dateFrom: shiftDays(-60),
-                  dateTo: shiftDays(60),
-                  includeEmployeeDetails: true,
-                }
-              : {
-                  dateFrom: effectiveDate,
-                  dateTo: effectiveDate,
-                  includeEmployeeDetails: true,
-                },
-        }),
-      );
-      if (!detailResult.ok) throw new Error(detailResult.error);
-      const filteredIds = new Set(dailyRows.map((row) => row.id));
-      const detailedRows = (detailResult.rows as OvertimeRow[]).filter((row) =>
-        filteredIds.has(row.id),
-      );
+      const detailedRows = exportRows;
       const ExcelJS = (await import("exceljs")).default;
       const workbook = new ExcelJS.Workbook();
       workbook.creator = "NEXO";
@@ -830,7 +878,7 @@ function ApprovedDailyExport({
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
-      URL.revokeObjectURL(url);
+      window.setTimeout(() => URL.revokeObjectURL(url), 5_000);
       toast.success(detailedRows.length + " colaborador(es) exportado(s) em tabela.");
     } catch (error) {
       toast.error(
@@ -930,7 +978,7 @@ function ApprovedDailyExport({
         <button
           type="button"
           onClick={exportDailyExcel}
-          disabled={!effectiveDate || dailyRows.length === 0 || exporting}
+          disabled={!effectiveDate || totalRows === 0 || exporting}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
           <Download className="h-4 w-4" />{" "}
@@ -942,7 +990,7 @@ function ApprovedDailyExport({
         </button>
       </div>
 
-      {error ? (
+      {datesError || pageQuery.error || metadataQuery.error ? (
         <div className="p-6 text-center">
           <div className="text-[13px] font-semibold text-destructive">
             Não foi possível carregar a exportação diária
@@ -951,16 +999,24 @@ function ApprovedDailyExport({
             Verifique a conexão e tente novamente.
           </div>
           {onRetry && (
-            <button type="button" onClick={onRetry} className="btn-secondary mt-3 text-[12px]">
+            <button
+              type="button"
+              onClick={() => {
+                onRetry();
+                void pageQuery.refetch();
+                void metadataQuery.refetch();
+              }}
+              className="btn-secondary mt-3 text-[12px]"
+            >
               Tentar novamente
             </button>
           )}
         </div>
-      ) : loading ? (
+      ) : loadingDates || pageQuery.isLoading || metadataQuery.isLoading ? (
         <div className="p-6 text-center text-[12px] text-muted-foreground">
           Carregando horas extras do dia…
         </div>
-      ) : dailyRows.length === 0 ? (
+      ) : totalRows === 0 ? (
         <div className="p-6">
           <EmptyState
             icon={<Timer className="h-4 w-4" />}
@@ -1012,10 +1068,16 @@ function ApprovedDailyExport({
                 </div>
                 {canManageRequests && row.source_type === "manual" && (
                   <div className="mt-3 flex gap-2 border-t border-border pt-3">
-                    <button onClick={() => onEdit?.(row)} className="btn-secondary min-h-9 flex-1 justify-center text-[11px]">
+                    <button
+                      onClick={() => onEdit?.(row)}
+                      className="btn-secondary min-h-9 flex-1 justify-center text-[11px]"
+                    >
                       <Pencil className="h-3.5 w-3.5" /> Editar
                     </button>
-                    <button onClick={() => onDelete?.(row)} className="min-h-9 flex-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10">
+                    <button
+                      onClick={() => onDelete?.(row)}
+                      className="min-h-9 flex-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10"
+                    >
                       Excluir
                     </button>
                   </div>
@@ -1075,14 +1137,22 @@ function ApprovedDailyExport({
                       <td className="whitespace-nowrap px-3 py-2 text-right">
                         {row.source_type === "manual" ? (
                           <div className="inline-flex gap-1.5">
-                            <button onClick={() => onEdit?.(row)} className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted">
+                            <button
+                              onClick={() => onEdit?.(row)}
+                              className="rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                            >
                               Editar
                             </button>
-                            <button onClick={() => onDelete?.(row)} className="rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
+                            <button
+                              onClick={() => onDelete?.(row)}
+                              className="rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
+                            >
                               Excluir
                             </button>
                           </div>
-                        ) : <span className="text-muted-foreground">—</span>}
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -1093,7 +1163,7 @@ function ApprovedDailyExport({
           <PaginationControls
             page={currentPage}
             pageCount={pageCount}
-            total={dailyRows.length}
+            total={totalRows}
             pageSize={pageSize}
             onPageChange={setPage}
           />
@@ -1347,9 +1417,7 @@ function MyRequests({
 }) {
   const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
   const availableDates = useMemo(() => {
-    return [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) =>
-      b.localeCompare(a),
-    );
+    return [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
   }, [rows]);
   const filteredRows = useMemo(
     () => (selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows),
@@ -1728,7 +1796,11 @@ function RequestsTable({
               </div>
             )}
             {r.status === "pending" &&
-              (onApprove || onReject || onEdit || onDelete || (onCancel && r.source_type !== "scale_change")) && (
+              (onApprove ||
+                onReject ||
+                onEdit ||
+                onDelete ||
+                (onCancel && r.source_type !== "scale_change")) && (
                 <div className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3">
                   {onApprove && (
                     <button
@@ -1755,12 +1827,18 @@ function RequestsTable({
                     </button>
                   )}
                   {onEdit && r.source_type === "manual" && (
-                    <button onClick={() => onEdit(r)} className="min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium hover:bg-muted">
+                    <button
+                      onClick={() => onEdit(r)}
+                      className="min-h-10 rounded-md border border-border bg-card px-3 text-[12px] font-medium hover:bg-muted"
+                    >
                       Editar
                     </button>
                   )}
                   {onDelete && r.source_type === "manual" && (
-                    <button onClick={() => onDelete(r)} className="min-h-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-[12px] font-medium text-destructive hover:bg-destructive/15">
+                    <button
+                      onClick={() => onDelete(r)}
+                      className="min-h-10 rounded-md border border-destructive/40 bg-destructive/10 px-3 text-[12px] font-medium text-destructive hover:bg-destructive/15"
+                    >
                       Excluir
                     </button>
                   )}
@@ -1865,12 +1943,18 @@ function RequestsTable({
                         </button>
                       )}
                       {onEdit && r.status === "pending" && r.source_type === "manual" && (
-                        <button onClick={() => onEdit(r)} className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted">
+                        <button
+                          onClick={() => onEdit(r)}
+                          className="inline-flex items-center gap-1 rounded border border-border px-2 py-1 text-[11px] hover:bg-muted"
+                        >
                           <Pencil className="h-3 w-3" /> Editar
                         </button>
                       )}
                       {onDelete && r.status === "pending" && r.source_type === "manual" && (
-                        <button onClick={() => onDelete(r)} className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">
+                        <button
+                          onClick={() => onDelete(r)}
+                          className="inline-flex items-center gap-1 rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
+                        >
                           <Trash2 className="h-3 w-3" /> Excluir
                         </button>
                       )}
@@ -2000,10 +2084,7 @@ async function exportEmployees(rows: EmployeeRow[]) {
     employee.transport_line || "",
     employee.is_active ? "Ativo" : "Inativo",
   ]);
-  const worksheet = XLSX.utils.aoa_to_sheet([
-    [...EMPLOYEE_TEMPLATE_HEADERS, "Status"],
-    ...values,
-  ]);
+  const worksheet = XLSX.utils.aoa_to_sheet([[...EMPLOYEE_TEMPLATE_HEADERS, "Status"], ...values]);
   worksheet["!cols"] = [16, 16, 20, 38, 28, 42, 24, 22, 20, 24, 16, 14].map((wch) => ({ wch }));
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, worksheet, "Colaboradores");
@@ -2753,7 +2834,12 @@ function EditOvertimeRequestModal({
   });
 
   async function save() {
-    if (!form.overtime_date || !form.departure_time || !form.service_description.trim() || !form.justification.trim()) {
+    if (
+      !form.overtime_date ||
+      !form.departure_time ||
+      !form.service_description.trim() ||
+      !form.justification.trim()
+    ) {
       return toast.error("Preencha data, saída, serviço e justificativa.");
     }
     setSaving(true);
@@ -2776,7 +2862,9 @@ function EditOvertimeRequestModal({
       toast.success("Solicitação atualizada.");
       onSaved();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível atualizar a solicitação.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível atualizar a solicitação.",
+      );
     } finally {
       setSaving(false);
     }
@@ -2789,8 +2877,20 @@ function EditOvertimeRequestModal({
       onClose={onClose}
       footer={
         <>
-          <button type="button" onClick={onClose} disabled={saving} className="btn-secondary min-h-10 px-4 text-[12px]">Cancelar</button>
-          <button type="button" onClick={save} disabled={saving} className="btn-primary min-h-10 px-4 text-[12px] disabled:opacity-60">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="btn-secondary min-h-10 px-4 text-[12px]"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={saving}
+            className="btn-primary min-h-10 px-4 text-[12px] disabled:opacity-60"
+          >
             {saving ? "Salvando…" : "Salvar alterações"}
           </button>
         </>
@@ -2798,39 +2898,88 @@ function EditOvertimeRequestModal({
     >
       <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2">
         <Field label="Data" required>
-          <input type="date" value={form.overtime_date} onChange={(e) => setForm((v) => ({ ...v, overtime_date: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+          <input
+            type="date"
+            value={form.overtime_date}
+            onChange={(e) => setForm((v) => ({ ...v, overtime_date: e.target.value }))}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          />
         </Field>
         <Field label="Número da ordem">
-          <input value={form.order_number} onChange={(e) => setForm((v) => ({ ...v, order_number: e.target.value }))} className="input-base w-full text-[12px]" />
+          <input
+            value={form.order_number}
+            onChange={(e) => setForm((v) => ({ ...v, order_number: e.target.value }))}
+            className="input-base w-full text-[12px]"
+          />
         </Field>
         <Field label="Horário de entrada">
-          <input type="time" value={form.entry_time} onChange={(e) => setForm((v) => ({ ...v, entry_time: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+          <input
+            type="time"
+            value={form.entry_time}
+            onChange={(e) => setForm((v) => ({ ...v, entry_time: e.target.value }))}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          />
         </Field>
         <Field label="Horário de saída" required>
-          <input type="time" value={form.departure_time} onChange={(e) => setForm((v) => ({ ...v, departure_time: e.target.value }))} className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]" />
+          <input
+            type="time"
+            value={form.departure_time}
+            onChange={(e) => setForm((v) => ({ ...v, departure_time: e.target.value }))}
+            className="input-base block min-w-0 w-full max-w-full text-[16px] sm:text-[12px]"
+          />
         </Field>
         <div className="sm:col-span-2">
           <Field label="Serviço / atividade" required>
-            <textarea rows={3} value={form.service_description} onChange={(e) => setForm((v) => ({ ...v, service_description: e.target.value }))} className="input-base w-full resize-y text-[12px]" />
+            <textarea
+              rows={3}
+              value={form.service_description}
+              onChange={(e) => setForm((v) => ({ ...v, service_description: e.target.value }))}
+              className="input-base w-full resize-y text-[12px]"
+            />
           </Field>
         </div>
         <div className="sm:col-span-2">
           <Field label="Justificativa" required>
-            <textarea rows={3} value={form.justification} onChange={(e) => setForm((v) => ({ ...v, justification: e.target.value }))} className="input-base w-full resize-y text-[12px]" />
+            <textarea
+              rows={3}
+              value={form.justification}
+              onChange={(e) => setForm((v) => ({ ...v, justification: e.target.value }))}
+              className="input-base w-full resize-y text-[12px]"
+            />
           </Field>
         </div>
         <label className="flex min-h-10 items-center gap-2 rounded border border-border px-3 text-[12px]">
-          <input type="checkbox" checked={form.needs_snack} onChange={(e) => setForm((v) => ({ ...v, needs_snack: e.target.checked }))} className="h-4 w-4 accent-primary" /> Precisa de lanche
+          <input
+            type="checkbox"
+            checked={form.needs_snack}
+            onChange={(e) => setForm((v) => ({ ...v, needs_snack: e.target.checked }))}
+            className="h-4 w-4 accent-primary"
+          />{" "}
+          Precisa de lanche
         </label>
         <label className="flex min-h-10 items-center gap-2 rounded border border-border px-3 text-[12px]">
-          <input type="checkbox" checked={form.needs_transport} onChange={(e) => setForm((v) => ({ ...v, needs_transport: e.target.checked }))} className="h-4 w-4 accent-primary" /> Precisa de transporte
+          <input
+            type="checkbox"
+            checked={form.needs_transport}
+            onChange={(e) => setForm((v) => ({ ...v, needs_transport: e.target.checked }))}
+            className="h-4 w-4 accent-primary"
+          />{" "}
+          Precisa de transporte
         </label>
       </div>
     </Modal>
   );
 }
 
-function DeleteOvertimeRequestModal({ row, onClose, onDeleted }: { row: OvertimeRow; onClose: () => void; onDeleted: () => void }) {
+function DeleteOvertimeRequestModal({
+  row,
+  onClose,
+  onDeleted,
+}: {
+  row: OvertimeRow;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
   const call = useServerFn(deleteOvertimeRequest);
   const [deleting, setDeleting] = useState(false);
   async function remove() {
@@ -2841,7 +2990,9 @@ function DeleteOvertimeRequestModal({ row, onClose, onDeleted }: { row: Overtime
       toast.success("Solicitação excluída.");
       onDeleted();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível excluir a solicitação.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível excluir a solicitação.",
+      );
     } finally {
       setDeleting(false);
     }
@@ -2853,14 +3004,28 @@ function DeleteOvertimeRequestModal({ row, onClose, onDeleted }: { row: Overtime
       onClose={onClose}
       footer={
         <>
-          <button type="button" onClick={onClose} disabled={deleting} className="btn-secondary min-h-10 px-4 text-[12px]">Voltar</button>
-          <button type="button" onClick={remove} disabled={deleting} className="min-h-10 rounded bg-destructive px-4 text-[12px] font-medium text-destructive-foreground disabled:opacity-60">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={deleting}
+            className="btn-secondary min-h-10 px-4 text-[12px]"
+          >
+            Voltar
+          </button>
+          <button
+            type="button"
+            onClick={remove}
+            disabled={deleting}
+            className="min-h-10 rounded bg-destructive px-4 text-[12px] font-medium text-destructive-foreground disabled:opacity-60"
+          >
             {deleting ? "Excluindo…" : "Excluir definitivamente"}
           </button>
         </>
       }
     >
-      <p className="text-[12px] text-muted-foreground">Esta ação remove apenas este colaborador da solicitação e não pode ser desfeita.</p>
+      <p className="text-[12px] text-muted-foreground">
+        Esta ação remove apenas este colaborador da solicitação e não pode ser desfeita.
+      </p>
     </Modal>
   );
 }
@@ -3526,4 +3691,3 @@ function DecideModal({
     </Modal>
   );
 }
-

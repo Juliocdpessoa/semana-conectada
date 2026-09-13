@@ -43,7 +43,11 @@ export type SessionInfo = {
 
 async function loadSession(): Promise<SessionInfo | null> {
   const { data, error: authError } = await supabase.auth.getUser();
-  if (authError) throw new Error("Não foi possível validar sua sessão. Verifique a conexão e tente novamente.");
+  if (authError) {
+    const { data: sessionState } = await supabase.auth.getSession();
+    if (!sessionState.session) return null;
+    throw new Error("Não foi possível validar sua sessão. Verifique a conexão e tente novamente.");
+  }
   if (!data.user) return null;
   let profile: any = null;
   let roles: any = null;
