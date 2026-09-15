@@ -18,6 +18,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedTransporteProgramadoRouteImport } from './routes/_authenticated/transporte-programado'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
+import { Route as AuthenticatedMudancaDeEscalaRouteImport } from './routes/_authenticated/mudanca-de-escala'
 import { Route as AuthenticatedHoraExtraRouteImport } from './routes/_authenticated/hora-extra'
 import { Route as AuthenticatedHistoricoRouteImport } from './routes/_authenticated/historico'
 import { Route as AuthenticatedAtividadesRouteImport } from './routes/_authenticated/atividades'
@@ -69,6 +70,12 @@ const AuthenticatedPainelRoute = AuthenticatedPainelRouteImport.update({
   path: '/painel',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedMudancaDeEscalaRoute =
+  AuthenticatedMudancaDeEscalaRouteImport.update({
+    id: '/mudanca-de-escala',
+    path: '/mudanca-de-escala',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedHoraExtraRoute = AuthenticatedHoraExtraRouteImport.update({
   id: '/hora-extra',
   path: '/hora-extra',
@@ -100,6 +107,7 @@ export interface FileRoutesByFullPath {
   '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/hora-extra': typeof AuthenticatedHoraExtraRoute
+  '/mudanca-de-escala': typeof AuthenticatedMudancaDeEscalaRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
@@ -114,6 +122,7 @@ export interface FileRoutesByTo {
   '/atividades': typeof AuthenticatedAtividadesRoute
   '/historico': typeof AuthenticatedHistoricoRoute
   '/hora-extra': typeof AuthenticatedHoraExtraRoute
+  '/mudanca-de-escala': typeof AuthenticatedMudancaDeEscalaRoute
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
@@ -130,6 +139,7 @@ export interface FileRoutesById {
   '/_authenticated/atividades': typeof AuthenticatedAtividadesRoute
   '/_authenticated/historico': typeof AuthenticatedHistoricoRoute
   '/_authenticated/hora-extra': typeof AuthenticatedHoraExtraRoute
+  '/_authenticated/mudanca-de-escala': typeof AuthenticatedMudancaDeEscalaRoute
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
@@ -146,6 +156,7 @@ export interface FileRouteTypes {
     | '/atividades'
     | '/historico'
     | '/hora-extra'
+    | '/mudanca-de-escala'
     | '/painel'
     | '/planejamento'
     | '/transporte-programado'
@@ -160,6 +171,7 @@ export interface FileRouteTypes {
     | '/atividades'
     | '/historico'
     | '/hora-extra'
+    | '/mudanca-de-escala'
     | '/painel'
     | '/planejamento'
     | '/transporte-programado'
@@ -175,6 +187,7 @@ export interface FileRouteTypes {
     | '/_authenticated/atividades'
     | '/_authenticated/historico'
     | '/_authenticated/hora-extra'
+    | '/_authenticated/mudanca-de-escala'
     | '/_authenticated/painel'
     | '/_authenticated/planejamento'
     | '/_authenticated/transporte-programado'
@@ -255,6 +268,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedPainelRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/mudanca-de-escala': {
+      id: '/_authenticated/mudanca-de-escala'
+      path: '/mudanca-de-escala'
+      fullPath: '/mudanca-de-escala'
+      preLoaderRoute: typeof AuthenticatedMudancaDeEscalaRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/hora-extra': {
       id: '/_authenticated/hora-extra'
       path: '/hora-extra'
@@ -290,6 +310,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedAtividadesRoute: typeof AuthenticatedAtividadesRoute
   AuthenticatedHistoricoRoute: typeof AuthenticatedHistoricoRoute
   AuthenticatedHoraExtraRoute: typeof AuthenticatedHoraExtraRoute
+  AuthenticatedMudancaDeEscalaRoute: typeof AuthenticatedMudancaDeEscalaRoute
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedTransporteProgramadoRoute: typeof AuthenticatedTransporteProgramadoRoute
@@ -300,6 +321,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedAtividadesRoute: AuthenticatedAtividadesRoute,
   AuthenticatedHistoricoRoute: AuthenticatedHistoricoRoute,
   AuthenticatedHoraExtraRoute: AuthenticatedHoraExtraRoute,
+  AuthenticatedMudancaDeEscalaRoute: AuthenticatedMudancaDeEscalaRoute,
   AuthenticatedPainelRoute: AuthenticatedPainelRoute,
   AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
   AuthenticatedTransporteProgramadoRoute:
