@@ -206,6 +206,7 @@ const PT_COLOR_LABELS: Record<PtColor, string> = {
   white: "Branca",
 };
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+const pad2 = (value: number) => String(value).padStart(2, "0");
 
 function SapStatusPill({ status }: { status?: SapConfirmationStatus }) {
   if (!status) return <span className="text-[11px] text-muted-foreground">Sem carga SAP</span>;
