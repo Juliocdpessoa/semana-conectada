@@ -1103,6 +1103,15 @@ function AtividadesPage() {
     setPage(0);
   }
 
+  function refreshActivitiesAndSapStatus() {
+    void qc.invalidateQueries({ queryKey: ["activities"] });
+    if (!activeWeek.data?.id || !canAccessSap) return;
+    void qc.invalidateQueries({
+      queryKey: ["sap-confirmation-overview", activeWeek.data.id],
+    });
+    void qc.invalidateQueries({ queryKey: ["sap-counts-by-current-filters"] });
+  }
+
   const activeFilters = [
     search,
     !isLeaderOnly && statusFilters.length > 0 ? "1" : "",
@@ -3057,7 +3066,7 @@ function AtividadesPage() {
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
-            qc.invalidateQueries({ queryKey: ["activities"] });
+            refreshActivitiesAndSapStatus();
           }}
         />
       )}
@@ -3073,7 +3082,7 @@ function AtividadesPage() {
           onSaved={() => {
             setBulkOpen(false);
             setSelected(new Set());
-            qc.invalidateQueries({ queryKey: ["activities"] });
+            refreshActivitiesAndSapStatus();
           }}
         />
       )}
