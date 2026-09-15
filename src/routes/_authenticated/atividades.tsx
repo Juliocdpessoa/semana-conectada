@@ -2214,8 +2214,8 @@ function AtividadesPage() {
                 {formatDateTime(sapOverview.data.deadline)}
               </p>
               {sapLatestImport.data && (
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} por{" "}
+                <p className="mt-0.5 whitespace-nowrap text-[11px] text-muted-foreground">
+                  Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} | Responsável:{" "}
                   <span className="font-medium text-foreground">
                     {sapLatestImport.data.imported_by_name ||
                       sapLatestImport.data.imported_by_email ||
