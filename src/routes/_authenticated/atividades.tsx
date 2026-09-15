@@ -1004,8 +1004,8 @@ function AtividadesPage() {
     placeholderData: (previous) => previous,
   });
 
-  const sapImportHistory = useQuery({
-    queryKey: ["sap-confirmation-import-history", activeWeek.data?.id],
+  const sapLatestImport = useQuery({
+    queryKey: ["sap-confirmation-latest-import", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
@@ -1013,9 +1013,10 @@ function AtividadesPage() {
         .select("id,source_file_name,row_count,imported_at,imported_by,imported_by_name,imported_by_email")
         .eq("week_id", activeWeek.data!.id)
         .order("imported_at", { ascending: false })
-        .limit(10);
+        .limit(1)
+        .maybeSingle();
       if (error) throw error;
-      return data ?? [];
+      return data ?? null;
     },
   });
 
@@ -1519,7 +1520,7 @@ function AtividadesPage() {
       setSapImportPreview(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["sap-confirmation-overview", activeWeek.data.id] }),
-        qc.invalidateQueries({ queryKey: ["sap-confirmation-import-history", activeWeek.data.id] }),
+        qc.invalidateQueries({ queryKey: ["sap-confirmation-latest-import", activeWeek.data.id] }),
       ]);
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível importar as confirmações SAP.");
@@ -2212,6 +2213,16 @@ function AtividadesPage() {
                 {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais · prazo até{" "}
                 {formatDateTime(sapOverview.data.deadline)}
               </p>
+              {sapLatestImport.data && (
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} por{" "}
+                  <span className="font-medium text-foreground">
+                    {sapLatestImport.data.imported_by_name ||
+                      sapLatestImport.data.imported_by_email ||
+                      "Carga do sistema"}
+                  </span>
+                </p>
+              )}
             </div>
             <span className="text-[10px] text-muted-foreground">
               O status SAP não altera o apontamento operacional.
@@ -2266,26 +2277,6 @@ function AtividadesPage() {
               <KpiCard label="Não programadas" value={sapOverview.data.unprogrammedCount} tone="primary" />
             </button>
           </div>
-          {(sapImportHistory.data?.length ?? 0) > 0 && (
-            <details className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground">
-              <summary className="cursor-pointer font-medium text-foreground">
-                Histórico de cargas ({sapImportHistory.data?.length})
-              </summary>
-              <div className="mt-2 space-y-1">
-                {(sapImportHistory.data ?? []).map((item: any, index: number) => (
-                  <div key={item.id} className="flex flex-wrap justify-between gap-2">
-                    <span>
-                      {index === 0 ? "Atual: " : ""}{item.source_file_name}
-                    </span>
-                    <span className="tabular">
-                      {item.imported_by_name || item.imported_by_email || "Carga do sistema"} ·{" "}
-                      {Number(item.row_count).toLocaleString("pt-BR")} linhas · {formatDateTime(item.imported_at)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </details>
-          )}
         </section>
       )}
 
@@ -2869,8 +2860,8 @@ function AtividadesPage() {
         >
           <div className="space-y-3">
             <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
-              {sapImportHistory.data?.length
-                ? "Já existe uma carga para esta semana. Esta será preservada no histórico, mas a nova carga passará a ser a utilizada no comparativo."
+              {sapLatestImport.data
+                ? "Já existe uma carga para esta semana. A nova carga substituirá a atual no comparativo SAP."
                 : "Confira a semana selecionada antes de confirmar. A importação não altera o status operacional das atividades."}
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
