@@ -100,6 +100,33 @@ type SapConfirmationStatus =
   | "Confirmação não esperada"
   | "Divergência";
 
+type SapImportRow = {
+  source_row_number: number;
+  order_number: string;
+  operation: string | null;
+  suboperation: string | null;
+  planning_code: string | null;
+  work_center: string | null;
+  description: string | null;
+  actual_start_date: string | null;
+  actual_end_date: string | null;
+  system_status: string | null;
+  normal_duration: number | null;
+  planned_work: number | null;
+  actual_work: number | null;
+  user_status: string | null;
+  operational_area: string | null;
+  confirmation: string;
+};
+
+type SapImportPreview = {
+  fileName: string;
+  rows: SapImportRow[];
+  confirmed: number;
+  confirmedWithoutHours: number;
+  withoutConfirmation: number;
+};
+
 type PtImportChange = {
   row: ActivityRow;
   confirmation: string;
@@ -191,6 +218,128 @@ function SapStatusPill({ status }: { status?: SapConfirmationStatus }) {
     Divergência: "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300",
   };
   return <span className={cn("status-pill whitespace-nowrap", styles[status])}>{status}</span>;
+}
+
+function normalizedSpreadsheetHeader(value: unknown) {
+  return String(value ?? "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]/gi, "")
+    .toUpperCase();
+}
+
+function sapText(value: unknown): string | null {
+  const text = String(value ?? "").trim();
+  return text || null;
+}
+
+function sapNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  const text = String(value).trim();
+  if (!text) return null;
+  const normalized = text.includes(",") ? text.replace(/\./g, "").replace(",", ".") : text;
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sapDate(value: unknown, XLSX: any): string | null {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return `${value.getFullYear()}-${pad2(value.getMonth() + 1)}-${pad2(value.getDate())}`;
+  }
+  if (typeof value === "number") {
+    const parsed = XLSX.SSF.parse_date_code(value);
+    return parsed ? `${parsed.y}-${pad2(parsed.m)}-${pad2(parsed.d)}` : null;
+  }
+  const text = String(value ?? "").trim();
+  if (!text) return null;
+  const br = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${pad2(Number(br[2]))}-${pad2(Number(br[1]))}`;
+  const iso = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
+}
+
+async function parseSapWorkbook(file: File): Promise<SapImportPreview> {
+  const XLSX = await import("xlsx");
+  const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
+  const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+  const matrix = XLSX.utils.sheet_to_json<unknown[]>(worksheet, {
+    header: 1,
+    defval: "",
+    raw: true,
+  });
+  if (matrix.length < 2) throw new Error("A planilha SAP não contém linhas de dados.");
+
+  const header = matrix[0].map(normalizedSpreadsheetHeader);
+  const aliases: Record<string, string[]> = {
+    order_number: ["ORDEM"],
+    operation: ["OPERACAO"],
+    suboperation: ["SUBOPERACAO"],
+    planning_code: ["CODPLANORDEM"],
+    work_center: ["CENTRABOPERACAO"],
+    description: ["TXTDESCOPER"],
+    actual_start_date: ["DATAINICREAL"],
+    actual_end_date: ["DATAFIMREAL"],
+    system_status: ["SISTSTATOPER"],
+    normal_duration: ["DURACAONORMAL"],
+    planned_work: ["TRABALHO"],
+    actual_work: ["TRABALHOREAL"],
+    user_status: ["STATUSUSUARIO"],
+    operational_area: ["AREAOPERACION"],
+    confirmation: ["CONFIRMACAO"],
+  };
+  const indexes = Object.fromEntries(
+    Object.entries(aliases).map(([key, names]) => [
+      key,
+      header.findIndex((value) => names.includes(value)),
+    ]),
+  ) as Record<keyof typeof aliases, number>;
+  const missing = Object.entries(indexes)
+    .filter(([, index]) => index < 0)
+    .map(([key]) => key);
+  if (missing.length) {
+    throw new Error(`Colunas obrigatórias ausentes ou renomeadas: ${missing.join(", ")}.`);
+  }
+
+  const rows = matrix.slice(1).flatMap((source, index) => {
+    const value = (key: keyof typeof aliases) => source[indexes[key]];
+    const order = sapText(value("order_number"));
+    const confirmation = sapText(value("confirmation"));
+    if (!order && !confirmation && source.every((cell) => sapText(cell) === null)) return [];
+    if (!order || !confirmation) {
+      throw new Error(`Linha ${index + 2}: Ordem e Confirmação são obrigatórias.`);
+    }
+    return [{
+      source_row_number: index + 2,
+      order_number: order,
+      operation: sapText(value("operation")),
+      suboperation: sapText(value("suboperation")),
+      planning_code: sapText(value("planning_code")),
+      work_center: sapText(value("work_center")),
+      description: sapText(value("description")),
+      actual_start_date: sapDate(value("actual_start_date"), XLSX),
+      actual_end_date: sapDate(value("actual_end_date"), XLSX),
+      system_status: sapText(value("system_status")),
+      normal_duration: sapNumber(value("normal_duration")),
+      planned_work: sapNumber(value("planned_work")),
+      actual_work: sapNumber(value("actual_work")),
+      user_status: sapText(value("user_status")),
+      operational_area: sapText(value("operational_area")),
+      confirmation,
+    } satisfies SapImportRow];
+  });
+  if (!rows.length) throw new Error("A planilha SAP não contém registros válidos.");
+  if (rows.length > 5000) throw new Error("A planilha excede o limite de 5.000 registros.");
+
+  const hasConf = (row: SapImportRow) =>
+    (row.system_status ?? "").toUpperCase().split(/\s+/).includes("CONF");
+  return {
+    fileName: file.name,
+    rows,
+    confirmed: rows.filter((row) => hasConf(row) && (row.actual_work ?? 0) > 0).length,
+    confirmedWithoutHours: rows.filter((row) => hasConf(row) && (row.actual_work ?? 0) <= 0).length,
+    withoutConfirmation: rows.filter((row) => !hasConf(row)).length,
+  };
 }
 
 /** HH planejado da atividade: valor da coluna Trab importada da programação. */
@@ -637,7 +786,10 @@ function AtividadesPage() {
   const [ptImportIgnored, setPtImportIgnored] = useState<string[]>([]);
   const [ptImportOpen, setPtImportOpen] = useState(false);
   const [sapUnprogrammedOpen, setSapUnprogrammedOpen] = useState(false);
+  const [sapImportPreview, setSapImportPreview] = useState<SapImportPreview | null>(null);
+  const [isSapImporting, setIsSapImporting] = useState(false);
   const ptImportInputRef = useRef<HTMLInputElement | null>(null);
+  const sapImportInputRef = useRef<HTMLInputElement | null>(null);
   const [page, setPage] = useState(0);
   const pageSize = 50;
 
@@ -747,6 +899,21 @@ function AtividadesPage() {
       return data as SapConfirmationOverview | null;
     },
     refetchInterval: 5 * 60_000,
+  });
+
+  const sapImportHistory = useQuery({
+    queryKey: ["sap-confirmation-import-history", activeWeek.data?.id],
+    enabled: Boolean(activeWeek.data?.id) && canEditPlanningFields,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("sap_confirmation_imports")
+        .select("id,source_file_name,row_count,imported_at,imported_by")
+        .eq("week_id", activeWeek.data!.id)
+        .order("imported_at", { ascending: false })
+        .limit(10);
+      if (error) throw error;
+      return data ?? [];
+    },
   });
 
   const dateEditSettings = useQuery({
@@ -1192,6 +1359,43 @@ function AtividadesPage() {
     return dateFilters[0];
   }
 
+  async function prepareSapImport(file: File) {
+    try {
+      setIsSapImporting(true);
+      setSapImportPreview(await parseSapWorkbook(file));
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível ler a planilha SAP.");
+      setSapImportPreview(null);
+    } finally {
+      setIsSapImporting(false);
+      if (sapImportInputRef.current) sapImportInputRef.current.value = "";
+    }
+  }
+
+  async function confirmSapImport() {
+    if (!activeWeek.data || !sapImportPreview || isSapImporting) return;
+    setIsSapImporting(true);
+    try {
+      const { data, error } = await (supabase as any).rpc("import_sap_confirmations", {
+        p_week_id: activeWeek.data.id,
+        p_source_file_name: sapImportPreview.fileName,
+        p_rows: sapImportPreview.rows,
+      });
+      if (error) throw error;
+      const count = Number(data?.count ?? sapImportPreview.rows.length);
+      toast.success(`${count.toLocaleString("pt-BR")} registros SAP importados para ${activeWeek.data.label}.`);
+      setSapImportPreview(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["sap-confirmation-overview", activeWeek.data.id] }),
+        qc.invalidateQueries({ queryKey: ["sap-confirmation-import-history", activeWeek.data.id] }),
+      ]);
+    } catch (error: any) {
+      toast.error(error?.message ?? "Não foi possível importar as confirmações SAP.");
+    } finally {
+      setIsSapImporting(false);
+    }
+  }
+
   async function downloadPtImportTemplate() {
     const day = selectedPtImportDay();
     if (!day || !activeWeek.data || isPtTemplateDownloading) return;
@@ -1622,6 +1826,25 @@ function AtividadesPage() {
             {canEditPlanningFields && (
               <>
                 <button
+                  onClick={() => sapImportInputRef.current?.click()}
+                  disabled={isSapImporting || !activeWeek.data}
+                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+                  title={`Importar a extração SAP para ${activeWeek.data?.label ?? "a semana selecionada"}`}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  {isSapImporting ? "Lendo SAP…" : "Importar SAP"}
+                </button>
+                <input
+                  ref={sapImportInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  className="hidden"
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    if (file) void prepareSapImport(file);
+                  }}
+                />
+                <button
                   onClick={exportPrintableSchedule}
                   disabled={isPrinting || planningSavePending || kpis.total === 0}
                   className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
@@ -1878,6 +2101,25 @@ function AtividadesPage() {
               <KpiCard label="Não programadas" value={sapOverview.data.unprogrammedCount} tone="primary" />
             </button>
           </div>
+          {canEditPlanningFields && (sapImportHistory.data?.length ?? 0) > 0 && (
+            <details className="mt-3 border-t border-border pt-2 text-[11px] text-muted-foreground">
+              <summary className="cursor-pointer font-medium text-foreground">
+                Histórico de cargas ({sapImportHistory.data?.length})
+              </summary>
+              <div className="mt-2 space-y-1">
+                {(sapImportHistory.data ?? []).map((item: any, index: number) => (
+                  <div key={item.id} className="flex flex-wrap justify-between gap-2">
+                    <span>
+                      {index === 0 ? "Atual: " : ""}{item.source_file_name}
+                    </span>
+                    <span className="tabular">
+                      {Number(item.row_count).toLocaleString("pt-BR")} linhas · {formatDateTime(item.imported_at)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          )}
         </section>
       )}
 
@@ -2406,6 +2648,105 @@ function AtividadesPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        </Modal>
+      )}
+
+      {sapImportPreview && activeWeek.data && (
+        <Modal
+          title="Conferir importação SAP"
+          description={`A carga ficará vinculada à obra atual e à ${activeWeek.data.label}.`}
+          size="lg"
+          onClose={() => !isSapImporting && setSapImportPreview(null)}
+          footer={
+            <>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={isSapImporting}
+                onClick={() => setSapImportPreview(null)}
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={isSapImporting}
+                onClick={confirmSapImport}
+              >
+                {isSapImporting
+                  ? "Importando…"
+                  : `Confirmar ${sapImportPreview.rows.length.toLocaleString("pt-BR")} registros`}
+              </button>
+            </>
+          }
+        >
+          <div className="space-y-3">
+            <div className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs text-warning-foreground">
+              {sapImportHistory.data?.length
+                ? "Já existe uma carga para esta semana. Esta será preservada no histórico, mas a nova carga passará a ser a utilizada no comparativo."
+                : "Confira a semana selecionada antes de confirmar. A importação não altera o status operacional das atividades."}
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <KpiCard label="Linhas" value={sapImportPreview.rows.length} />
+              <KpiCard label="Confirmadas" value={sapImportPreview.confirmed} tone="success" />
+              <KpiCard label="Confirmadas sem HH" value={sapImportPreview.confirmedWithoutHours} />
+              <KpiCard label="Sem CONF" value={sapImportPreview.withoutConfirmation} tone="warning" />
+            </div>
+            <div className="text-xs text-muted-foreground">
+              Arquivo: <span className="font-medium text-foreground">{sapImportPreview.fileName}</span>
+            </div>
+            <div className="max-h-72 overflow-auto rounded-md border border-border">
+              <table className="min-w-[760px] w-full text-xs">
+                <thead className="sticky top-0 bg-muted text-[10px] uppercase text-muted-foreground">
+                  <tr>
+                    <th className="px-2 py-2 text-left">Linha</th>
+                    <th className="px-2 py-2 text-left">Ordem</th>
+                    <th className="px-2 py-2 text-left">Oper / Sub</th>
+                    <th className="px-2 py-2 text-left">Descrição</th>
+                    <th className="px-2 py-2 text-left">Confirmação</th>
+                    <th className="px-2 py-2 text-left">Status SAP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/60">
+                  {sapImportPreview.rows.slice(0, 50).map((row) => {
+                    const confirmed = (row.system_status ?? "")
+                      .toUpperCase()
+                      .split(/\s+/)
+                      .includes("CONF");
+                    return (
+                      <tr key={row.source_row_number} className="row-zebra">
+                        <td className="px-2 py-2 tabular">{row.source_row_number}</td>
+                        <td className="px-2 py-2 font-mono">{row.order_number}</td>
+                        <td className="px-2 py-2 font-mono">
+                          {row.operation ?? "—"} / {row.suboperation ?? "—"}
+                        </td>
+                        <td className="max-w-72 truncate px-2 py-2" title={row.description ?? ""}>
+                          {row.description ?? "—"}
+                        </td>
+                        <td className="px-2 py-2 font-mono">{row.confirmation}</td>
+                        <td className="px-2 py-2">
+                          <SapStatusPill
+                            status={
+                              confirmed
+                                ? (row.actual_work ?? 0) > 0
+                                  ? "Confirmada no SAP"
+                                  : "Confirmada sem HH"
+                                : "Não confirmada no SAP"
+                            }
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {sapImportPreview.rows.length > 50 && (
+              <p className="text-[11px] text-muted-foreground">
+                Prévia das primeiras 50 linhas. Todos os {sapImportPreview.rows.length.toLocaleString("pt-BR")} registros serão importados.
+              </p>
+            )}
           </div>
         </Modal>
       )}
