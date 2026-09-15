@@ -2204,27 +2204,33 @@ function AtividadesPage() {
 
       {canAccessSap && sapOverview.data?.hasImport && (
         <section className="mb-5 rounded-md border border-border bg-card p-3">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
-                Conferência SAP
-              </h2>
-              <p className="mt-0.5 text-[11px] text-muted-foreground">
-                {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais · prazo até{" "}
-                {formatDateTime(sapOverview.data.deadline)}
-              </p>
-              {sapLatestImport.data && (
-                <p className="mt-0.5 whitespace-nowrap text-[11px] text-muted-foreground">
-                  Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} | Responsável:{" "}
-                  <span className="font-medium text-foreground">
-                    {sapLatestImport.data.imported_by_name ||
-                      sapLatestImport.data.imported_by_email ||
-                      "Carga do sistema"}
-                  </span>
-                </p>
-              )}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-1 overflow-x-auto">
+              <div className="flex min-w-max items-baseline gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                  Conferência SAP
+                </h2>
+                <span>|</span>
+                <span>
+                  {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais - prazo até{" "}
+                  {formatDateTime(sapOverview.data.deadline)}
+                </span>
+                {sapLatestImport.data && (
+                  <>
+                    <span>|</span>
+                    <span>
+                      Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} | Responsável:{" "}
+                      <span className="font-medium text-foreground">
+                        {sapLatestImport.data.imported_by_name ||
+                          sapLatestImport.data.imported_by_email ||
+                          "Carga do sistema"}
+                      </span>
+                    </span>
+                  </>
+                )}
+              </div>
             </div>
-            <span className="text-[10px] text-muted-foreground">
+            <span className="hidden shrink-0 text-[10px] text-muted-foreground xl:inline">
               O status SAP não altera o apontamento operacional.
             </span>
           </div>
