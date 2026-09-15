@@ -846,6 +846,19 @@ function AtividadesPage() {
     dates: dateFilters,
     origins: originFilters,
   };
+  const hasSapSummaryFilters = Boolean(
+    deferredSearch.trim() ||
+      statusFilters.length ||
+      releaseTypeFilters.length ||
+      ptColorFilters.length ||
+      areaFilters.length ||
+      workCenterFilters.length ||
+      planningGroupFilters.length ||
+      gerFilters.length ||
+      dateFilters.length ||
+      originFilters.length ||
+      sapStatusFilters.length,
+  );
 
   async function fetchActivitiesPage(pageIndex: number, size: number) {
     const { data, error } = await (supabase as any).rpc("get_activities_page", {
@@ -913,22 +926,23 @@ function AtividadesPage() {
     refetchInterval: 5 * 60_000,
   });
 
-  const sapCountsByOperationalStatus = useQuery({
+  const sapCountsByCurrentFilters = useQuery({
     queryKey: [
-      "sap-counts-by-operational-status",
+      "sap-counts-by-current-filters",
       activeWeek.data?.id,
-      statusFilters,
+      activityFilters,
+      sapStatusFilters,
       sapOverview.data?.statuses,
     ],
     enabled:
       Boolean(activeWeek.data?.id) &&
       canAccessSap &&
       Boolean(sapOverview.data?.hasImport) &&
-      statusFilters.length > 0,
+      hasSapSummaryFilters,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_activities_page", {
         p_week_id: activeWeek.data!.id,
-        p_filters: { statuses: statusFilters },
+        p_filters: activityFilters,
         p_page: 0,
         p_page_size: 5000,
       });
@@ -937,13 +951,17 @@ function AtividadesPage() {
       return ((data?.rows ?? []) as ActivityRow[]).reduce(
         (counts, row) => {
           const sapStatus = sapOverview.data?.statuses?.[row.id];
-          if (sapStatus) counts[sapStatus] = (counts[sapStatus] ?? 0) + 1;
+          if (
+            sapStatus &&
+            (sapStatusFilters.length === 0 || sapStatusFilters.includes(sapStatus))
+          ) {
+            counts[sapStatus] = (counts[sapStatus] ?? 0) + 1;
+          }
           return counts;
         },
         {} as Partial<Record<SapConfirmationStatus, number>>,
       );
     },
-    placeholderData: (previous) => previous,
   });
 
   const sapFilteredActivities = useQuery({
@@ -1059,8 +1077,8 @@ function AtividadesPage() {
   };
   const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
   const sapCounts =
-    statusFilters.length > 0
-      ? (sapCountsByOperationalStatus.data ?? {})
+    hasSapSummaryFilters
+      ? (sapCountsByCurrentFilters.data ?? {})
       : (sapOverview.data?.counts ?? {});
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
 
