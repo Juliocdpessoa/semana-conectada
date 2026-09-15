@@ -71,6 +71,35 @@ type ActivityRow = {
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
 };
 
+type SapConfirmationOverview = {
+  deadline: string;
+  hasImport: boolean;
+  importedRows: number;
+  statuses: Record<string, SapConfirmationStatus>;
+  counts: Partial<Record<SapConfirmationStatus, number>>;
+  unprogrammedCount: number;
+  unprogrammed: Array<{
+    id: string;
+    order_number: string;
+    operation: string | null;
+    suboperation: string | null;
+    description: string | null;
+    actual_start_date: string | null;
+    actual_end_date: string | null;
+    actual_work: number | null;
+    confirmation: string;
+    sap_status: string;
+  }>;
+};
+
+type SapConfirmationStatus =
+  | "Aguardando confirmação"
+  | "Confirmada no SAP"
+  | "Confirmada sem HH"
+  | "Não confirmada no SAP"
+  | "Confirmação não esperada"
+  | "Divergência";
+
 type PtImportChange = {
   row: ActivityRow;
   confirmation: string;
@@ -150,6 +179,19 @@ const PT_COLOR_LABELS: Record<PtColor, string> = {
   white: "Branca",
 };
 const ACTIVITY_SORT_COLLATOR = new Intl.Collator("pt-BR", { numeric: true, sensitivity: "base" });
+
+function SapStatusPill({ status }: { status?: SapConfirmationStatus }) {
+  if (!status) return <span className="text-[11px] text-muted-foreground">Sem carga SAP</span>;
+  const styles: Record<SapConfirmationStatus, string> = {
+    "Confirmada no SAP": "border-success/40 bg-success/10 text-success",
+    "Confirmada sem HH": "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+    "Aguardando confirmação": "border-warning/50 bg-warning/15 text-warning-foreground",
+    "Não confirmada no SAP": "border-destructive/40 bg-destructive/10 text-destructive",
+    "Confirmação não esperada": "border-border bg-muted text-muted-foreground",
+    Divergência: "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+  };
+  return <span className={cn("status-pill whitespace-nowrap", styles[status])}>{status}</span>;
+}
 
 /** HH planejado da atividade: valor da coluna Trab importada da programação. */
 function activityHours(planningData: Record<string, unknown> | null): number {
@@ -594,6 +636,7 @@ function AtividadesPage() {
   const [ptImportChanges, setPtImportChanges] = useState<PtImportChange[]>([]);
   const [ptImportIgnored, setPtImportIgnored] = useState<string[]>([]);
   const [ptImportOpen, setPtImportOpen] = useState(false);
+  const [sapUnprogrammedOpen, setSapUnprogrammedOpen] = useState(false);
   const ptImportInputRef = useRef<HTMLInputElement | null>(null);
   const [page, setPage] = useState(0);
   const pageSize = 50;
@@ -693,6 +736,19 @@ function AtividadesPage() {
     placeholderData: (previous) => previous,
   });
 
+  const sapOverview = useQuery({
+    queryKey: ["sap-confirmation-overview", activeWeek.data?.id],
+    enabled: Boolean(activeWeek.data?.id),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_sap_confirmation_overview", {
+        p_week_id: activeWeek.data!.id,
+      });
+      if (error) throw error;
+      return data as SapConfirmationOverview | null;
+    },
+    refetchInterval: 5 * 60_000,
+  });
+
   const dateEditSettings = useQuery({
     queryKey: ["activity-date-edit-settings"],
     enabled: canLoadDateEditSettings,
@@ -749,6 +805,8 @@ function AtividadesPage() {
     percent: 0,
   };
   const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
+  const sapCounts = sapOverview.data?.counts ?? {};
+  const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
 
   function toggleKpiStatus(nextStatus: string) {
     if (isLeaderOnly) return;
@@ -1788,6 +1846,41 @@ function AtividadesPage() {
         />
       </section>
 
+      {sapOverview.data?.hasImport && (
+        <section className="mb-5 rounded-md border border-border bg-card p-3">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-foreground">
+                Conferência SAP
+              </h2>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais · prazo até{" "}
+                {formatDateTime(sapOverview.data.deadline)}
+              </p>
+            </div>
+            <span className="text-[10px] text-muted-foreground">
+              O status SAP não altera o apontamento operacional.
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+            <KpiCard label="Confirmadas no SAP" value={sapCount("Confirmada no SAP")} tone="success" />
+            <KpiCard label="Confirmadas sem HH" value={sapCount("Confirmada sem HH")} />
+            <KpiCard label="Aguardando confirmação" value={sapCount("Aguardando confirmação")} tone="warning" />
+            <KpiCard label="Não confirmadas" value={sapCount("Não confirmada no SAP")} tone="destructive" />
+            <KpiCard label="Não esperadas" value={sapCount("Confirmação não esperada")} />
+            <KpiCard label="Divergências" value={sapCount("Divergência")} tone="warning" />
+            <button
+              type="button"
+              onClick={() => setSapUnprogrammedOpen(true)}
+              className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              title="Ver as atividades encontradas no SAP e ausentes da programação semanal"
+            >
+              <KpiCard label="Não programadas" value={sapOverview.data.unprogrammedCount} tone="primary" />
+            </button>
+          </div>
+        </section>
+      )}
+
       {/* Toolbar */}
       <Toolbar className="mb-3">
         <div className="relative min-w-[240px] flex-1">
@@ -1987,7 +2080,7 @@ function AtividadesPage() {
           {/* Desktop */}
           <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
             <div className="max-h-[calc(100vh-360px)] overflow-auto">
-              <table className="min-w-[1640px] w-full text-[13px]">
+              <table className="min-w-[1810px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="w-8 px-2 py-2">
@@ -2009,6 +2102,7 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
+                    <th className="px-2 py-2 text-left font-semibold">Status SAP</th>
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
                     <th className="px-2 py-2 text-right font-semibold">Ação</th>
                   </tr>
@@ -2118,6 +2212,9 @@ function AtividadesPage() {
                           </div>
                         )}
                       </td>
+                      <td className="px-2 py-2 align-top">
+                        <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
+                      </td>
                       <td className="px-2 py-2 align-top text-[11px]">
                         {r.reported_by_name || <span className="text-muted-foreground">—</span>}
                         {r.reported_at && (
@@ -2212,7 +2309,10 @@ function AtividadesPage() {
                   </div>
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-2">
-                  <StatusPill status={r.status} />
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <StatusPill status={r.status} />
+                    <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
+                  </div>
                   <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
                     {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
                   </button>
@@ -2261,6 +2361,53 @@ function AtividadesPage() {
             </div>
           </div>
         </>
+      )}
+
+      {sapUnprogrammedOpen && sapOverview.data && (
+        <Modal
+          title="Atividades não programadas"
+          description="Registros da carga SAP oficial que não foram localizados na programação da semana."
+          size="lg"
+          onClose={() => setSapUnprogrammedOpen(false)}
+          footer={
+            <button className="btn-primary" onClick={() => setSapUnprogrammedOpen(false)}>
+              Fechar
+            </button>
+          }
+        >
+          <div className="mb-3 text-xs text-muted-foreground">
+            {sapOverview.data.unprogrammedCount.toLocaleString("pt-BR")} registro(s). Eles não entram
+            nos cartões operacionais da programação.
+          </div>
+          <div className="max-h-[58vh] overflow-auto rounded-md border border-border">
+            <table className="min-w-[760px] w-full text-xs">
+              <thead className="sticky top-0 bg-muted text-[10px] uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2 text-left">Ordem</th>
+                  <th className="px-2 py-2 text-left">Oper / Sub</th>
+                  <th className="px-2 py-2 text-left">Descrição</th>
+                  <th className="px-2 py-2 text-left">Fim real</th>
+                  <th className="px-2 py-2 text-left">HH real</th>
+                  <th className="px-2 py-2 text-left">Confirmação</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border/60">
+                {sapOverview.data.unprogrammed.map((row) => (
+                  <tr key={row.id} className="row-zebra">
+                    <td className="px-2 py-2 font-mono">{row.order_number}</td>
+                    <td className="px-2 py-2 font-mono">
+                      {row.operation ?? "—"} / {row.suboperation ?? "—"}
+                    </td>
+                    <td className="px-2 py-2">{row.description ?? "—"}</td>
+                    <td className="px-2 py-2 tabular">{formatDate(row.actual_end_date)}</td>
+                    <td className="px-2 py-2 tabular">{formatActivityHours(row.actual_work ?? 0)}</td>
+                    <td className="px-2 py-2 font-mono">{row.confirmation}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
       )}
 
       {planningFieldsOpen && (
