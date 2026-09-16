@@ -1104,17 +1104,32 @@ function AtividadesPage() {
   });
 
   const sapAllocationActivities = useQuery({
-    queryKey: ["sap-allocation-activities-v2", activeWeek.data?.id],
+    queryKey: ["sap-allocation-activities-v3", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapLatestImport.data?.id),
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_activities_page", {
-        p_week_id: activeWeek.data!.id,
-        p_filters: {},
-        p_page: 0,
-        p_page_size: 5000,
-      });
-      if (error) throw error;
-      return (data?.rows ?? []) as ActivityRow[];
+      const pageSize = 500;
+      const loadPage = async (pageIndex: number) => {
+        const { data, error } = await (supabase as any).rpc("get_activities_page", {
+          p_week_id: activeWeek.data!.id,
+          p_filters: {},
+          p_page: pageIndex,
+          p_page_size: pageSize,
+        });
+        if (error) throw error;
+        return data as { rows?: ActivityRow[]; totalAll?: number } | null;
+      };
+
+      const firstPage = await loadPage(0);
+      const rows = [...(firstPage?.rows ?? [])];
+      const total = Number(firstPage?.totalAll ?? rows.length);
+      const pageCount = Math.ceil(total / pageSize);
+      if (pageCount > 1) {
+        const remainingPages = await Promise.all(
+          Array.from({ length: pageCount - 1 }, (_, index) => loadPage(index + 1)),
+        );
+        for (const result of remainingPages) rows.push(...(result?.rows ?? []));
+      }
+      return rows;
     },
     staleTime: 5 * 60_000,
   });
