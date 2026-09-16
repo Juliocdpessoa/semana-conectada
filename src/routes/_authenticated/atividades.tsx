@@ -1104,9 +1104,18 @@ function AtividadesPage() {
   });
 
   const sapAllocationActivities = useQuery({
-    queryKey: ["sap-allocation-activities", activeWeek.data?.id],
+    queryKey: ["sap-allocation-activities-v2", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapLatestImport.data?.id),
-    queryFn: async () => (await fetchActivitiesPage(0, 5000)).rows,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_activities_page", {
+        p_week_id: activeWeek.data!.id,
+        p_filters: {},
+        p_page: 0,
+        p_page_size: 5000,
+      });
+      if (error) throw error;
+      return (data?.rows ?? []) as ActivityRow[];
+    },
     staleTime: 5 * 60_000,
   });
 
@@ -1163,7 +1172,8 @@ function AtividadesPage() {
     for (const activity of sapAllocationActivities.data ?? []) {
       if (
         activity.status === "EXECUTADO" &&
-        statuses[activity.id] === "Confirmada no SAP" &&
+        (statuses[activity.id] === "Confirmada no SAP" ||
+          statuses[activity.id] === "Confirmada sem HH") &&
         !((sapHoursByActivity.get(activity.id) ?? 0) > 0)
       ) {
         statuses[activity.id] = waitingStatus;
