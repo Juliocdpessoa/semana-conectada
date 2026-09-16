@@ -77,6 +77,7 @@ type SapConfirmationOverview = {
   importedRows: number;
   statuses: Record<string, SapConfirmationStatus>;
   counts: Partial<Record<SapConfirmationStatus, number>>;
+  hours: Record<string, number>;
   unprogrammedCount: number;
   immediateCount: number;
   unprogrammed: Array<{
@@ -95,7 +96,6 @@ type SapConfirmationOverview = {
   }>;
 };
 
-type SapHoursByConfirmation = Record<string, number>;
 
 type SapConfirmationStatus =
   | "Aguardando confirmação"
@@ -1134,28 +1134,6 @@ function AtividadesPage() {
     },
   });
 
-  const sapHoursByConfirmation = useQuery({
-    queryKey: ["sap-hours-by-confirmation", sapLatestImport.data?.id],
-    enabled: Boolean(sapLatestImport.data?.id) && canAccessSap,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from("sap_confirmation_rows")
-        .select("confirmation,actual_work")
-        .eq("import_id", sapLatestImport.data!.id);
-      if (error) throw error;
-
-      return ((data ?? []) as Array<{ confirmation: string | null; actual_work: number | null }>).reduce(
-        (hours, row) => {
-          const confirmation = String(row.confirmation ?? "").trim();
-          if (!confirmation) return hours;
-          hours[confirmation] = (hours[confirmation] ?? 0) + Number(row.actual_work ?? 0);
-          return hours;
-        },
-        {} as SapHoursByConfirmation,
-      );
-    },
-  });
-
   const dateEditSettings = useQuery({
     queryKey: ["activity-date-edit-settings"],
     enabled: canLoadDateEditSettings,
@@ -1230,9 +1208,7 @@ function AtividadesPage() {
   }
 
   function appropriatedSapHours(row: ActivityRow): number | null {
-    const confirmation = activityConfirmation(row);
-    if (!confirmation) return null;
-    const value = sapHoursByConfirmation.data?.[confirmation];
+    const value = sapOverview.data?.hours?.[row.id];
     return value === undefined ? null : value;
   }
 
@@ -2833,11 +2809,6 @@ function AtividadesPage() {
                             {appropriatedSapHours(r) === null
                               ? "—"
                               : formatActivityHours(appropriatedSapHours(r) ?? 0)}
-                            {activityConfirmation(r) && (
-                              <div className="text-[9px] font-normal text-muted-foreground">
-                                total da confirmação
-                              </div>
-                            )}
                           </td>
                         </>
                       )}
@@ -2960,11 +2931,6 @@ function AtividadesPage() {
                           ? "—"
                           : formatActivityHours(appropriatedSapHours(r) ?? 0)}
                       </div>
-                      {activityConfirmation(r) && (
-                        <div className="text-[9px] font-normal text-muted-foreground">
-                          total da confirmação
-                        </div>
-                      )}
                     </div>
                   </div>
                 )}
