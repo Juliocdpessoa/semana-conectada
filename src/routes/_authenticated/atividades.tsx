@@ -193,6 +193,7 @@ type SapStoredRow = Pick<
   | "order_number"
   | "operation"
   | "suboperation"
+  | "actual_start_date"
   | "actual_end_date"
   | "actual_work"
   | "confirmation"
@@ -437,6 +438,24 @@ function activityHours(planningData: Record<string, unknown> | null): number {
 
 function formatActivityHours(value: number) {
   return `${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 }).format(Math.round(value * 10) / 10)} h`;
+}
+
+function normalizeSapCode(input: unknown) {
+  return String(input ?? "")
+    .trim()
+    .replace(/^0+/, "");
+}
+
+function activitySapKey(row: ActivityRow) {
+  const operation = normalizeSapCode(row.planning_data?.["Op"] ?? row.planning_data?.["Operação"]);
+  const suboperation = normalizeSapCode(
+    row.planning_data?.["Subop"] ?? row.planning_data?.["Suboperação"],
+  );
+  return `${String(row.order_number ?? "").trim()}|${operation}|${suboperation}`;
+}
+
+function storedSapKey(row: SapStoredRow) {
+  return `${String(row.order_number ?? "").trim()}|${normalizeSapCode(row.operation)}|${normalizeSapCode(row.suboperation)}`;
 }
 const ACTIVITY_EXPORT_COLUMNS = [
   "Tipo de Nota",
@@ -1152,7 +1171,7 @@ function AtividadesPage() {
       const { data, error } = await (supabase as any)
         .from("sap_confirmation_rows")
         .select(
-          "source_row_number,order_number,operation,suboperation,actual_end_date,actual_work,confirmation",
+          "source_row_number,order_number,operation,suboperation,actual_start_date,actual_end_date,actual_work,confirmation",
         )
         .eq("import_id", sapLatestImport.data!.id)
         .order("source_row_number", { ascending: true });
@@ -1161,6 +1180,57 @@ function AtividadesPage() {
     },
     staleTime: 5 * 60_000,
   });
+
+  const sapAllocationActivities = useQuery({
+    queryKey: ["sap-allocation-activities", activeWeek.data?.id],
+    enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapLatestImport.data?.id),
+    queryFn: async () => (await fetchActivitiesPage(0, 5000)).rows,
+    staleTime: 5 * 60_000,
+  });
+
+  const sapHoursByActivity = useMemo(() => {
+    const allocation = new Map<string, number>();
+    const activitiesByKey = new Map<string, ActivityRow[]>();
+    for (const activity of sapAllocationActivities.data ?? []) {
+      const key = activitySapKey(activity);
+      const group = activitiesByKey.get(key) ?? [];
+      group.push(activity);
+      activitiesByKey.set(key, group);
+    }
+
+    for (const sapRow of sapLatestRows.data ?? []) {
+      let remaining = Number(sapRow.actual_work ?? 0);
+      if (!(remaining > 0)) continue;
+      const group = [...(activitiesByKey.get(storedSapKey(sapRow)) ?? [])];
+      if (group.length === 0) continue;
+
+      const withinExecutionPeriod = group.filter((activity) => {
+        if (!activity.scheduled_date) return false;
+        if (sapRow.actual_start_date && activity.scheduled_date < sapRow.actual_start_date) return false;
+        if (sapRow.actual_end_date && activity.scheduled_date > sapRow.actual_end_date) return false;
+        return true;
+      });
+      let candidates = withinExecutionPeriod.length > 0 ? withinExecutionPeriod : group;
+      const confirmationMatches = candidates.filter(
+        (activity) => activityConfirmation(activity) === String(sapRow.confirmation ?? "").trim(),
+      );
+      if (confirmationMatches.length > 0) candidates = confirmationMatches;
+      candidates.sort((left, right) =>
+        String(left.scheduled_date ?? "").localeCompare(String(right.scheduled_date ?? "")) ||
+        (left.source_row_number ?? 0) - (right.source_row_number ?? 0),
+      );
+
+      for (let index = 0; index < candidates.length && remaining > 0; index += 1) {
+        const activity = candidates[index];
+        const planned = activityHours(activity.planning_data);
+        const isLast = index === candidates.length - 1;
+        const amount = planned > 0 && !isLast ? Math.min(planned, remaining) : remaining;
+        allocation.set(activity.id, (allocation.get(activity.id) ?? 0) + amount);
+        remaining -= amount;
+      }
+    }
+    return allocation;
+  }, [sapAllocationActivities.data, sapLatestRows.data]);
 
   const dateEditSettings = useQuery({
     queryKey: ["activity-date-edit-settings"],
@@ -1236,36 +1306,8 @@ function AtividadesPage() {
   }
 
   function appropriatedSapHours(row: ActivityRow): number | null {
-    const value = sapOverview.data?.hours?.[row.id];
-    if (value !== undefined && value !== null) return Number(value);
-
-    const normalizeCode = (input: unknown) =>
-      String(input ?? "")
-        .trim()
-        .replace(/^0+/, "");
-    const operation = normalizeCode(row.planning_data?.["Op"] ?? row.planning_data?.["Operação"]);
-    const suboperation = normalizeCode(
-      row.planning_data?.["Subop"] ?? row.planning_data?.["Suboperação"],
-    );
-    const confirmation = activityConfirmation(row);
-    const candidates = (sapLatestRows.data ?? []).filter((sapRow) => {
-      if (String(sapRow.order_number ?? "").trim() !== String(row.order_number ?? "").trim()) return false;
-      if (normalizeCode(sapRow.operation) !== operation) return false;
-      return !suboperation || normalizeCode(sapRow.suboperation) === suboperation;
-    });
-    if (candidates.length === 0) return null;
-
-    const ranked = [...candidates].sort((left, right) => {
-      const leftConfirmation = confirmation && left.confirmation === confirmation ? 0 : 1;
-      const rightConfirmation = confirmation && right.confirmation === confirmation ? 0 : 1;
-      if (leftConfirmation !== rightConfirmation) return leftConfirmation - rightConfirmation;
-      const leftDate = row.scheduled_date && left.actual_end_date === row.scheduled_date ? 0 : 1;
-      const rightDate = row.scheduled_date && right.actual_end_date === row.scheduled_date ? 0 : 1;
-      if (leftDate !== rightDate) return leftDate - rightDate;
-      return left.source_row_number - right.source_row_number;
-    });
-    const hours = ranked[0]?.actual_work;
-    return hours === null || hours === undefined ? null : Number(hours);
+    const value = sapHoursByActivity.get(row.id);
+    return value === undefined ? null : value;
   }
 
   function toggleSapStatus(status: SapConfirmationStatus) {
