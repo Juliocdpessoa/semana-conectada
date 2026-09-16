@@ -1070,84 +1070,6 @@ function AtividadesPage() {
     refetchInterval: 5 * 60_000,
   });
 
-  const sapCountsByCurrentFilters = useQuery({
-    queryKey: [
-      "sap-counts-by-current-filters",
-      activeWeek.data?.id,
-      activityFilters,
-      sapStatusFilters,
-      sapOverview.data?.statuses,
-    ],
-    enabled:
-      Boolean(activeWeek.data?.id) &&
-      canAccessSap &&
-      Boolean(sapOverview.data?.hasImport) &&
-      hasSapSummaryFilters,
-    queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_activities_page", {
-        p_week_id: activeWeek.data!.id,
-        p_filters: activityFilters,
-        p_page: 0,
-        p_page_size: 5000,
-      });
-      if (error) throw error;
-
-      return ((data?.rows ?? []) as ActivityRow[]).reduce(
-        (counts, row) => {
-          const sapStatus = sapOverview.data?.statuses?.[row.id];
-          if (
-            sapStatus &&
-            (sapStatusFilters.length === 0 || sapStatusFilters.includes(sapStatus))
-          ) {
-            counts[sapStatus] = (counts[sapStatus] ?? 0) + 1;
-          }
-          return counts;
-        },
-        {} as Partial<Record<SapConfirmationStatus, number>>,
-      );
-    },
-  });
-
-  const sapFilteredActivities = useQuery({
-    queryKey: [
-      "activities-sap-filtered",
-      activeWeek.data?.id,
-      page,
-      activityFilters,
-      sapStatusFilters,
-      sapOverview.data?.statuses,
-    ],
-    enabled:
-      Boolean(activeWeek.data?.id) &&
-      canAccessSap &&
-      sapStatusFilters.length > 0 &&
-      Boolean(sapOverview.data),
-    queryFn: async () => {
-      const result = await fetchActivitiesPage(0, 5000);
-      const matching = result.rows.filter((row) => {
-        const status = sapOverview.data?.statuses?.[row.id];
-        return Boolean(status && sapStatusFilters.includes(status));
-      });
-      const concluded = matching.filter((row) => row.status === "EXECUTADO").length;
-      const total = matching.length;
-      return {
-        ...result,
-        rows: matching.slice(page * pageSize, (page + 1) * pageSize),
-        totalAll: total,
-        kpis: {
-          total,
-          concluded,
-          impeded: matching.filter((row) => row.status === "NÃO EXECUTADO").length,
-          noReport: matching.filter((row) => PENDING_REPORT_STATUSES.has(row.status)).length,
-          cancelled: matching.filter((row) => row.status === "CANCELADA").length,
-          hours: matching.reduce((sum, row) => sum + activityHours(row.planning_data), 0),
-          percent: total > 0 ? Math.round((concluded / total) * 100) : 0,
-        },
-      };
-    },
-    placeholderData: (previous) => previous,
-  });
-
   const sapLatestImport = useQuery({
     queryKey: ["sap-confirmation-latest-import", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap,
@@ -1232,6 +1154,102 @@ function AtividadesPage() {
     return allocation;
   }, [sapAllocationActivities.data, sapLatestRows.data]);
 
+  const effectiveSapStatuses = useMemo(() => {
+    const statuses = { ...(sapOverview.data?.statuses ?? {}) };
+    const deadline = sapOverview.data?.deadline ? new Date(sapOverview.data.deadline) : null;
+    const waitingStatus: SapConfirmationStatus =
+      !deadline || new Date() <= deadline ? "Aguardando confirmação" : "Não confirmada no SAP";
+
+    for (const activity of sapAllocationActivities.data ?? []) {
+      if (
+        activity.status === "EXECUTADO" &&
+        statuses[activity.id] === "Confirmada no SAP" &&
+        !((sapHoursByActivity.get(activity.id) ?? 0) > 0)
+      ) {
+        statuses[activity.id] = waitingStatus;
+      }
+    }
+    return statuses;
+  }, [sapAllocationActivities.data, sapHoursByActivity, sapOverview.data?.deadline, sapOverview.data?.statuses]);
+
+  const sapCountsByCurrentFilters = useQuery({
+    queryKey: [
+      "sap-counts-by-current-filters",
+      activeWeek.data?.id,
+      activityFilters,
+      sapStatusFilters,
+      effectiveSapStatuses,
+    ],
+    enabled:
+      Boolean(activeWeek.data?.id) &&
+      canAccessSap &&
+      Boolean(sapOverview.data?.hasImport) &&
+      hasSapSummaryFilters,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_activities_page", {
+        p_week_id: activeWeek.data!.id,
+        p_filters: activityFilters,
+        p_page: 0,
+        p_page_size: 5000,
+      });
+      if (error) throw error;
+
+      return ((data?.rows ?? []) as ActivityRow[]).reduce(
+        (counts, row) => {
+          const sapStatus = effectiveSapStatuses[row.id];
+          if (
+            sapStatus &&
+            (sapStatusFilters.length === 0 || sapStatusFilters.includes(sapStatus))
+          ) {
+            counts[sapStatus] = (counts[sapStatus] ?? 0) + 1;
+          }
+          return counts;
+        },
+        {} as Partial<Record<SapConfirmationStatus, number>>,
+      );
+    },
+  });
+
+  const sapFilteredActivities = useQuery({
+    queryKey: [
+      "activities-sap-filtered",
+      activeWeek.data?.id,
+      page,
+      activityFilters,
+      sapStatusFilters,
+      effectiveSapStatuses,
+    ],
+    enabled:
+      Boolean(activeWeek.data?.id) &&
+      canAccessSap &&
+      sapStatusFilters.length > 0 &&
+      Boolean(sapOverview.data),
+    queryFn: async () => {
+      const result = await fetchActivitiesPage(0, 5000);
+      const matching = result.rows.filter((row) => {
+        const status = effectiveSapStatuses[row.id];
+        return Boolean(status && sapStatusFilters.includes(status));
+      });
+      const concluded = matching.filter((row) => row.status === "EXECUTADO").length;
+      const total = matching.length;
+      return {
+        ...result,
+        rows: matching.slice(page * pageSize, (page + 1) * pageSize),
+        totalAll: total,
+        kpis: {
+          total,
+          concluded,
+          impeded: matching.filter((row) => row.status === "NÃO EXECUTADO").length,
+          noReport: matching.filter((row) => PENDING_REPORT_STATUSES.has(row.status)).length,
+          cancelled: matching.filter((row) => row.status === "CANCELADA").length,
+          hours: matching.reduce((sum, row) => sum + activityHours(row.planning_data), 0),
+          percent: total > 0 ? Math.round((concluded / total) * 100) : 0,
+        },
+      };
+    },
+    placeholderData: (previous) => previous,
+  });
+
   const dateEditSettings = useQuery({
     queryKey: ["activity-date-edit-settings"],
     enabled: canLoadDateEditSettings,
@@ -1289,10 +1307,16 @@ function AtividadesPage() {
     percent: 0,
   };
   const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
-  const sapCounts =
-    hasSapSummaryFilters
-      ? (sapCountsByCurrentFilters.data ?? {})
-      : (sapOverview.data?.counts ?? {});
+  const effectiveSapCounts = Object.values(effectiveSapStatuses).reduce(
+    (counts, status) => {
+      counts[status] = (counts[status] ?? 0) + 1;
+      return counts;
+    },
+    {} as Partial<Record<SapConfirmationStatus, number>>,
+  );
+  const sapCounts = hasSapSummaryFilters
+    ? (sapCountsByCurrentFilters.data ?? {})
+    : effectiveSapCounts;
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
   const sapUnprogrammedRows =
     sapOverview.data?.unprogrammed.filter(
@@ -1607,7 +1631,7 @@ function AtividadesPage() {
       const filtered =
         canAccessSap && sapStatusFilters.length > 0
           ? fetched.filter((row) => {
-              const status = sapOverview.data?.statuses?.[row.id];
+              const status = effectiveSapStatuses[row.id];
               return Boolean(status && sapStatusFilters.includes(status));
             })
           : fetched;
@@ -1688,7 +1712,7 @@ function AtividadesPage() {
           const color = effectivePtColor(activity);
           row["Cor da PT"] = color ? PT_COLOR_LABELS[color] : "";
           if (canAccessSap) {
-            row["Status SAP"] = sapOverview.data?.statuses?.[activity.id] ?? "Sem carga SAP";
+            row["Status SAP"] = effectiveSapStatuses[activity.id] ?? "Sem carga SAP";
             row["HH programado"] = activityHours(activity.planning_data);
             row["HH apropriado SAP"] = appropriatedSapHours(activity) ?? "";
           }
@@ -2891,7 +2915,7 @@ function AtividadesPage() {
                       {canAccessSap && (
                         <>
                           <td className="px-2 py-2 align-top">
-                            <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
+                            <SapStatusPill status={effectiveSapStatuses[r.id]} />
                           </td>
                           <td className="px-2 py-2 text-right align-top tabular-nums">
                             {formatActivityHours(activityHours(r.planning_data))}
@@ -3007,7 +3031,7 @@ function AtividadesPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusPill status={r.status} />
                     {canAccessSap && (
-                      <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
+                      <SapStatusPill status={effectiveSapStatuses[r.id]} />
                     )}
                   </div>
                   <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
