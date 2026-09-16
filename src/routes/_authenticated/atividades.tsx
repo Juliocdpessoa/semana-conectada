@@ -78,6 +78,7 @@ type SapConfirmationOverview = {
   statuses: Record<string, SapConfirmationStatus>;
   counts: Partial<Record<SapConfirmationStatus, number>>;
   unprogrammedCount: number;
+  immediateCount: number;
   unprogrammed: Array<{
     id: string;
     order_number: string;
@@ -88,6 +89,8 @@ type SapConfirmationOverview = {
     actual_end_date: string | null;
     actual_work: number | null;
     confirmation: string;
+    planning_code: string | null;
+    classification: "NÃO PROGRAMADA" | "IMEDIATA";
     sap_status: string;
   }>;
 };
@@ -855,7 +858,9 @@ function AtividadesPage() {
   const [ptImportChanges, setPtImportChanges] = useState<PtImportChange[]>([]);
   const [ptImportIgnored, setPtImportIgnored] = useState<string[]>([]);
   const [ptImportOpen, setPtImportOpen] = useState(false);
-  const [sapUnprogrammedOpen, setSapUnprogrammedOpen] = useState(false);
+  const [sapUnprogrammedOpen, setSapUnprogrammedOpen] = useState<
+    "NÃO PROGRAMADA" | "IMEDIATA" | null
+  >(null);
   const [sapImportPreview, setSapImportPreview] = useState<SapImportPreview | null>(null);
   const [isSapImporting, setIsSapImporting] = useState(false);
   const ptImportInputRef = useRef<HTMLInputElement | null>(null);
@@ -1213,6 +1218,10 @@ function AtividadesPage() {
       ? (sapCountsByCurrentFilters.data ?? {})
       : (sapOverview.data?.counts ?? {});
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
+  const sapUnprogrammedRows =
+    sapOverview.data?.unprogrammed.filter(
+      (row) => row.classification === sapUnprogrammedOpen,
+    ) ?? [];
 
   function activityConfirmation(row: ActivityRow) {
     return String(
@@ -2389,7 +2398,7 @@ function AtividadesPage() {
               O status SAP não altera o apontamento operacional.
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-7">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
             {SAP_STATUS_OPTIONS.map((status) => (
               <button
                 key={status}
@@ -2431,11 +2440,19 @@ function AtividadesPage() {
             ))}
             <button
               type="button"
-              onClick={() => setSapUnprogrammedOpen(true)}
+              onClick={() => setSapUnprogrammedOpen("NÃO PROGRAMADA")}
               className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              title="Ver as atividades encontradas no SAP e ausentes da programação semanal"
+              title="Ver apropriações com cód.plan.ordem 1 ausentes da programação semanal"
             >
               <KpiCard label="Não programadas" value={sapOverview.data.unprogrammedCount} tone="primary" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSapUnprogrammedOpen("IMEDIATA")}
+              className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+              title="Ver apropriações com cód.plan.ordem 2 ausentes da programação semanal"
+            >
+              <KpiCard label="Imediatas" value={sapOverview.data.immediateCount ?? 0} tone="warning" />
             </button>
           </div>
         </section>
@@ -2999,40 +3016,50 @@ function AtividadesPage() {
 
       {canAccessSap && sapUnprogrammedOpen && sapOverview.data && (
         <Modal
-          title="Atividades não programadas"
-          description="Registros da carga SAP oficial que não foram localizados na programação da semana."
+          title={
+            sapUnprogrammedOpen === "IMEDIATA"
+              ? "Atividades imediatas"
+              : "Atividades não programadas"
+          }
+          description={
+            sapUnprogrammedOpen === "IMEDIATA"
+              ? "Apropriações com Cód.plan.ordem 2 que não foram localizadas na programação da semana."
+              : "Apropriações com Cód.plan.ordem 1 que não foram localizadas na programação da semana."
+          }
           size="lg"
-          onClose={() => setSapUnprogrammedOpen(false)}
+          onClose={() => setSapUnprogrammedOpen(null)}
           footer={
-            <button className="btn-primary" onClick={() => setSapUnprogrammedOpen(false)}>
+            <button className="btn-primary" onClick={() => setSapUnprogrammedOpen(null)}>
               Fechar
             </button>
           }
         >
           <div className="mb-3 text-xs text-muted-foreground">
-            {sapOverview.data.unprogrammedCount.toLocaleString("pt-BR")} registro(s). Eles não entram
-            nos cartões operacionais da programação.
+            {sapUnprogrammedRows.length.toLocaleString("pt-BR")} registro(s) apropriado(s). Eles não
+            entram nos cartões operacionais da programação.
           </div>
           <div className="max-h-[58vh] overflow-auto rounded-md border border-border">
-            <table className="min-w-[760px] w-full text-xs">
+            <table className="min-w-[820px] w-full text-xs">
               <thead className="sticky top-0 bg-muted text-[10px] uppercase text-muted-foreground">
                 <tr>
                   <th className="px-2 py-2 text-left">Ordem</th>
                   <th className="px-2 py-2 text-left">Oper / Sub</th>
                   <th className="px-2 py-2 text-left">Descrição</th>
+                  <th className="px-2 py-2 text-left">Cód.plan.ordem</th>
                   <th className="px-2 py-2 text-left">Fim real</th>
                   <th className="px-2 py-2 text-left">HH real</th>
                   <th className="px-2 py-2 text-left">Confirmação</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {sapOverview.data.unprogrammed.map((row) => (
+                {sapUnprogrammedRows.map((row) => (
                   <tr key={row.id} className="row-zebra">
                     <td className="px-2 py-2 font-mono">{row.order_number}</td>
                     <td className="px-2 py-2 font-mono">
                       {row.operation ?? "—"} / {row.suboperation ?? "—"}
                     </td>
                     <td className="px-2 py-2">{row.description ?? "—"}</td>
+                    <td className="px-2 py-2 text-center font-mono">{row.planning_code ?? "—"}</td>
                     <td className="px-2 py-2 tabular">{formatDate(row.actual_end_date)}</td>
                     <td className="px-2 py-2 tabular">{formatActivityHours(row.actual_work ?? 0)}</td>
                     <td className="px-2 py-2 font-mono">{row.confirmation}</td>
