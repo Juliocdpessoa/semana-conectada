@@ -1186,7 +1186,6 @@ function AtividadesPage() {
 
     for (const activity of sapAllocationActivities.data ?? []) {
       if (
-        activity.status === "EXECUTADO" &&
         (statuses[activity.id] === "Confirmada no SAP" ||
           statuses[activity.id] === "Confirmada sem HH") &&
         !((sapHoursByActivity.get(activity.id) ?? 0) > 0)
@@ -1221,7 +1220,7 @@ function AtividadesPage() {
 
       return ((data?.rows ?? []) as ActivityRow[]).reduce(
         (counts, row) => {
-          const sapStatus = effectiveSapStatuses[row.id];
+          const sapStatus = sapStatusForActivity(row);
           if (
             sapStatus &&
             (sapStatusFilters.length === 0 || sapStatusFilters.includes(sapStatus))
@@ -1252,7 +1251,7 @@ function AtividadesPage() {
     queryFn: async () => {
       const result = await fetchActivitiesPage(0, 5000);
       const matching = result.rows.filter((row) => {
-        const status = effectiveSapStatuses[row.id];
+        const status = sapStatusForActivity(row);
         return Boolean(status && sapStatusFilters.includes(status));
       });
       const concluded = matching.filter((row) => row.status === "EXECUTADO").length;
@@ -1357,6 +1356,20 @@ function AtividadesPage() {
   function appropriatedSapHours(row: ActivityRow): number | null {
     const value = sapHoursByActivity.get(row.id);
     return value === undefined ? null : value;
+  }
+
+  function sapStatusForActivity(row: ActivityRow): SapConfirmationStatus | undefined {
+    const status = effectiveSapStatuses[row.id];
+    if (
+      (status === "Confirmada no SAP" || status === "Confirmada sem HH") &&
+      !((sapHoursByActivity.get(row.id) ?? 0) > 0)
+    ) {
+      const deadline = sapOverview.data?.deadline ? new Date(sapOverview.data.deadline) : null;
+      return !deadline || new Date() <= deadline
+        ? "Aguardando confirmação"
+        : "Não confirmada no SAP";
+    }
+    return status;
   }
 
   function toggleSapStatus(status: SapConfirmationStatus) {
@@ -1656,7 +1669,7 @@ function AtividadesPage() {
       const filtered =
         canAccessSap && sapStatusFilters.length > 0
           ? fetched.filter((row) => {
-              const status = effectiveSapStatuses[row.id];
+              const status = sapStatusForActivity(row);
               return Boolean(status && sapStatusFilters.includes(status));
             })
           : fetched;
@@ -1737,7 +1750,7 @@ function AtividadesPage() {
           const color = effectivePtColor(activity);
           row["Cor da PT"] = color ? PT_COLOR_LABELS[color] : "";
           if (canAccessSap) {
-            row["Status SAP"] = effectiveSapStatuses[activity.id] ?? "Sem carga SAP";
+            row["Status SAP"] = sapStatusForActivity(activity) ?? "Sem carga SAP";
             row["HH programado"] = activityHours(activity.planning_data);
             row["HH apropriado SAP"] = appropriatedSapHours(activity) ?? "";
           }
@@ -2940,7 +2953,7 @@ function AtividadesPage() {
                       {canAccessSap && (
                         <>
                           <td className="px-2 py-2 align-top">
-                            <SapStatusPill status={effectiveSapStatuses[r.id]} />
+                            <SapStatusPill status={sapStatusForActivity(r)} />
                           </td>
                           <td className="px-2 py-2 text-right align-top tabular-nums">
                             {formatActivityHours(activityHours(r.planning_data))}
@@ -3056,7 +3069,7 @@ function AtividadesPage() {
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusPill status={r.status} />
                     {canAccessSap && (
-                      <SapStatusPill status={effectiveSapStatuses[r.id]} />
+                      <SapStatusPill status={sapStatusForActivity(r)} />
                     )}
                   </div>
                   <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
