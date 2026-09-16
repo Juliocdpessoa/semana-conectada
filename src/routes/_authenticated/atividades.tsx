@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -108,6 +108,60 @@ const SAP_STATUS_OPTIONS: SapConfirmationStatus[] = [
   "Confirmação não esperada",
   "Divergência",
 ];
+
+type PersistedActivityFilters = {
+  search: string;
+  statuses: string[];
+  releaseTypes: string[];
+  ptColors: string[];
+  areas: string[];
+  workCenters: string[];
+  planningGroups: string[];
+  gers: string[];
+  dates: string[];
+  origins: string[];
+  sapStatuses: SapConfirmationStatus[];
+};
+
+const EMPTY_PERSISTED_ACTIVITY_FILTERS: PersistedActivityFilters = {
+  search: "",
+  statuses: [],
+  releaseTypes: [],
+  ptColors: [],
+  areas: [],
+  workCenters: [],
+  planningGroups: [],
+  gers: [],
+  dates: [],
+  origins: [],
+  sapStatuses: [],
+};
+
+function readPersistedActivityFilters(storageKey: string): PersistedActivityFilters {
+  if (typeof window === "undefined") return EMPTY_PERSISTED_ACTIVITY_FILTERS;
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as Record<string, unknown>;
+    const strings = (key: string) =>
+      Array.isArray(parsed[key]) ? parsed[key].filter((value): value is string => typeof value === "string") : [];
+    return {
+      search: typeof parsed.search === "string" ? parsed.search : "",
+      statuses: strings("statuses"),
+      releaseTypes: strings("releaseTypes"),
+      ptColors: strings("ptColors"),
+      areas: strings("areas"),
+      workCenters: strings("workCenters"),
+      planningGroups: strings("planningGroups"),
+      gers: strings("gers"),
+      dates: strings("dates"),
+      origins: strings("origins"),
+      sapStatuses: strings("sapStatuses").filter((status): status is SapConfirmationStatus =>
+        SAP_STATUS_OPTIONS.includes(status as SapConfirmationStatus),
+      ),
+    };
+  } catch {
+    return EMPTY_PERSISTED_ACTIVITY_FILTERS;
+  }
+}
 
 type SapImportRow = {
   source_row_number: number;
@@ -747,6 +801,7 @@ function PlanningGridCell({
 
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const filterStorageKey = `nexo:activity-filters:${session.userId}:${session.worksiteId}`;
   const effectiveRoles = session.roles.length > 0 ? session.roles : session.role ? [session.role] : [];
   const isLeaderOnly = effectiveRoles.length === 1 && effectiveRoles[0] === "leader";
   const canEditPlanningFields = session.roles.some(
@@ -784,6 +839,7 @@ function AtividadesPage() {
   const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [originFilters, setOriginFilters] = useState<string[]>([]);
   const [sapStatusFilters, setSapStatusFilters] = useState<SapConfirmationStatus[]>([]);
+  const [loadedFilterStorageKey, setLoadedFilterStorageKey] = useState<string | null>(null);
   const [selectedWeekId, setSelectedWeekId] = useState("");
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -804,6 +860,57 @@ function AtividadesPage() {
   const sapImportInputRef = useRef<HTMLInputElement | null>(null);
   const [page, setPage] = useState(0);
   const pageSize = 50;
+
+  useEffect(() => {
+    const stored = readPersistedActivityFilters(filterStorageKey);
+    setSearch(stored.search);
+    setStatusFilters(stored.statuses);
+    setReleaseTypeFilters(stored.releaseTypes);
+    setPtColorFilters(stored.ptColors);
+    setAreaFilters(stored.areas);
+    setWorkCenterFilters(stored.workCenters);
+    setPlanningGroupFilters(stored.planningGroups);
+    setGerFilters(stored.gers);
+    setDateFilters(stored.dates);
+    setOriginFilters(stored.origins);
+    setSapStatusFilters(stored.sapStatuses);
+    setPage(0);
+    setLoadedFilterStorageKey(filterStorageKey);
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (loadedFilterStorageKey !== filterStorageKey) return;
+    localStorage.setItem(
+      filterStorageKey,
+      JSON.stringify({
+        search,
+        statuses: statusFilters,
+        releaseTypes: releaseTypeFilters,
+        ptColors: ptColorFilters,
+        areas: areaFilters,
+        workCenters: workCenterFilters,
+        planningGroups: planningGroupFilters,
+        gers: gerFilters,
+        dates: dateFilters,
+        origins: originFilters,
+        sapStatuses: sapStatusFilters,
+      } satisfies PersistedActivityFilters),
+    );
+  }, [
+    filterStorageKey,
+    loadedFilterStorageKey,
+    search,
+    statusFilters,
+    releaseTypeFilters,
+    ptColorFilters,
+    areaFilters,
+    workCenterFilters,
+    planningGroupFilters,
+    gerFilters,
+    dateFilters,
+    originFilters,
+    sapStatusFilters,
+  ]);
 
   const availableWeeks = useQuery({
     queryKey: ["activity-working-weeks"],
