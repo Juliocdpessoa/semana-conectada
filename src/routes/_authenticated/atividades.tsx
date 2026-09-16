@@ -92,6 +92,8 @@ type SapConfirmationOverview = {
   }>;
 };
 
+type SapHoursByConfirmation = Record<string, number>;
+
 type SapConfirmationStatus =
   | "Aguardando confirmação"
   | "Confirmada no SAP"
@@ -1127,6 +1129,28 @@ function AtividadesPage() {
     },
   });
 
+  const sapHoursByConfirmation = useQuery({
+    queryKey: ["sap-hours-by-confirmation", sapLatestImport.data?.id],
+    enabled: Boolean(sapLatestImport.data?.id) && canAccessSap,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from("sap_confirmation_rows")
+        .select("confirmation,actual_work")
+        .eq("import_id", sapLatestImport.data!.id);
+      if (error) throw error;
+
+      return ((data ?? []) as Array<{ confirmation: string | null; actual_work: number | null }>).reduce(
+        (hours, row) => {
+          const confirmation = String(row.confirmation ?? "").trim();
+          if (!confirmation) return hours;
+          hours[confirmation] = (hours[confirmation] ?? 0) + Number(row.actual_work ?? 0);
+          return hours;
+        },
+        {} as SapHoursByConfirmation,
+      );
+    },
+  });
+
   const dateEditSettings = useQuery({
     queryKey: ["activity-date-edit-settings"],
     enabled: canLoadDateEditSettings,
@@ -1189,6 +1213,19 @@ function AtividadesPage() {
       ? (sapCountsByCurrentFilters.data ?? {})
       : (sapOverview.data?.counts ?? {});
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
+
+  function activityConfirmation(row: ActivityRow) {
+    return String(
+      row.planning_data?.["Confirmação"] ?? row.planning_data?.["Confirmacao"] ?? "",
+    ).trim();
+  }
+
+  function appropriatedSapHours(row: ActivityRow): number | null {
+    const confirmation = activityConfirmation(row);
+    if (!confirmation) return null;
+    const value = sapHoursByConfirmation.data?.[confirmation];
+    return value === undefined ? null : value;
+  }
 
   function toggleSapStatus(status: SapConfirmationStatus) {
     if (!canAccessSap) return;
@@ -1498,7 +1535,7 @@ function AtividadesPage() {
         "Ger",
         "Nº PT",
         "Cor da PT",
-        ...(canAccessSap ? ["Status SAP"] : []),
+        ...(canAccessSap ? ["Status SAP", "HH programado", "HH apropriado SAP"] : []),
       ];
       const exportHeaders = [
         ...ACTIVITY_EXPORT_COLUMNS,
@@ -1569,6 +1606,8 @@ function AtividadesPage() {
           row["Cor da PT"] = color ? PT_COLOR_LABELS[color] : "";
           if (canAccessSap) {
             row["Status SAP"] = sapOverview.data?.statuses?.[activity.id] ?? "Sem carga SAP";
+            row["HH programado"] = activityHours(activity.planning_data);
+            row["HH apropriado SAP"] = appropriatedSapHours(activity) ?? "";
           }
           row[responsibleHeader] = activity.reported_by_name || activity.reported_by_email || "";
           row[reportedAtHeader] = formatReportedAt(activity.reported_at);
@@ -2615,7 +2654,7 @@ function AtividadesPage() {
           {/* Desktop */}
           <div className="hidden overflow-hidden rounded-md border border-border bg-card md:block">
             <div className="max-h-[calc(100vh-360px)] overflow-auto">
-              <table className="min-w-[1810px] w-full text-[13px]">
+              <table className="min-w-[1990px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
                     <th className="w-8 px-2 py-2">
@@ -2638,7 +2677,16 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
                     {canAccessSap && (
-                      <th className="px-2 py-2 text-left font-semibold">Status SAP</th>
+                      <>
+                        <th className="px-2 py-2 text-left font-semibold">Status SAP</th>
+                        <th className="px-2 py-2 text-right font-semibold">HH programado</th>
+                        <th
+                          className="px-2 py-2 text-right font-semibold"
+                          title="Total apropriado no SAP para a confirmação"
+                        >
+                          HH apropriado SAP
+                        </th>
+                      </>
                     )}
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
                     <th className="px-2 py-2 text-right font-semibold">Ação</th>
@@ -2750,9 +2798,31 @@ function AtividadesPage() {
                         )}
                       </td>
                       {canAccessSap && (
-                        <td className="px-2 py-2 align-top">
-                          <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
-                        </td>
+                        <>
+                          <td className="px-2 py-2 align-top">
+                            <SapStatusPill status={sapOverview.data?.statuses?.[r.id]} />
+                          </td>
+                          <td className="px-2 py-2 text-right align-top tabular-nums">
+                            {formatActivityHours(activityHours(r.planning_data))}
+                          </td>
+                          <td
+                            className="px-2 py-2 text-right align-top tabular-nums"
+                            title={
+                              activityConfirmation(r)
+                                ? `Total apropriado no SAP para a confirmação ${activityConfirmation(r)}`
+                                : "Atividade sem confirmação vinculada"
+                            }
+                          >
+                            {appropriatedSapHours(r) === null
+                              ? "—"
+                              : formatActivityHours(appropriatedSapHours(r) ?? 0)}
+                            {activityConfirmation(r) && (
+                              <div className="text-[9px] font-normal text-muted-foreground">
+                                total da confirmação
+                              </div>
+                            )}
+                          </td>
+                        </>
                       )}
                       <td className="px-2 py-2 align-top text-[11px]">
                         {r.reported_by_name || <span className="text-muted-foreground">—</span>}
@@ -2858,6 +2928,29 @@ function AtividadesPage() {
                     {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
                   </button>
                 </div>
+                {canAccessSap && (
+                  <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-border/70 bg-muted/40 px-2 py-1.5 text-[10px]">
+                    <div>
+                      <span className="text-muted-foreground">HH programado</span>
+                      <div className="font-semibold tabular-nums text-foreground">
+                        {formatActivityHours(activityHours(r.planning_data))}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-muted-foreground">HH apropriado SAP</span>
+                      <div className="font-semibold tabular-nums text-foreground">
+                        {appropriatedSapHours(r) === null
+                          ? "—"
+                          : formatActivityHours(appropriatedSapHours(r) ?? 0)}
+                      </div>
+                      {activityConfirmation(r) && (
+                        <div className="text-[9px] font-normal text-muted-foreground">
+                          total da confirmação
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 {r.status === "CANCELADA" && r.justification && (
                   <div className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-2 py-1.5 text-[11px] text-warning-foreground">
                     <span className="font-semibold">Motivo do cancelamento:</span> {r.justification}
