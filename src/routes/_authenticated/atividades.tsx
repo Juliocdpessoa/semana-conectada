@@ -226,7 +226,8 @@ const STATUSES = [
   "EXECUTADO",
   "NÃO EXECUTADO",
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT EM ASSINATURA",
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
   "CANCELADA",
 ];
@@ -272,14 +273,20 @@ const CANCELLATION_JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const PLANNING_WORKFLOW_STATUSES = new Set([
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT EM ASSINATURA",
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
+]);
+const OPERATION_WORKFLOW_STATUSES = new Set([
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
 ]);
 const PENDING_REPORT_FILTER = "__PENDING_REPORT__";
 const PENDING_REPORT_STATUSES = new Set([
   "Sem apontamento",
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT EM ASSINATURA",
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
 const IMMEDIATE_JUSTIFICATION = "08 - ATENDIMENTO DE ORDEM IMEDIATA";
@@ -845,6 +852,11 @@ function AtividadesPage() {
   const filterStorageKey = `nexo:activity-filters:${session.userId}:${session.worksiteId}`;
   const effectiveRoles = session.roles.length > 0 ? session.roles : session.role ? [session.role] : [];
   const isLeaderOnly = effectiveRoles.length === 1 && effectiveRoles[0] === "leader";
+  const hasFullActivityUpdate = effectiveRoles.some((role) =>
+    ["admin", "manager", "planning", "leader"].includes(role),
+  );
+  const isOperationOnly = !hasFullActivityUpdate && effectiveRoles.includes("operation");
+  const canUpdateActivities = hasFullActivityUpdate || isOperationOnly;
   const canEditPlanningFields = session.roles.some(
     (role) => role === "planning" || role === "admin",
   );
@@ -2792,7 +2804,7 @@ function AtividadesPage() {
       </Toolbar>
 
       {/* Ações de lote */}
-      {selected.size > 0 && (
+      {canUpdateActivities && selected.size > 0 && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-primary/30 bg-primary/[0.06] px-3 py-2">
           <div className="text-[13px]">
             <span className="font-semibold tabular">{selected.size}</span> atividade(s)
@@ -2810,9 +2822,11 @@ function AtividadesPage() {
                 Preencher liberação
               </button>
             )}
-            <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
-              Apontar em lote
-            </button>
+            {!isOperationOnly && (
+              <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
+                Apontar em lote
+              </button>
+            )}
           </div>
         </div>
       )}
@@ -2845,13 +2859,15 @@ function AtividadesPage() {
               <table className="min-w-[1990px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    <th className="w-8 px-2 py-2">
-                      <input
-                        type="checkbox"
-                        checked={paged.length > 0 && selected.size === paged.length}
-                        onChange={toggleAll}
-                      />
-                    </th>
+                    {canUpdateActivities && !isOperationOnly && (
+                      <th className="w-8 px-2 py-2">
+                        <input
+                          type="checkbox"
+                          checked={paged.length > 0 && selected.size === paged.length}
+                          onChange={toggleAll}
+                        />
+                      </th>
+                    )}
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
                     <th className="px-2 py-2 text-left font-semibold">Oper / Sub</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
@@ -2877,19 +2893,23 @@ function AtividadesPage() {
                       </>
                     )}
                     <th className="px-2 py-2 text-left font-semibold">Responsável</th>
-                    <th className="px-2 py-2 text-right font-semibold">Ação</th>
+                    {canUpdateActivities && (
+                      <th className="px-2 py-2 text-right font-semibold">Ação</th>
+                    )}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/60">
                   {paged.map((r) => (
                     <tr key={r.id} className="row-zebra hover:bg-accent/60">
-                      <td className="px-2 py-2 align-top">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(r.id)}
-                          onChange={() => toggleSelect(r.id)}
-                        />
-                      </td>
+                      {canUpdateActivities && !isOperationOnly && (
+                        <td className="px-2 py-2 align-top">
+                          <input
+                            type="checkbox"
+                            checked={selected.has(r.id)}
+                            onChange={() => toggleSelect(r.id)}
+                          />
+                        </td>
+                      )}
                       <td className="px-2 py-2 align-top font-mono text-[11px]">
                         <div className="text-foreground">{r.order_number}</div>
                         <div className="text-muted-foreground">{r.note_number}</div>
@@ -3015,14 +3035,16 @@ function AtividadesPage() {
                           </div>
                         )}
                       </td>
-                      <td className="px-2 py-2 text-right align-top">
-                        <button
-                          onClick={() => setEditing(r)}
-                          className="btn-primary py-1 text-[11px]"
-                        >
-                          {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
-                        </button>
-                      </td>
+                      {canUpdateActivities && (
+                        <td className="px-2 py-2 text-right align-top">
+                          <button
+                            onClick={() => setEditing(r)}
+                            className="btn-primary py-1 text-[11px]"
+                          >
+                            {isOperationOnly ? "Atualizar PT" : r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
@@ -3038,12 +3060,14 @@ function AtividadesPage() {
                 className={`surface-card p-3 ${r.is_immediate ? "border-l-[3px] border-l-warning" : ""}`}
               >
                 <div className="flex items-start gap-2">
-                  <input
-                    type="checkbox"
-                    className="mt-1"
-                    checked={selected.has(r.id)}
-                    onChange={() => toggleSelect(r.id)}
-                  />
+                  {canUpdateActivities && !isOperationOnly && (
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={selected.has(r.id)}
+                      onChange={() => toggleSelect(r.id)}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
                       <span className="font-mono text-[11px] text-foreground">
@@ -3107,9 +3131,11 @@ function AtividadesPage() {
                       <SapStatusPill status={sapStatusForActivity(r)} />
                     )}
                   </div>
-                  <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
-                    {r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
-                  </button>
+                  {canUpdateActivities && (
+                    <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
+                      {isOperationOnly ? "Atualizar PT" : r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
+                    </button>
+                  )}
                 </div>
                 {canAccessSap && (
                   <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-border/70 bg-muted/40 px-2 py-1.5 text-[10px]">
@@ -3452,6 +3478,8 @@ function AtividadesPage() {
         <ApontarModal
           activity={editing}
           canCancel={canEditPlanningFields}
+          allowedStatuses={isOperationOnly ? OPERATION_WORKFLOW_STATUSES : undefined}
+          statusOnly={isOperationOnly}
           onClose={() => setEditing(null)}
           onSaved={() => {
             setEditing(null);
@@ -3614,11 +3642,15 @@ function PlanningFieldsModal({
 function ApontarModal({
   activity,
   canCancel,
+  allowedStatuses,
+  statusOnly = false,
   onClose,
   onSaved,
 }: {
   activity: ActivityRow;
   canCancel: boolean;
+  allowedStatuses?: ReadonlySet<string>;
+  statusOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -3673,7 +3705,7 @@ function ApontarModal({
   return (
     <Modal
       title="Apontar atividade"
-      description="Registre status, justificativa e observações."
+      description={statusOnly ? "Atualize o andamento da emissão da PT." : "Registre status, justificativa e observações."}
       onClose={onClose}
       footer={
         <>
@@ -3714,15 +3746,20 @@ function ApontarModal({
             className="input-base"
           >
             {STATUSES.filter(
-              (s) =>
-                (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") ||
-                canCancel ||
-                activity.status === s,
+              (s) => allowedStatuses
+                ? allowedStatuses.has(s) || activity.status === s
+                : (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") ||
+                  canCancel ||
+                  activity.status === s,
             ).map((s) => (
               <option
                 key={s}
                 value={s}
-                disabled={(s === "CANCELADA" || PLANNING_WORKFLOW_STATUSES.has(s)) && !canCancel}
+                disabled={
+                  allowedStatuses
+                    ? !allowedStatuses.has(s)
+                    : (s === "CANCELADA" || PLANNING_WORKFLOW_STATUSES.has(s)) && !canCancel
+                }
               >
                 {s}
               </option>
@@ -3730,7 +3767,7 @@ function ApontarModal({
           </select>
         </Field>
 
-        <Field label="Justificativa" required={needsJust}>
+        {!statusOnly && <Field label="Justificativa" required={needsJust}>
           <select
             value={needsJust ? justification : ""}
             onChange={(e) => {
@@ -3749,9 +3786,9 @@ function ApontarModal({
               </option>
             ))}
           </select>
-        </Field>
+        </Field>}
 
-        {needsImmediateLink && (
+        {!statusOnly && needsImmediateLink && (
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -3776,7 +3813,7 @@ function ApontarModal({
           </div>
         )}
 
-        <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
+        {!statusOnly && <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
           <textarea
             value={observation}
             onChange={(e) => setObservation(e.target.value)}
@@ -3784,7 +3821,7 @@ function ApontarModal({
             maxLength={2000}
             className="input-base"
           />
-        </Field>
+        </Field>}
       </div>
 
       <ActivityTimeline activityId={activity.id} />
