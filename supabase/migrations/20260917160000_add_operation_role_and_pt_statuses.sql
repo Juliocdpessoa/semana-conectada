@@ -1,11 +1,6 @@
 -- Perfil Operação: leitura geral das atividades e alteração limitada ao fluxo de PT.
 ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'operation';
 
--- Consolida o nome anterior para que contagens e filtros não sejam divididos.
-UPDATE public.activities
-SET status = 'PT ENVIADA PARA ASSINATURA'
-WHERE status = 'PT EM ASSINATURA';
-
 CREATE OR REPLACE FUNCTION public.current_role_label(_user_id uuid)
 RETURNS text
 LANGUAGE sql
@@ -71,7 +66,7 @@ BEGIN
   IF coalesce(v_full_access, false) THEN RETURN NEW; END IF;
 
   IF coalesce(v_operation, false) THEN
-    IF NEW.status NOT IN ('PT ENVIADA PARA ASSINATURA', 'PT PRÉ-EMITIDA')
+    IF NEW.status NOT IN ('PT EM ASSINATURA', 'PT PRÉ-EMITIDA')
       OR NEW.justification IS DISTINCT FROM OLD.justification
       OR NEW.observation IS DISTINCT FROM OLD.observation
     THEN
