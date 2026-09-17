@@ -427,7 +427,11 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
   .validator((data: unknown) => activityPlanningFieldsSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
-    const { data: roles, error: rolesError } = await supabase
+    // Authorization must not depend on the caller being allowed to read
+    // user_roles through RLS. The authenticated user id still comes from the
+    // server middleware; the service client is used only to resolve its roles.
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: roles, error: rolesError } = await supabaseAdmin
       .from("user_roles")
       .select("role")
       .eq("user_id", userId);
@@ -439,7 +443,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
     if (!canEditPlanning && !isOperation) {
       return {
         ok: false as const,
-        error: "Apenas Planejamento ou Administrador pode editar estes campos.",
+        error: "Apenas Planejamento, Administrador ou Operação pode editar estes campos.",
       };
     }
 
