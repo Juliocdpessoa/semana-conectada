@@ -462,7 +462,13 @@ const exportPageSchema = exportListSchema
     includeMetadata: z.boolean().optional().default(true),
   });
 
-function applyOvertimeExportFilters(query: any, input: z.infer<typeof exportListSchema>) {
+function applyOvertimeExportFilters(
+  query: any,
+  input: Pick<
+    z.infer<typeof exportListSchema>,
+    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch"
+  >,
+) {
   let filtered = query;
   if (input.dateFrom) filtered = filtered.gte("overtime_date", input.dateFrom);
   if (input.dateTo) filtered = filtered.lte("overtime_date", input.dateTo);

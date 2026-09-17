@@ -89,9 +89,9 @@ async function loadSession(): Promise<SessionInfo | null> {
     "logistics",
     "viewer",
   ];
-  const allRoles = rolesRows
-    .map((row) => row.role)
-    .filter((role): role is AppRole => priority.includes(role as AppRole));
+  const allRoles = (rolesRows as Array<{ role: string }>)
+    .map((row: { role: string }) => row.role)
+    .filter((role: string): role is AppRole => priority.includes(role as AppRole));
   const role = priority.find((r) => allRoles.includes(r!)) ?? null;
   return {
     userId: data.user.id,
