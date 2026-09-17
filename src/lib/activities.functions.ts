@@ -10,7 +10,7 @@ const updateSchema = z.object({
     "EXECUTADO",
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
-    "PT ENVIADA PARA ASSINATURA",
+    "PT EM ASSINATURA",
     "PT PRÉ-EMITIDA",
     "PT ENVIADA P/ CAMPO",
     "CANCELADA",
@@ -23,12 +23,12 @@ const updateSchema = z.object({
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const PLANNING_WORKFLOW_STATUSES = new Set([
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
 const OPERATION_WORKFLOW_STATUSES = new Set([
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
 ]);
 const FULL_ACTIVITY_REPORT_ROLES = new Set(["admin", "manager", "planning", "leader"]);
@@ -224,7 +224,7 @@ const bulkSchema = z.object({
     "EXECUTADO",
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
-    "PT ENVIADA PARA ASSINATURA",
+    "PT EM ASSINATURA",
     "PT PRÉ-EMITIDA",
     "PT ENVIADA P/ CAMPO",
     "CANCELADA",
@@ -424,15 +424,56 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       .select("role")
       .eq("user_id", userId);
     if (rolesError) return { ok: false as const, error: rolesError.message };
-    if (!roles?.some((row) => row.role === "planning" || row.role === "admin")) {
+    const canEditPlanning = roles?.some(
+      (row) => row.role === "planning" || row.role === "admin",
+    );
+    const isOperation = !canEditPlanning && roles?.some((row) => row.role === "operation");
+    if (!canEditPlanning && !isOperation) {
       return {
         ok: false as const,
         error: "Apenas Planejamento ou Administrador pode editar estes campos.",
       };
     }
 
-    const access = await getDateEditAccess(supabase, userId);
-    if (access.locked) {
+    if (isOperation) {
+      if (data.rows.length !== 1) {
+        return {
+          ok: false as const,
+          error: "O perfil Operação pode alterar a cor de uma PT por vez.",
+        };
+      }
+      const requested = data.rows[0];
+      const { data: current, error: currentError } = await supabase
+        .from("activities")
+        .select("id,pbs,pt_number,pt_color,release_type,scheduled_date")
+        .eq("id", requested.id)
+        .maybeSingle();
+      if (currentError) return { ok: false as const, error: currentError.message };
+      if (!current) return { ok: false as const, error: "Atividade não encontrada." };
+      const changesRestrictedField =
+        (current.pbs ?? null) !== requested.pbs ||
+        (current.pt_number ?? null) !== requested.ptNumber ||
+        (current.release_type ?? null) !== requested.releaseType ||
+        (current.scheduled_date ?? null) !== requested.scheduledDate;
+      if (changesRestrictedField) {
+        return {
+          ok: false as const,
+          error: "O perfil Operação pode alterar somente a cor da PT.",
+        };
+      }
+      if (
+        (current.release_type === "ATRE" || current.release_type === "OFICINAS") &&
+        requested.ptColor !== null
+      ) {
+        return {
+          ok: false as const,
+          error: "Este tipo de liberação não possui cor de PT.",
+        };
+      }
+    }
+
+    const access = canEditPlanning ? await getDateEditAccess(supabase, userId) : null;
+    if (access?.locked) {
       const ids = data.rows.map((row) => row.id);
       const { data: currentRows, error: currentRowsError } = await supabase
         .from("activities")
