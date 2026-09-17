@@ -1364,10 +1364,15 @@ function AtividadesPage() {
     ? (sapCountsByCurrentFilters.data ?? {})
     : effectiveSapCounts;
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
+  const effectiveOutsideSchedule = sapOutsideSchedule.data ?? {
+    unprogrammedCount: sapOverview.data?.unprogrammedCount ?? 0,
+    immediateCount: sapOverview.data?.immediateCount ?? 0,
+    rows: sapOverview.data?.unprogrammed ?? [],
+  };
   const sapUnprogrammedRows =
-    sapOutsideSchedule.data?.rows.filter(
+    effectiveOutsideSchedule.rows.filter(
       (row) => row.classification === sapUnprogrammedOpen,
-    ) ?? [];
+    );
 
   function activityConfirmation(row: ActivityRow) {
     return String(
@@ -2604,7 +2609,7 @@ function AtividadesPage() {
             >
               <KpiCard
                 label="Não programadas"
-                value={sapOutsideSchedule.data?.unprogrammedCount ?? 0}
+                value={effectiveOutsideSchedule.unprogrammedCount}
                 tone="primary"
               />
             </button>
@@ -2616,7 +2621,7 @@ function AtividadesPage() {
             >
               <KpiCard
                 label="Imediatas"
-                value={sapOutsideSchedule.data?.immediateCount ?? 0}
+                value={effectiveOutsideSchedule.immediateCount}
                 tone="warning"
               />
             </button>
