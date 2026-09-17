@@ -96,6 +96,12 @@ type SapConfirmationOverview = {
   }>;
 };
 
+type SapOutsideSchedule = {
+  unprogrammedCount: number;
+  immediateCount: number;
+  rows: SapConfirmationOverview["unprogrammed"];
+};
+
 
 type SapConfirmationStatus =
   | "Aguardando confirmação"
@@ -1070,6 +1076,22 @@ function AtividadesPage() {
     refetchInterval: 5 * 60_000,
   });
 
+  const sapOutsideSchedule = useQuery({
+    queryKey: ["sap-outside-schedule", activeWeek.data?.id, sapOverview.data?.importedRows],
+    enabled:
+      Boolean(activeWeek.data?.id) &&
+      canAccessSap &&
+      Boolean(sapOverview.data?.hasImport),
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_sap_outside_schedule", {
+        p_week_id: activeWeek.data!.id,
+      });
+      if (error) throw error;
+      return data as SapOutsideSchedule;
+    },
+    refetchInterval: 5 * 60_000,
+  });
+
   const sapLatestImport = useQuery({
     queryKey: ["sap-confirmation-latest-import", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap,
@@ -1343,7 +1365,7 @@ function AtividadesPage() {
     : effectiveSapCounts;
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
   const sapUnprogrammedRows =
-    sapOverview.data?.unprogrammed.filter(
+    sapOutsideSchedule.data?.rows.filter(
       (row) => row.classification === sapUnprogrammedOpen,
     ) ?? [];
 
@@ -2580,7 +2602,11 @@ function AtividadesPage() {
               className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               title="Ver apropriações com cód.plan.ordem 1 ausentes da programação semanal"
             >
-              <KpiCard label="Não programadas" value={sapOverview.data.unprogrammedCount} tone="primary" />
+              <KpiCard
+                label="Não programadas"
+                value={sapOutsideSchedule.data?.unprogrammedCount ?? 0}
+                tone="primary"
+              />
             </button>
             <button
               type="button"
@@ -2588,7 +2614,11 @@ function AtividadesPage() {
               className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
               title="Ver apropriações com cód.plan.ordem 2 ausentes da programação semanal"
             >
-              <KpiCard label="Imediatas" value={sapOverview.data.immediateCount ?? 0} tone="warning" />
+              <KpiCard
+                label="Imediatas"
+                value={sapOutsideSchedule.data?.immediateCount ?? 0}
+                tone="warning"
+              />
             </button>
           </div>
         </section>
@@ -3140,7 +3170,7 @@ function AtividadesPage() {
         </>
       )}
 
-      {canAccessSap && sapUnprogrammedOpen && sapOverview.data && (
+      {canAccessSap && sapUnprogrammedOpen && (
         <Modal
           title={
             sapUnprogrammedOpen === "IMEDIATA"
@@ -3161,8 +3191,9 @@ function AtividadesPage() {
           }
         >
           <div className="mb-3 text-xs text-muted-foreground">
-            {sapUnprogrammedRows.length.toLocaleString("pt-BR")} registro(s) apropriado(s). Eles não
-            entram nos cartões operacionais da programação.
+            {sapOutsideSchedule.isLoading
+              ? "Carregando apropriações fora da programação…"
+              : `${sapUnprogrammedRows.length.toLocaleString("pt-BR")} registro(s) apropriado(s). Eles não entram nos cartões operacionais da programação.`}
           </div>
           <div className="max-h-[58vh] overflow-auto rounded-md border border-border">
             <table className="min-w-[820px] w-full text-xs">
