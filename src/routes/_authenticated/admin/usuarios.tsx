@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   component: AdminUsers,
 });
 
-type AppRole = "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
+type AppRole = "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "operation" | "viewer";
 
 type Row = {
   id: string;
@@ -37,6 +37,7 @@ const ROLE_OPTIONS: { value: AppRole; label: string }[] = [
   { value: "planning", label: "Planejamento" },
   { value: "measurement_control", label: "Medição e Controle" },
   { value: "logistics", label: "Logística" },
+  { value: "operation", label: "Operação" },
   { value: "viewer", label: "Consulta" },
   { value: "admin", label: "Administrador" },
 ];
