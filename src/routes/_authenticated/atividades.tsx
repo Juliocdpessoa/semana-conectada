@@ -226,7 +226,7 @@ const STATUSES = [
   "EXECUTADO",
   "NÃO EXECUTADO",
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
   "CANCELADA",
@@ -273,19 +273,19 @@ const CANCELLATION_JUSTIFICATIONS = [
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const PLANNING_WORKFLOW_STATUSES = new Set([
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
 const OPERATION_WORKFLOW_STATUSES = new Set([
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
 ]);
 const PENDING_REPORT_FILTER = "__PENDING_REPORT__";
 const PENDING_REPORT_STATUSES = new Set([
   "Sem apontamento",
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT ENVIADA PARA ASSINATURA",
+  "PT EM ASSINATURA",
   "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
@@ -2982,7 +2982,7 @@ function AtividadesPage() {
                                 (hasPtColorChoice(r) ? (
                                   <PtColorSelector
                                     value={effectivePtColor(r)}
-                                    editable={canEditPlanningFields}
+                                    editable={canEditPlanningFields || isOperationOnly}
                                     onChange={(color) => void changePtColor(r, color)}
                                   />
                                 ) : (
@@ -3110,7 +3110,7 @@ function AtividadesPage() {
                       {hasPtColorChoice(r) ? (
                         <PtColorSelector
                           value={effectivePtColor(r)}
-                          editable={canEditPlanningFields}
+                          editable={canEditPlanningFields || isOperationOnly}
                           onChange={(color) => void changePtColor(r, color)}
                         />
                       ) : (
