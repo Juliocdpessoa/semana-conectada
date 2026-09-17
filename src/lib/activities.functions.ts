@@ -10,7 +10,8 @@ const updateSchema = z.object({
     "EXECUTADO",
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
-    "PT EM ASSINATURA",
+    "PT ENVIADA PARA ASSINATURA",
+    "PT PRÉ-EMITIDA",
     "PT ENVIADA P/ CAMPO",
     "CANCELADA",
   ]),
@@ -22,9 +23,21 @@ const updateSchema = z.object({
 const REQUIRES_JUSTIFICATION = new Set(["NÃO EXECUTADO", "CANCELADA"]);
 const PLANNING_WORKFLOW_STATUSES = new Set([
   "AGUARDANDO PRÉ-EMISSÃO DE PT",
-  "PT EM ASSINATURA",
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
+const OPERATION_WORKFLOW_STATUSES = new Set([
+  "PT ENVIADA PARA ASSINATURA",
+  "PT PRÉ-EMITIDA",
+]);
+const FULL_ACTIVITY_REPORT_ROLES = new Set(["admin", "manager", "planning", "leader"]);
+
+function activityUpdateScope(roles: readonly string[]) {
+  if (roles.some((role) => FULL_ACTIVITY_REPORT_ROLES.has(role))) return "full" as const;
+  if (roles.includes("operation")) return "operation" as const;
+  return "readonly" as const;
+}
 const CANCELLATION_JUSTIFICATIONS = new Set([
   "11 - MUDANÇA DE ESCOPO DA INTERVENÇÃO",
   "12 - SERVIÇO CANCELADO",
@@ -80,18 +93,34 @@ export const updateActivity = createServerFn({ method: "POST" })
 
     const { data: currentActivity, error: currentError } = await supabase
       .from("activities")
-      .select("id, week_id, is_immediate, planning_data, status, justification")
+      .select("id, week_id, is_immediate, planning_data, status, justification, observation")
       .eq("id", data.activityId)
       .maybeSingle();
     if (currentError) return { ok: false as const, error: currentError.message };
     if (!currentActivity) return { ok: false as const, error: "Atividade não encontrada." };
+    const { data: actorRoles, error: actorRolesError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    if (actorRolesError) return { ok: false as const, error: actorRolesError.message };
+    const roleNames = (actorRoles ?? []).map((row) => row.role);
+    const updateScope = activityUpdateScope(roleNames);
+    if (updateScope === "readonly") {
+      return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
+    }
+    if (
+      updateScope === "operation" &&
+      (!OPERATION_WORKFLOW_STATUSES.has(data.status) ||
+        (data.observation?.trim() || null) !== (currentActivity.observation?.trim() || null))
+    ) {
+      return {
+        ok: false as const,
+        error: "O perfil Operação pode alterar somente os status de pré-emissão e envio para assinatura.",
+      };
+    }
     if (PLANNING_WORKFLOW_STATUSES.has(data.status) && currentActivity.status !== data.status) {
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      if (rolesError) return { ok: false as const, error: rolesError.message };
-      if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
+      const operationAllowed = updateScope === "operation" && OPERATION_WORKFLOW_STATUSES.has(data.status);
+      if (!operationAllowed && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
         return {
           ok: false as const,
           error: "Somente o perfil Planejamento pode atribuir este status.",
@@ -195,7 +224,8 @@ const bulkSchema = z.object({
     "EXECUTADO",
     "NÃO EXECUTADO",
     "AGUARDANDO PRÉ-EMISSÃO DE PT",
-    "PT EM ASSINATURA",
+    "PT ENVIADA PARA ASSINATURA",
+    "PT PRÉ-EMITIDA",
     "PT ENVIADA P/ CAMPO",
     "CANCELADA",
   ]),
@@ -209,16 +239,26 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
   .validator((data: unknown) => bulkSchema.parse(data))
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
+    const { data: actorRoles, error: actorRolesError } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId);
+    if (actorRolesError) return { ok: false as const, error: actorRolesError.message };
+    const updateScope = activityUpdateScope((actorRoles ?? []).map((row) => row.role));
+    if (updateScope === "readonly") {
+      return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
+    }
+    if (updateScope === "operation") {
+      return {
+        ok: false as const,
+        error: "O perfil Operação deve atualizar as atividades individualmente.",
+      };
+    }
     const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status)
       ? data.justification?.trim() || null
       : null;
     if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
-      const { data: roles, error: rolesError } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId);
-      if (rolesError) return { ok: false as const, error: rolesError.message };
-      if (!(await canUsePlanningWorkflow(supabase, userId, roles))) {
+      if (!(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
         return {
           ok: false as const,
           error: "Somente o perfil Planejamento pode atribuir este status.",
@@ -539,12 +579,13 @@ const roleSchema = z.enum([
   "leader",
   "measurement_control",
   "logistics",
+  "operation",
   "viewer",
 ]);
 const approveSchema = z.object({
   targetUserId: z.string().uuid(),
   approvalStatus: z.enum(["approved", "blocked", "pending"]),
-  roles: z.array(roleSchema).min(1, "Selecione pelo menos um perfil.").max(7).optional(),
+  roles: z.array(roleSchema).min(1, "Selecione pelo menos um perfil.").max(8).optional(),
 });
 
 export const setUserApproval = createServerFn({ method: "POST" })
