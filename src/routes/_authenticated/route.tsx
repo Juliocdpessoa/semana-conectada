@@ -26,7 +26,7 @@ import { BrandLogo } from "@/components/brand-logo";
 import { cn } from "@/lib/utils";
 
 export type AppRole =
-  "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "viewer";
+  "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "operation" | "viewer";
 
 export type SessionInfo = {
   userId: string;
@@ -87,11 +87,12 @@ async function loadSession(): Promise<SessionInfo | null> {
     "leader",
     "measurement_control",
     "logistics",
+    "operation",
     "viewer",
   ];
-  const allRoles = (rolesRows as Array<{ role: string }>)
-    .map((row: { role: string }) => row.role)
-    .filter((role: string): role is AppRole => priority.includes(role as AppRole));
+  const allRoles = rolesRows
+    .map((row) => row.role)
+    .filter((role): role is AppRole => priority.includes(role as AppRole));
   const role = priority.find((r) => allRoles.includes(r!)) ?? null;
   return {
     userId: data.user.id,
@@ -145,7 +146,7 @@ function AuthedLayout() {
   const isManager = roleSet.has("manager") || isAdmin;
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
-  const hasGeneralAccess = ["admin", "manager", "planning", "leader", "viewer"].some((role) =>
+  const hasGeneralAccess = ["admin", "manager", "planning", "leader", "operation", "viewer"].some((role) =>
     roleSet.has(role as AppRole),
   );
   const overtimeOnly = (isMeasurementControl || isLogistics) && !hasGeneralAccess;
@@ -391,6 +392,8 @@ function roleLabel(role: SessionInfo["role"]) {
       return "Medição e Controle";
     case "logistics":
       return "Logística";
+    case "operation":
+      return "Operação";
     case "viewer":
       return "Consulta";
     default:
