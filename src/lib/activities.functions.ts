@@ -249,10 +249,18 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
     }
     if (updateScope === "operation") {
-      return {
-        ok: false as const,
-        error: "O perfil Operação deve atualizar as atividades individualmente.",
-      };
+      if (!OPERATION_WORKFLOW_STATUSES.has(data.status)) {
+        return {
+          ok: false as const,
+          error: "O perfil Operação pode atualizar em lote somente os status PT EM ASSINATURA e PT PRÉ-EMITIDA.",
+        };
+      }
+      if (data.justification?.trim() || data.observation?.trim()) {
+        return {
+          ok: false as const,
+          error: "O perfil Operação não pode alterar justificativa ou observação em lote.",
+        };
+      }
     }
     const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status)
       ? data.justification?.trim() || null
