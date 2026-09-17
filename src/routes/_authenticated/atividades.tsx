@@ -2822,11 +2822,9 @@ function AtividadesPage() {
                 Preencher liberação
               </button>
             )}
-            {!isOperationOnly && (
-              <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
-                Apontar em lote
-              </button>
-            )}
+            <button onClick={() => setBulkOpen(true)} className="btn-primary py-1 text-xs">
+              {isOperationOnly ? "Atualizar PT em lote" : "Apontar em lote"}
+            </button>
           </div>
         </div>
       )}
@@ -2859,7 +2857,7 @@ function AtividadesPage() {
               <table className="min-w-[1990px] w-full text-[13px]">
                 <thead className="sticky top-0 z-10 border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
                   <tr>
-                    {canUpdateActivities && !isOperationOnly && (
+                    {canUpdateActivities && (
                       <th className="w-8 px-2 py-2">
                         <input
                           type="checkbox"
@@ -2901,7 +2899,7 @@ function AtividadesPage() {
                 <tbody className="divide-y divide-border/60">
                   {paged.map((r) => (
                     <tr key={r.id} className="row-zebra hover:bg-accent/60">
-                      {canUpdateActivities && !isOperationOnly && (
+                      {canUpdateActivities && (
                         <td className="px-2 py-2 align-top">
                           <input
                             type="checkbox"
@@ -3060,7 +3058,7 @@ function AtividadesPage() {
                 className={`surface-card p-3 ${r.is_immediate ? "border-l-[3px] border-l-warning" : ""}`}
               >
                 <div className="flex items-start gap-2">
-                  {canUpdateActivities && !isOperationOnly && (
+                  {canUpdateActivities && (
                     <input
                       type="checkbox"
                       className="mt-1"
@@ -3495,6 +3493,8 @@ function AtividadesPage() {
             .map((row) => ({ id: row.id, expectedVersion: row.version }))}
           weekId={activeWeek.data!.id}
           canCancel={canEditPlanningFields}
+          allowedStatuses={isOperationOnly ? OPERATION_WORKFLOW_STATUSES : undefined}
+          statusOnly={isOperationOnly}
           onClose={() => setBulkOpen(false)}
           onSaved={() => {
             setBulkOpen(false);
@@ -4122,6 +4122,8 @@ function BulkModal({
   rows,
   weekId,
   canCancel,
+  allowedStatuses,
+  statusOnly = false,
   onClose,
   onSaved,
 }: {
@@ -4129,10 +4131,12 @@ function BulkModal({
   rows: { id: string; expectedVersion: number }[];
   weekId: string;
   canCancel: boolean;
+  allowedStatuses?: readonly string[];
+  statusOnly?: boolean;
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [status, setStatus] = useState("EXECUTADO");
+  const [status, setStatus] = useState(allowedStatuses?.[0] ?? "EXECUTADO");
   const [justification, setJustification] = useState("");
   const [observation, setObservation] = useState("");
   const [saving, setSaving] = useState(false);
@@ -4211,8 +4215,10 @@ function BulkModal({
             }}
             className="input-base"
           >
-            {STATUSES.filter(
-              (s) => canCancel || (s !== "CANCELADA" && !PLANNING_WORKFLOW_STATUSES.has(s)),
+            {STATUSES.filter((s) =>
+              allowedStatuses
+                ? allowedStatuses.includes(s)
+                : canCancel || (s !== "CANCELADA" && !PLANNING_WORKFLOW_STATUSES.has(s)),
             ).map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -4220,7 +4226,7 @@ function BulkModal({
             ))}
           </select>
         </Field>
-        <Field label="Justificativa" required={needsJust}>
+        {!statusOnly && <Field label="Justificativa" required={needsJust}>
           <select
             value={needsJust ? justification : ""}
             onChange={(e) => {
@@ -4239,8 +4245,8 @@ function BulkModal({
               </option>
             ))}
           </select>
-        </Field>
-        {needsImmediateLink && (
+        </Field>}
+        {!statusOnly && needsImmediateLink && (
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
@@ -4264,7 +4270,7 @@ function BulkModal({
             </div>
           </div>
         )}
-        <Field label="Observação (opcional)">
+        {!statusOnly && <Field label="Observação (opcional)">
           <textarea
             value={observation}
             onChange={(e) => setObservation(e.target.value)}
@@ -4272,7 +4278,7 @@ function BulkModal({
             maxLength={2000}
             className="input-base"
           />
-        </Field>
+        </Field>}
       </div>
       {immediatePickerOpen && (
         <ImmediatePicker
