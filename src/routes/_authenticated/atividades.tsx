@@ -1007,7 +1007,7 @@ function AtividadesPage() {
   const activityFilters = {
     search: deferredSearch,
     statuses: isLeaderOnly ? [] : statusFilters,
-    releaseTypes: canEditPlanningFields ? releaseTypeFilters : [],
+    releaseTypes: canFilterReleaseType ? releaseTypeFilters : [],
     ptColors: isLeaderOnly ? [] : ptColorFilters,
     areas: areaFilters,
     locations: locationFilters,
