@@ -36,6 +36,13 @@
       "when": 1789748728210,
       "tag": "0004_preserve_activity_notes_for_operation_status",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1789748833231,
+      "tag": "0005_activity_empty_location_filter",
+      "breakpoints": true
     }
   ]
 }

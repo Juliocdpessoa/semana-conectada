@@ -127,6 +127,7 @@ type PersistedActivityFilters = {
   ptColors: string[];
   areas: string[];
   locations: string[];
+        hasEmptyLocation: boolean;
   workCenters: string[];
   planningGroups: string[];
   gers: string[];
@@ -1351,9 +1352,17 @@ function AtividadesPage() {
   const areas = Array.from(new Set([...(serverOptions?.areas ?? []), ...areaFilters])).sort(
     (a, b) => a.localeCompare(b, "pt-BR"),
   );
+  const hasEmptyLocation =
+    locationFilters.includes("__EMPTY__") || Boolean(serverOptions?.hasEmptyLocation);
   const locationOptions = Array.from(
-    new Set([...(serverOptions?.locations ?? []), ...locationFilters]),
-  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
+    new Set([
+      ...(hasEmptyLocation ? ["__EMPTY__"] : []),
+      ...(serverOptions?.locations ?? []),
+      ...locationFilters,
+    ]),
+  ).sort((a, b) =>
+    a === "__EMPTY__" ? -1 : b === "__EMPTY__" ? 1 : a.localeCompare(b, "pt-BR"),
+  );
   const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort(
     (a, b) => (a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR")),
   );
@@ -2755,6 +2764,7 @@ function AtividadesPage() {
           ariaLabel="Filtrar por localização"
           searchPlaceholder="Buscar localização..."
           selectedPlural="localizações selecionadas"
+          optionLabel={(value) => (value === "__EMPTY__" ? "Vazio" : value)}
         />
         <FilterMultiSelect
           options={gerOptions}
