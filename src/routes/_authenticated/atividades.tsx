@@ -868,7 +868,6 @@ function AtividadesPage() {
     (session.roles.includes("admin") &&
       session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessSap = isPlanning;
-  const canAccessPreparation = canEditPlanningFields || effectiveRoles.includes("operation");
   const canFilterReleaseType = canEditPlanningFields || effectiveRoles.includes("operation");
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings =
@@ -976,8 +975,7 @@ function AtividadesPage() {
   ]);
 
   const availableWeeks = useQuery({
-    queryKey: ["activity-working-weeks"],
-    enabled: canAccessPreparation,
+    queryKey: ["activity-working-weeks", session.userId, session.worksiteId],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("weeks")
@@ -990,11 +988,11 @@ function AtividadesPage() {
   });
 
   const activeWeek = useQuery({
-    queryKey: ["active-week", canAccessPreparation ? selectedWeekId : "operational"],
+    queryKey: ["active-week", session.userId, session.worksiteId, selectedWeekId || "operational"],
     queryFn: async () => {
       let request = (supabase as any).from("weeks").select("*");
       request =
-        canAccessPreparation && selectedWeekId
+        selectedWeekId
           ? request.eq("id", selectedWeekId)
           : request.eq("is_active", true);
       const { data, error } = await request.maybeSingle();
@@ -2292,7 +2290,7 @@ function AtividadesPage() {
         }
         actions={
           <div className="flex flex-wrap items-center justify-end gap-2">
-            {canAccessPreparation && (availableWeeks.data?.length ?? 0) > 0 && (
+            {(availableWeeks.data?.length ?? 0) > 0 && (
               <select
                 value={selectedWeekId || activeWeek.data?.id || ""}
                 onChange={(event) => {
