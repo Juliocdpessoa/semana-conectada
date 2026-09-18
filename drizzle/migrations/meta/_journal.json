@@ -22,6 +22,13 @@
       "when": 1789748306195,
       "tag": "0002_allow_operation_update_activities",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789748698662,
+      "tag": "0003_fix_operation_pt_status_updates",
+      "breakpoints": true
     }
   ]
 }

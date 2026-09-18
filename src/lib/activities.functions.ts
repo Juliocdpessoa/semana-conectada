@@ -266,7 +266,9 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       ? data.justification?.trim() || null
       : null;
     if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
-      if (!(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
+      const operationAllowed =
+        updateScope === "operation" && OPERATION_WORKFLOW_STATUSES.has(data.status);
+      if (!operationAllowed && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
         return {
           ok: false as const,
           error: "Somente o perfil Planejamento pode atribuir este status.",
