@@ -1457,7 +1457,7 @@ function AtividadesPage() {
   const activeFilters = [
     search,
     !isLeaderOnly && statusFilters.length > 0 ? "1" : "",
-    canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
+    canFilterReleaseType && releaseTypeFilters.length > 0 ? "1" : "",
     !isLeaderOnly && ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
     locationFilters.length > 0 ? "1" : "",
