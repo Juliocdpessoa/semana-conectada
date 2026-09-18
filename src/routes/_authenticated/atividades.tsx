@@ -2702,7 +2702,7 @@ function AtividadesPage() {
             selectedPlural="status SAP selecionados"
           />
         )}
-        {canEditPlanningFields && (
+        {canFilterReleaseType && (
           <FilterMultiSelect
             options={[...releaseTypeOptions, ...(hasEmptyReleaseType ? ["__EMPTY__"] : [])]}
             selected={releaseTypeFilters}
