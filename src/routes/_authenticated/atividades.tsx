@@ -2344,16 +2344,18 @@ function AtividadesPage() {
                       ? "Gerando…"
                       : "Imprimir programação"}
                 </button>
-                <button
-                  onClick={exportFilteredActivities}
-                  disabled={isExporting || planningSavePending || kpis.total === 0}
-                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
-                  title="Exportar as atividades com os filtros atuais"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
-                </button>
               </>
+            )}
+            {canExportActivities && (
+              <button
+                onClick={exportFilteredActivities}
+                disabled={isExporting || planningSavePending || kpis.total === 0}
+                className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+                title="Exportar as atividades com os filtros atuais"
+              >
+                <Download className="h-3.5 w-3.5" />
+                {planningSavePending ? "Salvando…" : isExporting ? "Exportando…" : "Exportar"}
+              </button>
             )}
             {isPlanning && (
               <>
