@@ -110,11 +110,7 @@ export const updateActivity = createServerFn({ method: "POST" })
     if (updateScope === "readonly") {
       return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
     }
-    if (
-      updateScope === "operation" &&
-      (!canUseOperationWorkflow ||
-        (data.observation?.trim() || null) !== (currentActivity.observation?.trim() || null))
-    ) {
+    if (updateScope === "operation" && !canUseOperationWorkflow) {
       return {
         ok: false as const,
         error: "O perfil Operação pode alterar somente os status de pré-emissão e envio para assinatura.",
@@ -257,12 +253,6 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
         return {
           ok: false as const,
           error: "O perfil Operação pode atualizar em lote somente os status PT EM ASSINATURA e PT PRÉ-EMITIDA.",
-        };
-      }
-      if (data.justification?.trim() || data.observation?.trim()) {
-        return {
-          ok: false as const,
-          error: "O perfil Operação não pode alterar justificativa ou observação em lote.",
         };
       }
     }
