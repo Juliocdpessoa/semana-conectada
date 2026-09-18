@@ -868,7 +868,7 @@ function AtividadesPage() {
     (session.roles.includes("admin") &&
       session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessSap = isPlanning;
-  const canAccessPreparation = canEditPlanningFields;
+  const canAccessPreparation = canEditPlanningFields || effectiveRoles.includes("operation");
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings =
     canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
