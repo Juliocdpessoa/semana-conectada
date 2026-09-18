@@ -79,7 +79,7 @@ async function loadSession(): Promise<SessionInfo | null> {
         .select("is_worksite_admin").eq("user_id", data.user.id)
         .eq("worksite_id", worksiteId).maybeSingle()
     : { data: null };
-  const rolesRows = roles?.data ?? [];
+  const rolesRows = (roles?.data ?? []) as { role: string }[];
   const priority: SessionInfo["role"][] = [
     "admin",
     "manager",

@@ -3520,7 +3520,7 @@ function AtividadesPage() {
             .map((row) => ({ id: row.id, expectedVersion: row.version }))}
           weekId={activeWeek.data!.id}
           canCancel={canEditPlanningFields}
-          allowedStatuses={isOperationOnly ? OPERATION_WORKFLOW_STATUSES : undefined}
+          allowedStatuses={isOperationOnly ? [...OPERATION_WORKFLOW_STATUSES] : undefined}
           statusOnly={isOperationOnly}
           onClose={() => setBulkOpen(false)}
           onSaved={() => {
