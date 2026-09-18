@@ -104,23 +104,20 @@ export const updateActivity = createServerFn({ method: "POST" })
       .eq("user_id", userId);
     if (actorRolesError) return { ok: false as const, error: actorRolesError.message };
     const roleNames = (actorRoles ?? []).map((row) => row.role);
+    const canUseOperationWorkflow =
+      roleNames.includes("operation") && OPERATION_WORKFLOW_STATUSES.has(data.status);
     const updateScope = activityUpdateScope(roleNames);
     if (updateScope === "readonly") {
       return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
     }
-    if (
-      updateScope === "operation" &&
-      (!OPERATION_WORKFLOW_STATUSES.has(data.status) ||
-        (data.observation?.trim() || null) !== (currentActivity.observation?.trim() || null))
-    ) {
+    if (updateScope === "operation" && !canUseOperationWorkflow) {
       return {
         ok: false as const,
         error: "O perfil Operação pode alterar somente os status de pré-emissão e envio para assinatura.",
       };
     }
     if (PLANNING_WORKFLOW_STATUSES.has(data.status) && currentActivity.status !== data.status) {
-      const operationAllowed = updateScope === "operation" && OPERATION_WORKFLOW_STATUSES.has(data.status);
-      if (!operationAllowed && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
+      if (!canUseOperationWorkflow && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
         return {
           ok: false as const,
           error: "Somente o perfil Planejamento pode atribuir este status.",
@@ -244,7 +241,10 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
       .select("role")
       .eq("user_id", userId);
     if (actorRolesError) return { ok: false as const, error: actorRolesError.message };
-    const updateScope = activityUpdateScope((actorRoles ?? []).map((row) => row.role));
+    const roleNames = (actorRoles ?? []).map((row) => row.role);
+    const canUseOperationWorkflow =
+      roleNames.includes("operation") && OPERATION_WORKFLOW_STATUSES.has(data.status);
+    const updateScope = activityUpdateScope(roleNames);
     if (updateScope === "readonly") {
       return { ok: false as const, error: "O perfil Consulta possui acesso somente para visualização." };
     }
@@ -255,20 +255,12 @@ export const bulkUpdateActivities = createServerFn({ method: "POST" })
           error: "O perfil Operação pode atualizar em lote somente os status PT EM ASSINATURA e PT PRÉ-EMITIDA.",
         };
       }
-      if (data.justification?.trim() || data.observation?.trim()) {
-        return {
-          ok: false as const,
-          error: "O perfil Operação não pode alterar justificativa ou observação em lote.",
-        };
-      }
     }
     const normalizedJustification = REQUIRES_JUSTIFICATION.has(data.status)
       ? data.justification?.trim() || null
       : null;
     if (PLANNING_WORKFLOW_STATUSES.has(data.status)) {
-      const operationAllowed =
-        updateScope === "operation" && OPERATION_WORKFLOW_STATUSES.has(data.status);
-      if (!operationAllowed && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
+      if (!canUseOperationWorkflow && !(await canUsePlanningWorkflow(supabase, userId, actorRoles))) {
         return {
           ok: false as const,
           error: "Somente o perfil Planejamento pode atribuir este status.",

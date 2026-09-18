@@ -43,6 +43,13 @@
       "when": 1789748833231,
       "tag": "0005_activity_empty_location_filter",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1789749242889,
+      "tag": "0006_align_operation_activity_status_trigger",
+      "breakpoints": true
     }
   ]
 }
