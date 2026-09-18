@@ -869,6 +869,7 @@ function AtividadesPage() {
       session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
   const canAccessSap = isPlanning;
   const canAccessPreparation = canEditPlanningFields || effectiveRoles.includes("operation");
+  const canFilterReleaseType = canEditPlanningFields || effectiveRoles.includes("operation");
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings =
     canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
@@ -1006,7 +1007,7 @@ function AtividadesPage() {
   const activityFilters = {
     search: deferredSearch,
     statuses: isLeaderOnly ? [] : statusFilters,
-    releaseTypes: canEditPlanningFields ? releaseTypeFilters : [],
+    releaseTypes: canFilterReleaseType ? releaseTypeFilters : [],
     ptColors: isLeaderOnly ? [] : ptColorFilters,
     areas: areaFilters,
     locations: locationFilters,
@@ -1456,7 +1457,7 @@ function AtividadesPage() {
   const activeFilters = [
     search,
     !isLeaderOnly && statusFilters.length > 0 ? "1" : "",
-    canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
+    canFilterReleaseType && releaseTypeFilters.length > 0 ? "1" : "",
     !isLeaderOnly && ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
     locationFilters.length > 0 ? "1" : "",
@@ -2701,7 +2702,7 @@ function AtividadesPage() {
             selectedPlural="status SAP selecionados"
           />
         )}
-        {canEditPlanningFields && (
+        {canFilterReleaseType && (
           <FilterMultiSelect
             options={[...releaseTypeOptions, ...(hasEmptyReleaseType ? ["__EMPTY__"] : [])]}
             selected={releaseTypeFilters}
