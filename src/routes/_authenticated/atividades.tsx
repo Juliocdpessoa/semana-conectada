@@ -127,7 +127,6 @@ type PersistedActivityFilters = {
   ptColors: string[];
   areas: string[];
   locations: string[];
-        hasEmptyLocation: boolean;
   workCenters: string[];
   planningGroups: string[];
   gers: string[];
@@ -1059,6 +1058,7 @@ function AtividadesPage() {
         ptColors: string[];
         areas: string[];
         locations: string[];
+        hasEmptyLocation: boolean;
         workCenters: string[];
         planningGroups: string[];
         gers: string[];
