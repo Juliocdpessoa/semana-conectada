@@ -8,6 +8,13 @@
       "when": 1789730835375,
       "tag": "0000_activity_location_filter",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1789739765074,
+      "tag": "0001_operation_access_preparation_weeks",
+      "breakpoints": true
     }
   ]
 }
