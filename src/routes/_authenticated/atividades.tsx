@@ -126,6 +126,7 @@ type PersistedActivityFilters = {
   releaseTypes: string[];
   ptColors: string[];
   areas: string[];
+  locations: string[];
   workCenters: string[];
   planningGroups: string[];
   gers: string[];
@@ -140,6 +141,7 @@ const EMPTY_PERSISTED_ACTIVITY_FILTERS: PersistedActivityFilters = {
   releaseTypes: [],
   ptColors: [],
   areas: [],
+  locations: [],
   workCenters: [],
   planningGroups: [],
   gers: [],
@@ -160,6 +162,7 @@ function readPersistedActivityFilters(storageKey: string): PersistedActivityFilt
       releaseTypes: strings("releaseTypes"),
       ptColors: strings("ptColors"),
       areas: strings("areas"),
+      locations: strings("locations"),
       workCenters: strings("workCenters"),
       planningGroups: strings("planningGroups"),
       gers: strings("gers"),
@@ -886,6 +889,7 @@ function AtividadesPage() {
   const [releaseTypeFilters, setReleaseTypeFilters] = useState<string[]>([]);
   const [ptColorFilters, setPtColorFilters] = useState<string[]>([]);
   const [areaFilters, setAreaFilters] = useState<string[]>([]);
+  const [locationFilters, setLocationFilters] = useState<string[]>([]);
   const [workCenterFilters, setWorkCenterFilters] = useState<string[]>([]);
   const [planningGroupFilters, setPlanningGroupFilters] = useState<string[]>([]);
   const [gerFilters, setGerFilters] = useState<string[]>([]);
@@ -923,6 +927,7 @@ function AtividadesPage() {
     setReleaseTypeFilters(stored.releaseTypes);
     setPtColorFilters(stored.ptColors);
     setAreaFilters(stored.areas);
+    setLocationFilters(stored.locations);
     setWorkCenterFilters(stored.workCenters);
     setPlanningGroupFilters(stored.planningGroups);
     setGerFilters(stored.gers);
@@ -943,6 +948,7 @@ function AtividadesPage() {
         releaseTypes: releaseTypeFilters,
         ptColors: ptColorFilters,
         areas: areaFilters,
+        locations: locationFilters,
         workCenters: workCenterFilters,
         planningGroups: planningGroupFilters,
         gers: gerFilters,
@@ -959,6 +965,7 @@ function AtividadesPage() {
     releaseTypeFilters,
     ptColorFilters,
     areaFilters,
+    locationFilters,
     workCenterFilters,
     planningGroupFilters,
     gerFilters,
@@ -1002,6 +1009,7 @@ function AtividadesPage() {
     releaseTypes: canEditPlanningFields ? releaseTypeFilters : [],
     ptColors: isLeaderOnly ? [] : ptColorFilters,
     areas: areaFilters,
+    locations: locationFilters,
     workCenters: workCenterFilters,
     planningGroups: isLeaderOnly ? [] : planningGroupFilters,
     gers: gerFilters,
@@ -1014,6 +1022,7 @@ function AtividadesPage() {
       releaseTypeFilters.length ||
       ptColorFilters.length ||
       areaFilters.length ||
+      locationFilters.length ||
       workCenterFilters.length ||
       planningGroupFilters.length ||
       gerFilters.length ||
@@ -1048,6 +1057,7 @@ function AtividadesPage() {
         hasEmptyReleaseType: boolean;
         ptColors: string[];
         areas: string[];
+        locations: string[];
         workCenters: string[];
         planningGroups: string[];
         gers: string[];
@@ -1341,6 +1351,9 @@ function AtividadesPage() {
   const areas = Array.from(new Set([...(serverOptions?.areas ?? []), ...areaFilters])).sort(
     (a, b) => a.localeCompare(b, "pt-BR"),
   );
+  const locationOptions = Array.from(
+    new Set([...(serverOptions?.locations ?? []), ...locationFilters]),
+  ).sort((a, b) => a.localeCompare(b, "pt-BR"));
   const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort(
     (a, b) => (a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR")),
   );
@@ -1446,6 +1459,7 @@ function AtividadesPage() {
     canEditPlanningFields && releaseTypeFilters.length > 0 ? "1" : "",
     !isLeaderOnly && ptColorFilters.length > 0 ? "1" : "",
     areaFilters.length > 0 ? "1" : "",
+    locationFilters.length > 0 ? "1" : "",
     workCenterFilters.length > 0 ? "1" : "",
     !isLeaderOnly && planningGroupFilters.length > 0 ? "1" : "",
     gerFilters.length > 0 ? "1" : "",
@@ -1460,6 +1474,7 @@ function AtividadesPage() {
     setReleaseTypeFilters([]);
     setPtColorFilters([]);
     setAreaFilters([]);
+    setLocationFilters([]);
     setWorkCenterFilters([]);
     setPlanningGroupFilters([]);
     setGerFilters([]);
@@ -2726,6 +2741,18 @@ function AtividadesPage() {
           ariaLabel="Filtrar por área"
           searchPlaceholder="Buscar área..."
           selectedPlural="áreas selecionadas"
+        />
+        <FilterMultiSelect
+          options={locationOptions}
+          selected={locationFilters}
+          onChange={(next) => {
+            setLocationFilters(next);
+            setPage(0);
+          }}
+          allLabel="Todas as localizações"
+          ariaLabel="Filtrar por localização"
+          searchPlaceholder="Buscar localização..."
+          selectedPlural="localizações selecionadas"
         />
         <FilterMultiSelect
           options={gerOptions}
