@@ -20,6 +20,7 @@ import {
   UserX,
   Pencil,
   Trash2,
+  Archive,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { PageHeader, Panel, KpiCard, EmptyState, Modal, Field } from "@/components/ui-kit";
@@ -63,6 +64,12 @@ import {
   parseEmployeeImportText,
 } from "@/lib/overtime.functions";
 import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtime.functions";
+import {
+  finalizeOperationalArchive,
+  listOperationalArchives,
+  loadOperationalArchiveRows,
+  prepareOperationalArchive,
+} from "@/lib/operational-archive.functions";
 
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
@@ -151,8 +158,15 @@ function shiftDays(days: number) {
   return toIsoDate(date);
 }
 
+function operationalWindowStart() {
+  const date = new Date();
+  const day = date.getDay() || 7;
+  date.setDate(date.getDate() - (day - 1) - 28);
+  return toIsoDate(date);
+}
+
 function defaultPeriod(): Period {
-  return { from: shiftDays(-30), to: shiftDays(30) };
+  return { from: operationalWindowStart(), to: shiftDays(365) };
 }
 
 function OvertimePage() {
@@ -168,14 +182,19 @@ function OvertimePage() {
   const logisticsOnly = isLogistics && roleSet.size === 1;
   const canExportOvertime =
     isMeasurementControl || isAdmin || roleSet.has("manager") || isLogistics;
-  const [tab, setTab] = useState<"list" | "queue" | "employees" | "export" | "weekly_export">(
+  const [tab, setTab] = useState<
+    "list" | "queue" | "employees" | "export" | "weekly_export" | "archives"
+  >(
     logisticsOnly ? "export" : canRequest ? "list" : isMeasurementControl ? "export" : "queue",
   );
   const loadOvertimeExportDates = useServerFn(listOvertimeExportDates);
   const [period] = useState<Period>(() => defaultPeriod());
   // A exportação diária sempre carrega uma janela fixa em torno do dia atual;
   // o filtro de período global não se aplica a essa aba.
-  const exportPeriod = useMemo(() => ({ from: shiftDays(-60), to: shiftDays(60) }), []);
+  const exportPeriod = useMemo(
+    () => ({ from: operationalWindowStart(), to: shiftDays(365) }),
+    [],
+  );
   const [exportDate, setExportDate] = useState(() => toIsoDate(new Date()));
   const exportDateOptions = useQuery({
     queryKey: ["overtime-export-dates", s.userId, s.worksiteId, exportPeriod.from, exportPeriod.to],
@@ -359,6 +378,11 @@ function OvertimePage() {
             Colaboradores
           </TabBtn>
         )}
+        {isAdmin && (
+          <TabBtn active={tab === "archives"} onClick={() => selectTab("archives")}>
+            Arquivos históricos
+          </TabBtn>
+        )}
       </div>
 
       {tab === "export" && canExportOvertime && (
@@ -432,6 +456,8 @@ function OvertimePage() {
 
       {tab === "employees" && (isManager || isLogistics) && <EmployeeManagement readOnly={false} />}
 
+      {tab === "archives" && isAdmin && <OperationalArchives />}
+
       {showNew && canRequest && (
         <NewRequestModal
           onClose={() => setShowNew(false)}
@@ -475,6 +501,181 @@ function OvertimePage() {
         />
       )}
     </main>
+  );
+}
+
+type OperationalArchiveRow = {
+  id: string;
+  cutoff_date: string;
+  status: "prepared" | "finalized" | "cancelled";
+  overtime_count: number;
+  scale_change_count: number;
+  prepared_at: string;
+  finalized_at: string | null;
+};
+
+function OperationalArchives() {
+  const qc = useQueryClient();
+  const listArchives = useServerFn(listOperationalArchives);
+  const prepareArchive = useServerFn(prepareOperationalArchive);
+  const loadArchiveRows = useServerFn(loadOperationalArchiveRows);
+  const finalizeArchive = useServerFn(finalizeOperationalArchive);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
+  const cutoffDate = useMemo(() => operationalWindowStart(), []);
+  const archives = useQuery({
+    queryKey: ["operational-archives"],
+    queryFn: async () => {
+      const result = await listArchives();
+      if (!result.ok) throw new Error(result.error);
+      return (result.archives ?? []) as OperationalArchiveRow[];
+    },
+  });
+
+  async function handlePrepare() {
+    if (
+      !confirm(
+        `Preparar para arquivamento os registros anteriores a ${formatDate(cutoffDate)}? Nenhum registro será removido nesta etapa.`,
+      )
+    )
+      return;
+    setPreparing(true);
+    try {
+      const result = await prepareArchive({ data: { cutoffDate } });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Arquivo preparado. Baixe e confira antes de finalizar.");
+      await qc.invalidateQueries({ queryKey: ["operational-archives"] });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível preparar o arquivo.");
+    } finally {
+      setPreparing(false);
+    }
+  }
+
+  async function handleDownload(archive: OperationalArchiveRow) {
+    setBusyId(archive.id);
+    try {
+      const result = await loadArchiveRows({ data: { archiveId: archive.id } });
+      if (!result.ok) return toast.error(result.error);
+      const overtime = (result.rows ?? [])
+        .filter((row: any) => row.source_type === "overtime")
+        .map((row: any) => row.payload);
+      const scaleChanges = (result.rows ?? [])
+        .filter((row: any) => row.source_type === "scale_change")
+        .map((row: any) => row.payload);
+      const XLSX = await import("xlsx");
+      const workbook = XLSX.utils.book_new();
+      const overtimeSheet = XLSX.utils.json_to_sheet(overtime.length ? overtime : [{ Informação: "Sem registros" }]);
+      const scaleSheet = XLSX.utils.json_to_sheet(
+        scaleChanges.length ? scaleChanges : [{ Informação: "Sem registros" }],
+      );
+      XLSX.utils.book_append_sheet(workbook, overtimeSheet, "Horas extras");
+      XLSX.utils.book_append_sheet(workbook, scaleSheet, "Mudanças de escala");
+      XLSX.writeFile(workbook, `historico-operacional-ate-${archive.cutoff_date}.xlsx`);
+      setDownloaded((current) => new Set(current).add(archive.id));
+      toast.success("Arquivo histórico baixado.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível baixar o arquivo.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleFinalize(archive: OperationalArchiveRow) {
+    if (!downloaded.has(archive.id)) {
+      return toast.error("Baixe o arquivo antes de finalizar o arquivamento.");
+    }
+    if (
+      !confirm(
+        `Confirmar a retirada de ${archive.overtime_count} hora(s) extra(s) e ${archive.scale_change_count} mudança(s) de escala da base operacional? O histórico permanecerá guardado.`,
+      )
+    )
+      return;
+    setBusyId(archive.id);
+    try {
+      const result = await finalizeArchive({ data: { archiveId: archive.id } });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Arquivamento finalizado com conferência de quantidades.");
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["operational-archives"] }),
+        qc.invalidateQueries({ queryKey: ["overtime-requests"] }),
+        qc.invalidateQueries({ queryKey: ["overtime-export-dates"] }),
+        qc.invalidateQueries({ queryKey: ["scheduled-transport"] }),
+      ]);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível finalizar o arquivo.");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <Panel title="Arquivos históricos" subtitle="Mantém a operação leve sem perder dados antigos.">
+      <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col justify-between gap-2 rounded-md border border-border bg-muted/30 p-3 sm:flex-row sm:items-center">
+          <div className="text-[12px]">
+            <p className="font-semibold text-foreground">Janela operacional atual</p>
+            <p className="text-muted-foreground">
+              Registros desde {formatDate(cutoffDate)} e todas as programações futuras permanecem nas telas.
+            </p>
+          </div>
+          <button className="btn-primary" disabled={preparing} onClick={handlePrepare}>
+            <Archive className="h-4 w-4" /> {preparing ? "Preparando…" : "Preparar arquivo"}
+          </button>
+        </div>
+
+        {archives.isLoading ? (
+          <p className="py-6 text-center text-[12px] text-muted-foreground">Carregando arquivos…</p>
+        ) : archives.isError ? (
+          <p className="py-6 text-center text-[12px] text-destructive">
+            {archives.error instanceof Error ? archives.error.message : "Falha ao carregar arquivos."}
+          </p>
+        ) : (archives.data?.length ?? 0) === 0 ? (
+          <EmptyState title="Nenhum arquivo preparado" description="Prepare o primeiro período quando desejar arquivar os registros antigos." />
+        ) : (
+          <div className="overflow-x-auto rounded-md border border-border">
+            <table className="w-full min-w-[760px] text-left text-[12px]">
+              <thead className="bg-muted/60 text-[10px] uppercase text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Registros anteriores a</th>
+                  <th className="px-3 py-2">Horas extras</th>
+                  <th className="px-3 py-2">Mudanças de escala</th>
+                  <th className="px-3 py-2">Preparado em</th>
+                  <th className="px-3 py-2">Situação</th>
+                  <th className="px-3 py-2 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody>
+                {archives.data?.map((archive) => (
+                  <tr key={archive.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-medium">{formatDate(archive.cutoff_date)}</td>
+                    <td className="px-3 py-2">{archive.overtime_count}</td>
+                    <td className="px-3 py-2">{archive.scale_change_count}</td>
+                    <td className="px-3 py-2">{formatDateTime(archive.prepared_at)}</td>
+                    <td className="px-3 py-2">
+                      {archive.status === "finalized" ? "Finalizado" : "Aguardando conferência"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex justify-end gap-2">
+                        <button className="btn-secondary" disabled={busyId === archive.id} onClick={() => handleDownload(archive)}>
+                          <Download className="h-3.5 w-3.5" /> Baixar Excel
+                        </button>
+                        {archive.status === "prepared" && (
+                          <button className="btn-primary" disabled={busyId === archive.id || !downloaded.has(archive.id)} onClick={() => handleFinalize(archive)}>
+                            Finalizar
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </Panel>
   );
 }
 

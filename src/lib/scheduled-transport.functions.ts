@@ -35,7 +35,8 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
     try {
       const fallbackStart = new Date();
-      fallbackStart.setDate(fallbackStart.getDate() - 90);
+      const fallbackDay = fallbackStart.getDay() || 7;
+      fallbackStart.setDate(fallbackStart.getDate() - (fallbackDay - 1) - 28);
       const defaultStart = `${fallbackStart.getFullYear()}-${String(fallbackStart.getMonth() + 1).padStart(2, "0")}-${String(fallbackStart.getDate()).padStart(2, "0")}`;
       const applyDateRange = (query: any) => {
         let next = query.eq("worksite_id", info.worksiteId).gte("transport_date", input.start_date || defaultStart);
