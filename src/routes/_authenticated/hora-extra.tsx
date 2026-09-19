@@ -514,6 +514,75 @@ type OperationalArchiveRow = {
   finalized_at: string | null;
 };
 
+const ARCHIVE_COLUMN_LABELS: Record<string, string> = {
+  id: "ID do registro",
+  request_number: "Nº da solicitação",
+  batch_id: "ID do lote",
+  worksite_id: "ID da obra",
+  requester_user_id: "ID de quem solicitou",
+  requester_name: "Quem solicitou",
+  requester_email: "E-mail do solicitante",
+  employee_master_id: "ID do colaborador",
+  employee_external_id: "ID externo do colaborador",
+  employee_registration: "Matrícula",
+  employee_name: "Colaborador",
+  employee_role: "Função",
+  employee_address: "Endereço",
+  employee_neighborhood: "Bairro",
+  employee_city: "Cidade",
+  employee_phone: "Telefone",
+  employee_message_contact: "Contato para recado",
+  employee_transport_line: "Linha de transporte",
+  activity_id: "ID da atividade",
+  week_id: "ID da semana",
+  order_number: "Ordem",
+  service_description: "Serviço / O que será feito",
+  overtime_date: "Data da hora extra",
+  transport_date: "Data da mudança de escala",
+  entry_time: "Horário de entrada",
+  departure_time: "Horário de saída",
+  needs_snack: "Precisa de lanche",
+  needs_transport: "Precisa de transporte",
+  justification: "Justificativa",
+  observation: "Observação",
+  status: "Status",
+  manager_comment: "Comentário da decisão",
+  decided_by_user_id: "ID de quem decidiu",
+  decided_by_name: "Decidido por",
+  decided_by_email: "E-mail de quem decidiu",
+  decided_at: "Data/hora da decisão",
+  cancelled_by_user_id: "ID de quem cancelou",
+  cancelled_by_name: "Cancelado por",
+  cancelled_at: "Data/hora do cancelamento",
+  updated_by_user_id: "ID da última alteração",
+  updated_by_name: "Última alteração por",
+  source_type: "Origem",
+  source_scheduled_transport_id: "ID da mudança de escala de origem",
+  version: "Versão",
+  created_at: "Criado em",
+  updated_at: "Atualizado em",
+};
+
+const ARCHIVE_COLUMN_ORDER = Object.keys(ARCHIVE_COLUMN_LABELS);
+
+function formatArchiveCell(value: unknown) {
+  if (value === true) return "Sim";
+  if (value === false) return "Não";
+  if (value == null) return "";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function mapArchivePayload(payload: Record<string, unknown>) {
+  const keys = [
+    ...ARCHIVE_COLUMN_ORDER.filter((key) => key in payload),
+    ...Object.keys(payload).filter((key) => !(key in ARCHIVE_COLUMN_LABELS)).sort(),
+  ];
+  return Object.fromEntries(
+    keys.map((key) => [ARCHIVE_COLUMN_LABELS[key] ?? key, formatArchiveCell(payload[key])]),
+  );
+}
+
 function OperationalArchives() {
   const qc = useQueryClient();
   const listArchives = useServerFn(listOperationalArchives);
@@ -560,10 +629,10 @@ function OperationalArchives() {
       if (!result.ok) return toast.error(result.error);
       const overtime = (result.rows ?? [])
         .filter((row: any) => row.source_type === "overtime")
-        .map((row: any) => row.payload);
+        .map((row: any) => mapArchivePayload(row.payload ?? {}));
       const scaleChanges = (result.rows ?? [])
         .filter((row: any) => row.source_type === "scale_change")
-        .map((row: any) => row.payload);
+        .map((row: any) => mapArchivePayload(row.payload ?? {}));
       const XLSX = await import("xlsx");
       const workbook = XLSX.utils.book_new();
       const overtimeSheet = XLSX.utils.json_to_sheet(overtime.length ? overtime : [{ Informação: "Sem registros" }]);
