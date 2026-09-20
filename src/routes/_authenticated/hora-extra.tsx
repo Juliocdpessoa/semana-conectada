@@ -623,7 +623,7 @@ function OperationalArchives() {
   async function handlePrepare() {
     if (
       !confirm(
-        `Preparar para arquivamento os registros anteriores a ${formatDate(cutoffDate)}? Nenhum registro será removido nesta etapa.`,
+        `Preparar para arquivamento todos os registros anteriores a ${formatDate(cutoffDate)}, inclusive os pendentes? Nenhum registro será removido nesta etapa.`,
       )
     )
       return;
@@ -698,7 +698,7 @@ function OperationalArchives() {
   }
 
   return (
-    <Panel title="Arquivos históricos" subtitle="Mantém a operação leve sem perder dados antigos.">
+    <Panel title="Arquivos históricos" subtitle="Arquiva todos os registros antigos, inclusive pendentes, sem perder o histórico.">
       <div className="flex flex-col gap-3 p-3">
         <div className="flex flex-col justify-between gap-2 rounded-md border border-border bg-muted/30 p-3 sm:flex-row sm:items-center">
           <div className="text-[12px]">
