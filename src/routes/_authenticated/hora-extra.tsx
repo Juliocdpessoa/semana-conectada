@@ -165,6 +165,12 @@ function operationalWindowStart() {
   return toIsoDate(date);
 }
 
+function dayBeforeIsoDate(isoDate: string) {
+  const date = new Date(`${isoDate}T12:00:00`);
+  date.setDate(date.getDate() - 1);
+  return toIsoDate(date);
+}
+
 function defaultPeriod(): Period {
   return { from: operationalWindowStart(), to: shiftDays(365) };
 }
@@ -619,6 +625,10 @@ function OperationalArchives() {
       return (result.archives ?? []) as OperationalArchiveRow[];
     },
   });
+  const latestFinalizedArchive = archives.data?.find((archive) => archive.status === "finalized");
+  const archivedThrough = latestFinalizedArchive
+    ? dayBeforeIsoDate(latestFinalizedArchive.cutoff_date)
+    : null;
 
   async function handlePrepare() {
     if (
@@ -700,6 +710,14 @@ function OperationalArchives() {
   return (
     <Panel title="Arquivos históricos" subtitle="Arquiva todos os registros antigos, inclusive pendentes, sem perder o histórico.">
       <div className="flex flex-col gap-3 p-3">
+        {archivedThrough && (
+          <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-[12px]">
+            <span className="font-semibold text-foreground">Histórico já arquivado:</span>{" "}
+            <span className="text-muted-foreground">
+              todos os registros até {formatDate(archivedThrough)} estão preservados no histórico.
+            </span>
+          </div>
+        )}
         <div className="flex flex-col justify-between gap-2 rounded-md border border-border bg-muted/30 p-3 sm:flex-row sm:items-center">
           <div className="text-[12px]">
             <p className="font-semibold text-foreground">Janela operacional atual</p>
@@ -725,7 +743,7 @@ function OperationalArchives() {
             <table className="w-full min-w-[760px] text-left text-[12px]">
               <thead className="bg-muted/60 text-[10px] uppercase text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2">Registros anteriores a</th>
+                  <th className="px-3 py-2">Período arquivado</th>
                   <th className="px-3 py-2">Horas extras</th>
                   <th className="px-3 py-2">Mudanças de escala</th>
                   <th className="px-3 py-2">Preparado em</th>
@@ -736,7 +754,9 @@ function OperationalArchives() {
               <tbody>
                 {archives.data?.map((archive) => (
                   <tr key={archive.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-medium">{formatDate(archive.cutoff_date)}</td>
+                    <td className="px-3 py-2 font-medium">
+                      Até {formatDate(dayBeforeIsoDate(archive.cutoff_date))}
+                    </td>
                     <td className="px-3 py-2">{archive.overtime_count}</td>
                     <td className="px-3 py-2">{archive.scale_change_count}</td>
                     <td className="px-3 py-2">{formatDateTime(archive.prepared_at)}</td>
