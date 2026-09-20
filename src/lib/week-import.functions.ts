@@ -160,6 +160,32 @@ export const activateWeek = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+const sapClosureActionSchema = z.discriminatedUnion("action", [
+  z.object({ weekId: z.string().uuid(), action: z.literal("close"), reason: z.string().trim().min(3).max(500) }),
+  z.object({ weekId: z.string().uuid(), action: z.literal("reopen"), reason: z.string().trim().min(3).max(500) }),
+  z.object({ weekId: z.string().uuid(), action: z.literal("extend"), deadline: z.string().datetime(), reason: z.string().trim().min(3).max(500) }),
+]);
+
+export const manageSapClosure = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .validator((data: unknown) => sapClosureActionSchema.parse(data))
+  .handler(async ({ data, context }) => {
+    const { supabase, userId } = context;
+    const access = await loadPlanningContext(supabase, userId);
+    const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
+    const isAdmin = roles?.some((role: any) => role.role === "admin") ?? false;
+    if (!access.allowed || !access.worksiteId || !isAdmin) {
+      return { ok: false as const, error: "Somente o administrador da obra pode controlar o fechamento SAP." };
+    }
+    const functionName = data.action === "close" ? "close_sap_week" : data.action === "reopen" ? "reopen_sap_week" : "extend_sap_week_deadline";
+    const parameters = data.action === "extend"
+      ? { p_week_id: data.weekId, p_deadline: data.deadline, p_reason: data.reason }
+      : { p_week_id: data.weekId, p_reason: data.reason };
+    const { error } = await (supabase as any).rpc(functionName, parameters);
+    if (error) return { ok: false as const, error: error.message };
+    return { ok: true as const };
+  });
+
 export const deleteWeek = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => z.object({ weekId: z.string().uuid() }).parse(data))

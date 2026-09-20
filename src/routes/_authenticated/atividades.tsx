@@ -863,10 +863,7 @@ function AtividadesPage() {
   const canEditPlanningFields = session.roles.some(
     (role) => role === "planning" || role === "admin",
   );
-  const isPlanning =
-    session.roles.includes("planning") ||
-    (session.roles.includes("admin") &&
-      session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br");
+  const isPlanning = session.roles.includes("planning") || session.roles.includes("admin");
   const canAccessSap = isPlanning;
   const canExportActivities = canAccessSap || effectiveRoles.includes("operation");
   const canFilterReleaseType = canEditPlanningFields || effectiveRoles.includes("operation");
@@ -978,11 +975,12 @@ function AtividadesPage() {
   const availableWeeks = useQuery({
     queryKey: ["activity-working-weeks", session.userId, session.worksiteId],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      let request = (supabase as any)
         .from("weeks")
-        .select("id,code,label,start_date,end_date,is_active,lifecycle_status")
-        .in("lifecycle_status", ["operational", "preparation"])
-        .order("start_date", { ascending: true });
+        .select("id,code,label,start_date,end_date,is_active,lifecycle_status,sap_closure_status,sap_closure_deadline")
+        .order("start_date", { ascending: false });
+      request = canAccessSap ? request.limit(6) : request.in("lifecycle_status", ["operational", "preparation"]);
+      const { data, error } = await request;
       if (error) throw error;
       return data ?? [];
     },
@@ -2290,7 +2288,7 @@ function AtividadesPage() {
         eyebrow={
           activeWeek.data?.lifecycle_status === "preparation"
             ? "Semana em preparação"
-            : "Semana operacional"
+            : activeWeek.data?.lifecycle_status === "operational" ? "Semana operacional" : "Fechamento SAP"
         }
         title={activeWeek.data?.label ?? "—"}
         description={
@@ -2314,7 +2312,7 @@ function AtividadesPage() {
                 {(availableWeeks.data ?? []).map((week: any) => (
                   <option key={week.id} value={week.id}>
                     {week.label} —{" "}
-                    {week.lifecycle_status === "preparation" ? "Em preparação" : "Operacional"}
+                    {week.lifecycle_status === "preparation" ? "Em preparação" : week.lifecycle_status === "operational" ? "Operacional" : "Fechamento SAP"}
                   </option>
                 ))}
               </select>
@@ -2323,7 +2321,7 @@ function AtividadesPage() {
               <>
                 <button
                   onClick={() => sapImportInputRef.current?.click()}
-                  disabled={isSapImporting || !activeWeek.data}
+                  disabled={isSapImporting || !activeWeek.data || activeWeek.data.sap_closure_status === "closed" || (activeWeek.data.sap_closure_deadline && new Date(activeWeek.data.sap_closure_deadline) < new Date())}
                   className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title={`Importar a extração SAP para ${activeWeek.data?.label ?? "a semana selecionada"}`}
                 >

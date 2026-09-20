@@ -4,7 +4,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
-import { importWeek, activateWeek, deleteWeek } from "@/lib/week-import.functions";
+import { importWeek, activateWeek, deleteWeek, manageSapClosure } from "@/lib/week-import.functions";
 import { toast } from "sonner";
 import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown, Trash2 } from "lucide-react";
 import type { SessionInfo } from "./route";
@@ -223,11 +223,18 @@ function toISODate(v: any): string | null {
 }
 
 function PlanejamentoPage() {
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
   const qc = useQueryClient();
   const [showImm, setShowImm] = useState(false);
   const [showImmImport, setShowImmImport] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [exportingId, setExportingId] = useState<string | null>(null);
+  const [sapActionWeek, setSapActionWeek] = useState<any | null>(null);
+  const [sapAction, setSapAction] = useState<"close" | "extend" | "reopen">("close");
+  const [sapReason, setSapReason] = useState("");
+  const [sapDeadline, setSapDeadline] = useState("");
+  const [savingSapClosure, setSavingSapClosure] = useState(false);
+  const isAdmin = session.roles.includes("admin");
 
   const activeWeek = useQuery({
     queryKey: ["active-week"],
@@ -247,13 +254,44 @@ function PlanejamentoPage() {
       (
         await (supabase as any)
           .from("weeks")
-          .select("id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at")
+          .select("id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at, sap_closure_status, sap_closure_deadline, sap_closed_at")
           .order("start_date", { ascending: false })
       ).data ?? [],
   });
 
   const activateFn = useServerFn(activateWeek);
   const deleteFn = useServerFn(deleteWeek);
+  const manageSapClosureFn = useServerFn(manageSapClosure);
+
+  function openSapAction(week: any, action: "close" | "extend" | "reopen") {
+    setSapActionWeek(week);
+    setSapAction(action);
+    setSapReason("");
+    const currentDeadline = week.sap_closure_deadline ? new Date(week.sap_closure_deadline) : new Date(`${week.end_date}T12:00:00`);
+    setSapDeadline(new Date(currentDeadline.getTime() - currentDeadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+  }
+
+  async function submitSapAction() {
+    if (!sapActionWeek || sapReason.trim().length < 3) return toast.error("Informe o motivo da alteração.");
+    if (sapAction === "extend" && !sapDeadline) return toast.error("Informe o novo prazo.");
+    setSavingSapClosure(true);
+    try {
+      const result = await manageSapClosureFn({ data: sapAction === "extend"
+        ? { weekId: sapActionWeek.id, action: "extend" as const, deadline: new Date(sapDeadline).toISOString(), reason: sapReason.trim() }
+        : { weekId: sapActionWeek.id, action: sapAction, reason: sapReason.trim() } });
+      if (!result.ok) return toast.error(result.error);
+      toast.success(sapAction === "close" ? "Fechamento SAP encerrado." : sapAction === "reopen" ? "Fechamento SAP reaberto." : "Prazo do fechamento SAP prorrogado.");
+      setSapActionWeek(null);
+      await Promise.all([
+        qc.invalidateQueries({ queryKey: ["weeks-list"] }),
+        qc.invalidateQueries({ queryKey: ["active-week"] }),
+        qc.invalidateQueries({ queryKey: ["activity-working-weeks"] }),
+        qc.invalidateQueries({ queryKey: ["sap-confirmation-overview"] }),
+      ]);
+    } finally {
+      setSavingSapClosure(false);
+    }
+  }
 
   async function exportWeekById(week: { id: string; code: string }) {
     if (exportingId) return;
@@ -507,6 +545,10 @@ function PlanejamentoPage() {
                         ) : (
                           <span className="text-[11px] text-muted-foreground">Encerrada</span>
                         )}
+                        <div className="mt-1 text-[10px] text-muted-foreground">
+                          SAP: {w.sap_closure_status === "closed" || (w.sap_closure_deadline && new Date(w.sap_closure_deadline) < new Date()) ? "Fechado" : "Aberto"}
+                          {w.sap_closure_deadline ? ` até ${new Date(w.sap_closure_deadline).toLocaleString("pt-BR")}` : ""}
+                        </div>
                       </td>
                       <td className="px-3 py-2 text-right">
                         <div className="flex flex-wrap justify-end gap-1">
@@ -519,6 +561,17 @@ function PlanejamentoPage() {
                             <Download className="h-3.5 w-3.5" />
                             {exportingId === w.id ? "Baixando…" : "Baixar"}
                           </button>
+                          {isAdmin && (
+                            <>
+                              {w.sap_closure_status !== "closed" && (!w.sap_closure_deadline || new Date(w.sap_closure_deadline) >= new Date()) && (
+                                <button onClick={() => openSapAction(w, "close")} className="btn-ghost py-1 text-[11px]">Fechar SAP agora</button>
+                              )}
+                              <button onClick={() => openSapAction(w, "extend")} className="btn-ghost py-1 text-[11px]">Prorrogar prazo</button>
+                              {(w.sap_closure_status === "closed" || (w.sap_closure_deadline && new Date(w.sap_closure_deadline) < new Date())) && (
+                                <button onClick={() => openSapAction(w, "reopen")} className="btn-ghost py-1 text-[11px]">Reabrir fechamento</button>
+                              )}
+                            </>
+                          )}
                           {w.lifecycle_status !== "operational" && !w.is_active && (
                             <>
                               <button
@@ -578,6 +631,21 @@ function PlanejamentoPage() {
           )}
         </Panel>
       </div>
+
+      {sapActionWeek && (
+        <Modal
+          title={sapAction === "close" ? "Fechar conferência SAP agora" : sapAction === "reopen" ? "Reabrir conferência SAP" : "Prorrogar prazo da conferência SAP"}
+          description={`${sapActionWeek.label} · ${sapActionWeek.code}`}
+          onClose={() => !savingSapClosure && setSapActionWeek(null)}
+          footer={<><button className="btn-ghost" disabled={savingSapClosure} onClick={() => setSapActionWeek(null)}>Cancelar</button><button className="btn-primary" disabled={savingSapClosure} onClick={submitSapAction}>{savingSapClosure ? "Salvando…" : "Confirmar"}</button></>}
+        >
+          <div className="grid gap-3">
+            {sapAction === "extend" && <Field label="Novo prazo" required><input type="datetime-local" className="input-base" value={sapDeadline} onChange={(event) => setSapDeadline(event.target.value)} /></Field>}
+            <Field label="Motivo" required><textarea rows={3} className="input-base" value={sapReason} onChange={(event) => setSapReason(event.target.value)} placeholder="Explique o motivo desta alteração" /></Field>
+            <p className="text-[11px] text-muted-foreground">A ação ficará registrada com responsável, data, horário e motivo.</p>
+          </div>
+        </Modal>
+      )}
 
       {showImport && (
         <ImportModal

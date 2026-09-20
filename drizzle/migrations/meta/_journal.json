@@ -57,6 +57,13 @@
       "when": 1790208000000,
       "tag": "0007_operational_history_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1790253000000,
+      "tag": "0008_sap_week_closure_control",
+      "breakpoints": true
     }
   ]
 }
