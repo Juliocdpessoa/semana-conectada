@@ -111,7 +111,6 @@ BEGIN
   FROM public.overtime_requests r
   WHERE r.worksite_id = _worksite_id
     AND r.overtime_date < _cutoff_date
-    AND r.status IN ('approved', 'rejected', 'cancelled')
   ON CONFLICT (source_type, source_id) DO UPDATE
     SET archive_id = excluded.archive_id,
         worksite_id = excluded.worksite_id,
@@ -134,12 +133,12 @@ BEGIN
         archived_at = now();
 
   SELECT count(*)::integer INTO v_overtime_count
-  FROM public.operational_archive_rows
-  WHERE archive_id = v_archive_id AND source_type = 'overtime';
+  FROM public.operational_archive_rows ar
+  WHERE ar.archive_id = v_archive_id AND ar.source_type = 'overtime';
 
   SELECT count(*)::integer INTO v_scale_count
-  FROM public.operational_archive_rows
-  WHERE archive_id = v_archive_id AND source_type = 'scale_change';
+  FROM public.operational_archive_rows ar
+  WHERE ar.archive_id = v_archive_id AND ar.source_type = 'scale_change';
 
   UPDATE public.operational_archives
   SET overtime_count = v_overtime_count,
