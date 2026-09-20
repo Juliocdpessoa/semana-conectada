@@ -84,7 +84,46 @@ export const loadOperationalArchiveRows = createServerFn({ method: "POST" })
         rows.push(...(page ?? []));
         if (!page?.length || page.length < 1000) break;
       }
-      return { ok: true as const, archive, rows };
+      const batchIds = Array.from(
+        new Set(rows.map((row) => row.payload?.batch_id).filter(Boolean)),
+      ) as string[];
+      const [{ data: worksite, error: worksiteError }, batchesResult] = await Promise.all([
+        db.from("worksites").select("id,code,name,is_active,created_at,updated_at").eq("id", access.worksiteId).maybeSingle(),
+        batchIds.length
+          ? db.from("scheduled_transport_batches").select("*").in("id", batchIds)
+          : Promise.resolve({ data: [], error: null }),
+      ]);
+      if (worksiteError) throw new Error(worksiteError.message);
+      if (batchesResult.error) throw new Error(batchesResult.error.message);
+      const batchesById = new Map((batchesResult.data ?? []).map((batch: any) => [batch.id, batch]));
+      const enrichedRows = rows.map((row) => {
+        const batch = row.payload?.batch_id ? batchesById.get(row.payload.batch_id) : null;
+        return {
+          ...row,
+          payload: {
+            ...row.payload,
+            worksite_code: worksite?.code ?? "",
+            worksite_name: worksite?.name ?? "",
+            worksite_active: worksite?.is_active ?? null,
+            batch_start_date: batch?.start_date ?? null,
+            batch_end_date: batch?.end_date ?? null,
+            batch_weekdays: batch?.weekdays ?? null,
+            batch_entry_time: batch?.entry_time ?? null,
+            batch_departure_time: batch?.departure_time ?? null,
+            batch_needs_snack: batch?.needs_snack ?? null,
+            batch_needs_transport: batch?.needs_transport ?? null,
+            batch_order_number: batch?.order_number ?? null,
+            batch_service_description: batch?.service_description ?? null,
+            batch_observation: batch?.observation ?? null,
+            batch_created_by_user_id: batch?.created_by_user_id ?? null,
+            batch_created_by_name: batch?.created_by_name ?? null,
+            batch_created_by_email: batch?.created_by_email ?? null,
+            batch_created_at: batch?.created_at ?? null,
+            batch_updated_at: batch?.updated_at ?? null,
+          },
+        };
+      });
+      return { ok: true as const, archive, rows: enrichedRows };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao montar o arquivo." };
     }
