@@ -1363,7 +1363,7 @@ export type Database = {
         | "logistics"
         | "operation"
       approval_status: "pending" | "approved" | "blocked"
-      change_source: "individual" | "bulk" | "import" | "sync" | "planning"
+      change_source: "individual" | "bulk" | "import" | "sync" | "planning" | "operation"
       sync_status: "synced" | "pending" | "error"
     }
     CompositeTypes: {
@@ -1503,7 +1503,7 @@ export const Constants = {
         "operation",
       ],
       approval_status: ["pending", "approved", "blocked"],
-      change_source: ["individual", "bulk", "import", "sync", "planning"],
+      change_source: ["individual", "bulk", "import", "sync", "planning", "operation"],
       sync_status: ["synced", "pending", "error"],
     },
   },

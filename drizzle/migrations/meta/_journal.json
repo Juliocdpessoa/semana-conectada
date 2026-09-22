@@ -64,6 +64,20 @@
       "when": 1790253000000,
       "tag": "0008_sap_week_closure_control",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1790253060000,
+      "tag": "0009_add_operation_history_source",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1790253120000,
+      "tag": "0010_track_operation_pt_color",
+      "breakpoints": true
     }
   ]
 }

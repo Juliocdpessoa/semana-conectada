@@ -5,6 +5,12 @@ ALTER TABLE public.weeks
   ADD COLUMN IF NOT EXISTS sap_closed_at timestamptz,
   ADD COLUMN IF NOT EXISTS sap_closed_by uuid REFERENCES auth.users(id);
 
+-- Alguns ambientes antigos ainda não receberam a migração de snapshot do SAP.
+-- Mantém esta migração autocontida e segura para reaplicação.
+ALTER TABLE public.activities
+  ADD COLUMN IF NOT EXISTS sap_status_snapshot text,
+  ADD COLUMN IF NOT EXISTS sap_status_snapshot_at timestamptz;
+
 CREATE OR REPLACE FUNCTION public.can_access_sap(_user_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER SET search_path=public AS $$
   SELECT public.is_approved(_user_id)

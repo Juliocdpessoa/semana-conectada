@@ -1084,6 +1084,34 @@ function AtividadesPage() {
     placeholderData: (previous) => previous,
   });
 
+  useEffect(() => {
+    const weekId = activeWeek.data?.id;
+    if (!weekId) return;
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const channel = supabase
+      .channel(`activities-live-${weekId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "activities", filter: `week_id=eq.${weekId}` },
+        (payload) => {
+          if (refreshTimer) clearTimeout(refreshTimer);
+          refreshTimer = setTimeout(() => {
+            void qc.invalidateQueries({ queryKey: ["activities", weekId] });
+            const activityId = String((payload.new as { id?: string } | null)?.id ?? "");
+            if (activityId) {
+              void qc.invalidateQueries({ queryKey: ["activity-timeline", activityId] });
+            }
+          }, 250);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) clearTimeout(refreshTimer);
+      void supabase.removeChannel(channel);
+    };
+  }, [activeWeek.data?.id, qc]);
+
   const sapOverview = useQuery({
     queryKey: ["sap-confirmation-overview", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canAccessSap,
@@ -3959,7 +3987,11 @@ function ActivityTimeline({ activityId }: { activityId: string }) {
                     {h.changed_by_name || h.changed_by_email || "Sistema"}
                   </span>
                   <span className="status-pill border-border bg-muted text-muted-foreground">
-                    {h.change_source === "planning" ? "Planejamento" : h.change_source}
+                    {h.change_source === "planning"
+                      ? "Planejamento"
+                      : h.change_source === "operation"
+                        ? "Operação"
+                        : h.change_source}
                   </span>
                 </div>
                 <div className="mt-1 space-y-0.5">
