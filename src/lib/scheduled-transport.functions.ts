@@ -74,44 +74,24 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
         return next;
       };
 
-      const optionsRows: any[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await applyDateRange(
-          db
-            .from("scheduled_transport_requests")
-            .select("transport_date,employee_role,entry_time,departure_time")
-            .order("transport_date", { ascending: false })
-            .range(from, from + 999),
-        );
-        if (error) throw error;
-        if (!data?.length) break;
-        optionsRows.push(...data);
-        if (data.length < 1000) break;
-      }
-
-      const summaryRows: any[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data, error } = await applyFilters(
-          db
-            .from("scheduled_transport_requests")
-            .select("employee_master_id,status,needs_transport")
-            .range(from, from + 999),
-        );
-        if (error) throw error;
-        if (!data?.length) break;
-        summaryRows.push(...data);
-        if (data.length < 1000) break;
-      }
-
-      const scheduled = summaryRows.filter((row) => row.status === "scheduled");
-      const cancelled = summaryRows.filter((row) => row.status === "cancelled");
-      const kpis = {
-        employees: new Set(scheduled.map((row) => row.employee_master_id)).size,
-        transport: new Set(scheduled.filter((row) => row.needs_transport).map((row) => row.employee_master_id)).size,
-        noTransport: new Set(scheduled.filter((row) => !row.needs_transport).map((row) => row.employee_master_id)).size,
-        cancelled: new Set(cancelled.map((row) => row.employee_master_id)).size,
-      };
-
+      const metadataSearch = input.search
+        ?.replace(/[,%()]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim() ?? "";
+      const metadataPromise = db.rpc(
+        "get_scheduled_transport_metadata",
+        {
+          p_worksite_id: info.worksiteId,
+          p_date_from: input.start_date || defaultStart,
+          p_date_to: input.end_date ?? null,
+          p_search: metadataSearch,
+          p_job_title: input.job_title ?? null,
+          p_status: input.status,
+          p_transport: input.transport,
+          p_entry_time: input.entry_time ?? null,
+          p_departure_time: input.departure_time ?? null,
+        },
+      );
       let rowsQuery = applyFilters(
         db
           .from("scheduled_transport_requests")
@@ -123,8 +103,11 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
         const from = (input.page - 1) * input.page_size;
         rowsQuery = rowsQuery.range(from, from + input.page_size - 1);
       }
-      const { data: rows, error: rowsError, count } = await rowsQuery;
+      const [rowsResult, metadataResult] = await Promise.all([rowsQuery, metadataPromise]);
+      const { data: rows, error: rowsError, count } = rowsResult;
       if (rowsError) throw rowsError;
+      if (metadataResult.error) throw metadataResult.error;
+      const metadata = metadataResult.data as any;
 
       const batchIds = Array.from(new Set((rows ?? []).map((row: any) => row.batch_id).filter(Boolean))) as string[];
       const batches: any[] = [];
@@ -142,16 +125,13 @@ export const listScheduledTransport = createServerFn({ method: "POST" })
         ok: true as const,
         rows: rows ?? [],
         batches,
-        total: count ?? summaryRows.length,
-        kpis,
+        total: count ?? 0,
+        kpis: metadata?.kpis ?? { employees: 0, transport: 0, noTransport: 0, cancelled: 0 },
         options: {
-          jobTitles: [...new Set(optionsRows.map((row) => row.employee_role).filter(Boolean))].sort(),
-          dates: [...new Set(optionsRows.map((row) => row.transport_date).filter(Boolean))].sort(),
-          entryTimes: [...new Set(optionsRows.map((row) => row.entry_time).filter(Boolean))].sort(),
-          departurePairs: optionsRows.map((row) => ({
-            entry: row.entry_time,
-            departure: row.departure_time,
-          })),
+          jobTitles: metadata?.jobTitles ?? [],
+          dates: metadata?.dates ?? [],
+          entryTimes: metadata?.entryTimes ?? [],
+          departurePairs: metadata?.departurePairs ?? [],
         },
       };
     } catch (error) {

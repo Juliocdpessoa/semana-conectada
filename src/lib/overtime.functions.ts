@@ -539,52 +539,18 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    const baseInput = { ...input, entryTime: undefined, departureTime: undefined };
-    const metadataRows: Array<{
-      entry_time: string | null;
-      departure_time: string;
-      status: string;
-      needs_snack: boolean;
-      needs_transport: boolean;
-    }> = [];
-    if (input.includeMetadata) {
-      for (let from = 0; ; from += 1000) {
-        let metadataQuery = db
-          .from("overtime_requests")
-          .select("entry_time,departure_time,status,needs_snack,needs_transport")
-          .eq("worksite_id", info.worksiteId)
-          .neq("status", "cancelled")
-          .order("id", { ascending: false })
-          .range(from, from + 999);
-        metadataQuery = applyOvertimeExportFilters(metadataQuery, baseInput);
-        const { data, error } = await metadataQuery;
-        if (error) return { ok: false as const, error: error.message };
-        metadataRows.push(...(data ?? []));
-        if (!data?.length || data.length < 1000) break;
-      }
-    }
-
-    const entryTimes = [
-      ...new Set(metadataRows.map((row) => row.entry_time).filter(Boolean)),
-    ].sort();
-    const entryRows = input.entryTime
-      ? metadataRows.filter((row) => row.entry_time === input.entryTime)
-      : metadataRows;
-    const departureTimes = [
-      ...new Set(entryRows.map((row) => row.departure_time).filter(Boolean)),
-    ].sort();
-    const summaryRows = entryRows.filter(
-      (row) => !input.departureTime || row.departure_time === input.departureTime,
-    );
-    const kpis = {
-      total: summaryRows.length,
-      pending: summaryRows.filter((row) => row.status === "pending").length,
-      approved: summaryRows.filter((row) => row.status === "approved").length,
-      rejected: summaryRows.filter((row) => row.status === "rejected").length,
-      snacks: summaryRows.filter((row) => row.status === "approved" && row.needs_snack).length,
-      transports: summaryRows.filter((row) => row.status === "approved" && row.needs_transport)
-        .length,
-    };
+    const metadataSearch = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
+    const metadataPromise = input.includeMetadata
+      ? db.rpc("get_overtime_export_metadata", {
+        p_worksite_id: info.worksiteId,
+        p_date_from: input.dateFrom ?? null,
+        p_date_to: input.dateTo ?? null,
+        p_entry_time: input.entryTime ?? null,
+        p_departure_time: input.departureTime ?? null,
+        p_transport: input.transport,
+        p_employee_search: metadataSearch,
+      })
+      : Promise.resolve({ data: null, error: null });
 
     const from = (input.page - 1) * input.pageSize;
     let pageQuery = db
@@ -596,15 +562,21 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
       .order("id", { ascending: false })
       .range(from, from + input.pageSize - 1);
     pageQuery = applyOvertimeExportFilters(pageQuery, input);
-    const { data, error, count } = await pageQuery;
+    const [{ data, error, count }, metadataResult] = await Promise.all([
+      pageQuery,
+      metadataPromise,
+    ]);
     if (error) return { ok: false as const, error: error.message };
+    if (metadataResult.error)
+      return { ok: false as const, error: metadataResult.error.message };
+    const metadata = metadataResult.data as any;
     return {
       ok: true as const,
       rows: data ?? [],
       total: count ?? 0,
-      entryTimes: input.includeMetadata ? entryTimes : null,
-      departureTimes: input.includeMetadata ? departureTimes : null,
-      kpis: input.includeMetadata ? kpis : null,
+      entryTimes: input.includeMetadata ? (metadata?.entryTimes ?? []) : null,
+      departureTimes: input.includeMetadata ? (metadata?.departureTimes ?? []) : null,
+      kpis: input.includeMetadata ? (metadata?.kpis ?? null) : null,
     };
   });
 
