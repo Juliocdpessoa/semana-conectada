@@ -3019,7 +3019,8 @@ function AtividadesPage() {
                                 value={planningValue(r, field)}
                                 field={field}
                                 editable={
-                                  canEditPlanningFields &&
+                                  (canEditPlanningFields ||
+                                    (isOperationOnly && field === "pt_number")) &&
                                   (field !== "scheduled_date" || canEditPlanningDate)
                                 }
                                 onChange={(value) => setPlanningValue(r.id, field, value)}

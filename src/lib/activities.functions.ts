@@ -445,7 +445,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       if (data.rows.length !== 1) {
         return {
           ok: false as const,
-          error: "O perfil Operação pode alterar a cor de uma PT por vez.",
+          error: "O perfil Operação pode alterar o número e a cor de uma PT por vez.",
         };
       }
       const requested = data.rows[0];
@@ -458,13 +458,12 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       if (!current) return { ok: false as const, error: "Atividade não encontrada." };
       const changesRestrictedField =
         (current.pbs ?? null) !== requested.pbs ||
-        (current.pt_number ?? null) !== requested.ptNumber ||
         (current.release_type ?? null) !== requested.releaseType ||
         (current.scheduled_date ?? null) !== requested.scheduledDate;
       if (changesRestrictedField) {
         return {
           ok: false as const,
-          error: "O perfil Operação pode alterar somente a cor da PT.",
+          error: "O perfil Operação pode alterar somente o número e a cor da PT.",
         };
       }
       if (
