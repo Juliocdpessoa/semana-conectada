@@ -41,6 +41,7 @@ import {
 } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { canRetryActivityReport } from "@/lib/activity-report-conflict";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -3720,6 +3721,14 @@ function ApontarModal({
   onClose: () => void;
   onSaved: () => void;
 }) {
+  const reportBaseline = useRef<{
+    version: number;
+    status: string;
+    justification: string | null;
+    observation: string | null;
+    planning_data: unknown;
+  }>(activity);
+  const saveInFlight = useRef(false);
   const [status, setStatus] = useState(activity.status);
   const [justification, setJustification] = useState(activity.justification ?? "");
   const [observation, setObservation] = useState(activity.observation ?? "");
@@ -3734,6 +3743,7 @@ function ApontarModal({
     status === "NÃO EXECUTADO" && justification === IMMEDIATE_JUSTIFICATION;
 
   async function save() {
+    if (saveInFlight.current) return;
     if (needsJust && !justification.trim()) {
       toast.error("Justificativa é obrigatória para este status.");
       return;
@@ -3743,27 +3753,52 @@ function ApontarModal({
       setImmediatePickerOpen(true);
       return;
     }
+    saveInFlight.current = true;
     setSaving(true);
     try {
-      const res = await call({
-        data: {
+      const data = {
           activityId: activity.id,
-          expectedVersion: activity.version,
+          expectedVersion: reportBaseline.current.version,
           status,
           justification: justification.trim() || null,
           observation: observation.trim() || null,
           immediateActivityIds: needsImmediateLink ? Array.from(selectedImmediateIds) : [],
-        },
-      });
+        };
+      let res = await call({ data });
+      // A colour/PT update (including our own) can advance the version.
+      // Keep optimistic locking on every attempt; never overwrite a changed report.
+      for (let retry = 0; retry < 2 && !res.ok && "conflict" in res; retry++) {
+        const current = res.current;
+        if (!current || !canRetryActivityReport(reportBaseline.current, current)) break;
+        reportBaseline.current = { ...reportBaseline.current, ...current };
+        res = await call({ data: { ...data, expectedVersion: current.version } });
+      }
       if (!res.ok) {
-        if ((res as any).conflict)
-          toast.error("Esta atividade foi alterada por outro usuário. Recarregue e revise.");
-        else toast.error(res.error ?? "Erro ao salvar apontamento.");
+        if ("conflict" in res && res.current) {
+          const current = res.current;
+          if (canRetryActivityReport(reportBaseline.current, current)) {
+            reportBaseline.current = { ...reportBaseline.current, ...current };
+            toast.info("A tarefa recebeu atualizações. Seu preenchimento foi mantido; tente salvar novamente.");
+          } else {
+            reportBaseline.current = { ...reportBaseline.current, ...current };
+            setStatus(current.status);
+            setJustification(current.justification ?? "");
+            setObservation(current.observation ?? "");
+            const planningData = current.planning_data;
+            setSelectedImmediateIds(new Set(getLinkedImmediateIds(
+              planningData && typeof planningData === "object" && !Array.isArray(planningData)
+                ? planningData : null,
+            )));
+            toast.info("O apontamento mudou desde a abertura. Os dados atuais foram carregados; revise antes de salvar.");
+          }
+        }
+        else toast.error("error" in res ? res.error ?? "Erro ao salvar apontamento." : "Não foi possível carregar a tarefa. Atualize a lista.");
         return;
       }
       toast.success("Apontamento salvo.");
       onSaved();
     } finally {
+      saveInFlight.current = false;
       setSaving(false);
     }
   }

@@ -185,7 +185,7 @@ export const updateActivity = createServerFn({ method: "POST" })
       if (/alterad[ao]s? por outro usu[aá]rio|recarregue/i.test(error.message)) {
         const { data: current } = await supabase
           .from("activities")
-          .select("id, version, status, justification, observation, reported_by_name")
+          .select("id, version, status, justification, observation, planning_data, reported_by_name")
           .eq("id", data.activityId)
           .maybeSingle();
         return { ok: false as const, conflict: true, current };
@@ -203,7 +203,7 @@ export const updateActivity = createServerFn({ method: "POST" })
       // Conflict: fetch current
       const { data: current } = await supabase
         .from("activities")
-        .select("id, version, status, justification, observation, reported_by_name")
+        .select("id, version, status, justification, observation, planning_data, reported_by_name")
         .eq("id", data.activityId)
         .maybeSingle();
       return { ok: false as const, conflict: true, current };
