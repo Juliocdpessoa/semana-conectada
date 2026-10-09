@@ -36,6 +36,8 @@ export type Database = {
           reported_by_email: string | null
           reported_by_name: string | null
           reported_by_user_id: string | null
+          sap_status_snapshot: string | null
+          sap_status_snapshot_at: string | null
           scheduled_date: string | null
           source_key: string
           source_row_number: number | null
@@ -69,6 +71,8 @@ export type Database = {
           reported_by_email?: string | null
           reported_by_name?: string | null
           reported_by_user_id?: string | null
+          sap_status_snapshot?: string | null
+          sap_status_snapshot_at?: string | null
           scheduled_date?: string | null
           source_key: string
           source_row_number?: number | null
@@ -102,6 +106,8 @@ export type Database = {
           reported_by_email?: string | null
           reported_by_name?: string | null
           reported_by_user_id?: string | null
+          sap_status_snapshot?: string | null
+          sap_status_snapshot_at?: string | null
           scheduled_date?: string | null
           source_key?: string
           source_row_number?: number | null
@@ -418,6 +424,101 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "employees_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operational_archive_rows: {
+        Row: {
+          archive_id: string
+          archived_at: string
+          id: number
+          payload: Json
+          record_date: string
+          source_id: string
+          source_type: string
+          worksite_id: string
+        }
+        Insert: {
+          archive_id: string
+          archived_at?: string
+          id?: number
+          payload: Json
+          record_date: string
+          source_id: string
+          source_type: string
+          worksite_id: string
+        }
+        Update: {
+          archive_id?: string
+          archived_at?: string
+          id?: number
+          payload?: Json
+          record_date?: string
+          source_id?: string
+          source_type?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_archive_rows_archive_id_fkey"
+            columns: ["archive_id"]
+            isOneToOne: false
+            referencedRelation: "operational_archives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operational_archive_rows_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      operational_archives: {
+        Row: {
+          cutoff_date: string
+          finalized_at: string | null
+          finalized_by: string | null
+          id: string
+          overtime_count: number
+          prepared_at: string
+          prepared_by: string | null
+          scale_change_count: number
+          status: string
+          worksite_id: string
+        }
+        Insert: {
+          cutoff_date: string
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          overtime_count?: number
+          prepared_at?: string
+          prepared_by?: string | null
+          scale_change_count?: number
+          status?: string
+          worksite_id: string
+        }
+        Update: {
+          cutoff_date?: string
+          finalized_at?: string | null
+          finalized_by?: string | null
+          id?: string
+          overtime_count?: number
+          prepared_at?: string
+          prepared_by?: string | null
+          scale_change_count?: number
+          status?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operational_archives_worksite_id_fkey"
             columns: ["worksite_id"]
             isOneToOne: false
             referencedRelation: "worksites"
@@ -757,6 +858,63 @@ export type Database = {
           },
           {
             foreignKeyName: "sap_confirmation_rows_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sap_week_closure_history: {
+        Row: {
+          action: string
+          changed_at: string
+          changed_by: string
+          changed_by_email: string | null
+          changed_by_name: string | null
+          id: string
+          new_deadline: string | null
+          previous_deadline: string | null
+          reason: string
+          week_id: string
+          worksite_id: string
+        }
+        Insert: {
+          action: string
+          changed_at?: string
+          changed_by: string
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          id?: string
+          new_deadline?: string | null
+          previous_deadline?: string | null
+          reason: string
+          week_id: string
+          worksite_id: string
+        }
+        Update: {
+          action?: string
+          changed_at?: string
+          changed_by?: string
+          changed_by_email?: string | null
+          changed_by_name?: string | null
+          id?: string
+          new_deadline?: string | null
+          previous_deadline?: string | null
+          reason?: string
+          week_id?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sap_week_closure_history_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sap_week_closure_history_worksite_id_fkey"
             columns: ["worksite_id"]
             isOneToOne: false
             referencedRelation: "worksites"
@@ -1107,6 +1265,10 @@ export type Database = {
           is_active: boolean
           label: string
           lifecycle_status: string
+          sap_closed_at: string | null
+          sap_closed_by: string | null
+          sap_closure_deadline: string | null
+          sap_closure_status: string
           sharepoint_item_id: string | null
           sheet_name: string | null
           source_file_name: string | null
@@ -1126,6 +1288,10 @@ export type Database = {
           is_active?: boolean
           label: string
           lifecycle_status?: string
+          sap_closed_at?: string | null
+          sap_closed_by?: string | null
+          sap_closure_deadline?: string | null
+          sap_closure_status?: string
           sharepoint_item_id?: string | null
           sheet_name?: string | null
           source_file_name?: string | null
@@ -1145,6 +1311,10 @@ export type Database = {
           is_active?: boolean
           label?: string
           lifecycle_status?: string
+          sap_closed_at?: string | null
+          sap_closed_by?: string | null
+          sap_closure_deadline?: string | null
+          sap_closure_status?: string
           sharepoint_item_id?: string | null
           sheet_name?: string | null
           source_file_name?: string | null
@@ -1271,6 +1441,38 @@ export type Database = {
         Args: { p_week_id: string }
         Returns: undefined
       }
+      assert_sap_closure_admin: {
+        Args: { p_week_id: string }
+        Returns: {
+          activated_at: string | null
+          activated_by: string | null
+          closed_at: string | null
+          code: string
+          created_at: string
+          end_date: string
+          id: string
+          imported_at: string | null
+          imported_by: string | null
+          is_active: boolean
+          label: string
+          lifecycle_status: string
+          sap_closed_at: string | null
+          sap_closed_by: string | null
+          sap_closure_deadline: string | null
+          sap_closure_status: string
+          sharepoint_item_id: string | null
+          sheet_name: string | null
+          source_file_name: string | null
+          start_date: string
+          worksite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "weeks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       brazil_easter_date: { Args: { p_year: number }; Returns: string }
       bulk_update_activity_planning_fields: {
         Args: { p_rows: Json }
@@ -1309,8 +1511,23 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      close_sap_week: {
+        Args: { p_reason: string; p_week_id: string }
+        Returns: undefined
+      }
       current_role_label: { Args: { _user_id: string }; Returns: string }
       current_worksite_id: { Args: { _user_id: string }; Returns: string }
+      extend_sap_week_deadline: {
+        Args: { p_deadline: string; p_reason: string; p_week_id: string }
+        Returns: undefined
+      }
+      finalize_operational_archive: {
+        Args: { _archive_id: string }
+        Returns: {
+          overtime_deleted: number
+          scale_change_deleted: number
+        }[]
+      }
       get_activities_page: {
         Args: {
           p_filters?: Json
@@ -1320,8 +1537,34 @@ export type Database = {
         }
         Returns: Json
       }
+      get_overtime_export_metadata: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_departure_time?: string
+          p_employee_search?: string
+          p_entry_time?: string
+          p_transport?: string
+          p_worksite_id: string
+        }
+        Returns: Json
+      }
       get_sap_confirmation_overview: {
         Args: { p_week_id: string }
+        Returns: Json
+      }
+      get_scheduled_transport_metadata: {
+        Args: {
+          p_date_from: string
+          p_date_to?: string
+          p_departure_time?: string
+          p_entry_time?: string
+          p_job_title?: string
+          p_search?: string
+          p_status?: string
+          p_transport?: string
+          p_worksite_id: string
+        }
         Returns: Json
       }
       has_role: {
@@ -1345,6 +1588,22 @@ export type Database = {
         Args: { p_date: string; p_worksite_id: string }
         Returns: boolean
       }
+      operational_history_cutoff: {
+        Args: { _reference_date?: string }
+        Returns: string
+      }
+      prepare_operational_archive: {
+        Args: { _cutoff_date?: string; _worksite_id: string }
+        Returns: {
+          archive_id: string
+          overtime_count: number
+          scale_change_count: number
+        }[]
+      }
+      reopen_sap_week: {
+        Args: { p_reason: string; p_week_id: string }
+        Returns: undefined
+      }
       sync_overtime_from_scale_row: {
         Args: {
           p_scale: Database["public"]["Tables"]["scheduled_transport_requests"]["Row"]
@@ -1363,7 +1622,13 @@ export type Database = {
         | "logistics"
         | "operation"
       approval_status: "pending" | "approved" | "blocked"
-      change_source: "individual" | "bulk" | "import" | "sync" | "planning" | "operation"
+      change_source:
+        | "individual"
+        | "bulk"
+        | "import"
+        | "sync"
+        | "planning"
+        | "operation"
       sync_status: "synced" | "pending" | "error"
     }
     CompositeTypes: {
@@ -1503,7 +1768,14 @@ export const Constants = {
         "operation",
       ],
       approval_status: ["pending", "approved", "blocked"],
-      change_source: ["individual", "bulk", "import", "sync", "planning", "operation"],
+      change_source: [
+        "individual",
+        "bulk",
+        "import",
+        "sync",
+        "planning",
+        "operation",
+      ],
       sync_status: ["synced", "pending", "error"],
     },
   },
