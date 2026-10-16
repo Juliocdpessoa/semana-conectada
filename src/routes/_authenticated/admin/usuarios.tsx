@@ -4,11 +4,12 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { setUserApproval } from "@/lib/activities.functions";
 import { createWorksite, setWorksiteMembership } from "@/lib/worksites.functions";
+import { filterUsersBySearch } from "@/lib/user-search";
 import { toast } from "sonner";
 import type { SessionInfo } from "../route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
-import { Building2, Users } from "lucide-react";
-import { useEffect, useState, type FormEvent } from "react";
+import { Building2, Search, Users } from "lucide-react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
   beforeLoad: ({ context }) => {
@@ -113,6 +114,7 @@ function AdminUsers() {
   const [creatingWorksite, setCreatingWorksite] = useState(false);
   const [allWorksites, setAllWorksites] = useState<Worksite[]>([]);
   const [savingMembership, setSavingMembership] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
   useEffect(() => {
     if (!isGlobalAdmin) return;
     void (supabase as any).from("worksites").select("id,code,name").eq("is_active", true).order("code")
@@ -191,6 +193,7 @@ function AdminUsers() {
   }
 
   const total = users.data?.length ?? 0;
+  const filteredUsers = useMemo(() => filterUsersBySearch(users.data ?? [], search), [users.data, search]);
   const pending = (users.data ?? []).filter((u) => u.approval_status === "pending").length;
 
   return (
@@ -250,7 +253,23 @@ function AdminUsers() {
       )}
 
       <Panel title={`Usuários · ${session.worksiteCode}`} padded={false}>
-        {users.data && users.data.length > 0 ? (
+        <div className="flex flex-wrap items-end gap-3 border-b border-border p-3">
+          <div className="w-full sm:max-w-md">
+            <label htmlFor="user-search" className="mb-1 block text-[11px] font-medium">Buscar usuários</label>
+            <div className="relative">
+              <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <input id="user-search" type="search" value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nome ou e-mail…"
+                className="input-field h-9 w-full pl-9" />
+            </div>
+          </div>
+          {search && <button type="button" onClick={() => setSearch("")} className="btn-ghost h-9 text-xs">Limpar busca</button>}
+          <span role="status" className="pb-2 text-xs text-muted-foreground">
+            {users.isLoading ? "Carregando usuários…" : `${filteredUsers.length} de ${total} usuários`}
+          </span>
+        </div>
+        {filteredUsers.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -264,7 +283,7 @@ function AdminUsers() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/60">
-                {users.data.map((u) => (
+                {filteredUsers.map((u) => (
                   <tr key={u.id} className="row-zebra">
                     <td className="px-3 py-2">{u.full_name || <span className="text-muted-foreground">—</span>}</td>
                     <td className="px-3 py-2 text-[12px] text-muted-foreground">{u.email}</td>
@@ -337,7 +356,9 @@ function AdminUsers() {
           </div>
         ) : (
           <div className="p-4">
-            <EmptyState icon={<Users className="h-4 w-4" />} title="Nenhum usuário cadastrado" />
+            <EmptyState icon={<Users className="h-4 w-4" />}
+              title={users.isLoading ? "Carregando usuários…" : users.isError ? "Não foi possível carregar os usuários" : search.trim() ? "Nenhum usuário encontrado" : "Nenhum usuário cadastrado"}
+              description={search.trim() && !users.isLoading && !users.isError ? "Tente outro nome ou e-mail, ou limpe a busca." : undefined} />
           </div>
         )}
       </Panel>
