@@ -23,6 +23,7 @@ import {
   CalendarClock,
 } from "lucide-react";
 import { BrandLogo } from "@/components/brand-logo";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 export type AppRole =
@@ -214,7 +215,7 @@ function AuthedLayout() {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-primary-foreground shadow-sm">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-[oklch(0.42_0.13_142)] text-white shadow-sm dark:bg-[oklch(0.25_0.04_150)]">
         <div className="mx-auto flex max-w-none items-center gap-4 px-4 py-2 sm:px-6">
           {/* Marca */}
           <Link
@@ -223,7 +224,7 @@ function AuthedLayout() {
           >
             <div className="leading-tight">
               <div className="text-[13px] font-semibold">NEXO</div>
-              <div className="hidden text-[10px] uppercase tracking-[0.09em] text-primary-foreground/70 lg:block">
+              <div className="hidden text-[10px] uppercase tracking-[0.09em] text-white/70 lg:block">
                 Gestão integrada da manutenção
               </div>
             </div>
@@ -245,9 +246,10 @@ function AuthedLayout() {
 
           {/* Ações à direita */}
           <div className="ml-auto flex items-center gap-2">
+            <ThemeToggle userId={s.userId} />
             {worksites.length > 1 && (
               <label className="hidden items-center gap-1.5 md:flex">
-                <span className="text-[10px] font-medium uppercase tracking-wide text-primary-foreground/70">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-white/70">
                   Obra
                 </span>
                 <select
@@ -267,11 +269,11 @@ function AuthedLayout() {
             )}
             <div className="hidden text-right md:block">
               <div className="text-[12px] font-medium leading-tight">{s.fullName || s.email}</div>
-              <div className="text-[10px] leading-tight text-primary-foreground/70">
+              <div className="text-[10px] leading-tight text-white/70">
                 {(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []).map(roleLabel).join(" + ")}
               </div>
               {s.worksiteCode && (
-                <div className="text-[9px] leading-tight text-primary-foreground/65">
+                <div className="text-[9px] leading-tight text-white/65">
                   {s.worksiteCode}
                 </div>
               )}
@@ -298,14 +300,14 @@ function AuthedLayout() {
 
         {/* Navegação mobile */}
         {menuOpen && (
-          <nav className="border-t border-white/10 bg-[oklch(0.42_0.13_142)] px-3 py-2 sm:hidden">
+          <nav className="border-t border-white/10 bg-[oklch(0.42_0.13_142)] px-3 py-2 sm:hidden dark:bg-[oklch(0.25_0.04_150)]">
             <div className="mb-2 rounded-md bg-white/10 px-3 py-2 text-[11px]">
               <div className="font-medium">{s.fullName || s.email}</div>
-              <div className="text-primary-foreground/70">
+              <div className="text-white/70">
                 {s.email} · {roleLabel(s.role)}
               </div>
               {s.worksiteCode && (
-                <div className="mt-0.5 text-primary-foreground/70">
+                <div className="mt-0.5 text-white/70">
                   Obra: {s.worksiteCode}
                 </div>
               )}
@@ -350,11 +352,11 @@ function DesktopNavItem({ to, label, icon }: { to: string; label: string; icon: 
     <Link
       to={to}
       className={cn(
-        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-primary-foreground/85 transition-colors hover:bg-white/10 hover:text-primary-foreground",
+        "group relative inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12px] font-medium text-white/85 transition-colors hover:bg-white/10 hover:text-white",
       )}
       activeProps={{
         className:
-          "bg-white/15 text-primary-foreground after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-primary-foreground",
+          "bg-white/15 text-white after:absolute after:inset-x-2 after:-bottom-[9px] after:h-[2px] after:rounded-full after:bg-white",
       }}
     >
       {icon}
@@ -367,9 +369,9 @@ function MobileNavItem({ to, label, icon }: { to: string; label: string; icon: R
   return (
     <Link
       to={to}
-      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-primary-foreground/85 hover:bg-white/10"
+      className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-[13px] font-medium text-white/85 hover:bg-white/10"
       activeProps={{
-        className: "bg-white/15 text-primary-foreground border-l-2 border-primary-foreground",
+        className: "bg-white/15 text-white border-l-2 border-white",
       }}
     >
       {icon}

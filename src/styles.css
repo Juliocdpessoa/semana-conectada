@@ -61,6 +61,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 5px;
 
   /* Superfícies frias */
@@ -108,6 +109,66 @@
   --sidebar-accent-foreground: oklch(0.98 0.005 150);
   --sidebar-border: oklch(0.3 0.04 150);
   --sidebar-ring: oklch(0.72 0.2 142);
+}
+
+.dark {
+  color-scheme: dark;
+  --background: #111820;
+  --surface: #19232d;
+  --surface-muted: #1e2b36;
+  --foreground: #edf3f8;
+  --card: #19232d;
+  --card-foreground: #edf3f8;
+  --popover: #1c2935;
+  --popover-foreground: #edf3f8;
+  --primary: #63d68b;
+  --primary-foreground: #102118;
+  --secondary: #89e5a8;
+  --secondary-foreground: #102118;
+  --muted: #23323b;
+  --muted-foreground: #b4c2cc;
+  --accent: #203e30;
+  --accent-foreground: #b0efc3;
+  --success: #63d68b;
+  --success-foreground: #102118;
+  --warning: #f0bd57;
+  --warning-foreground: #ffdc8a;
+  --destructive: #ff8585;
+  --destructive-foreground: #251112;
+  --border: #344651;
+  --border-strong: #58707f;
+  --input: #4b606e;
+  --ring: #63d68b;
+  --sidebar: #14291f;
+  --sidebar-foreground: #edf3f8;
+  --sidebar-primary: #63d68b;
+  --sidebar-primary-foreground: #102118;
+  --sidebar-accent: #203e30;
+  --sidebar-accent-foreground: #edf3f8;
+  --sidebar-border: #344651;
+  --sidebar-ring: #63d68b;
+}
+
+.dark .recharts-cartesian-axis-tick-value { fill: var(--muted-foreground); }
+.dark .recharts-cartesian-grid line { stroke: var(--border); }
+.dark .recharts-default-tooltip {
+  background-color: var(--popover) !important;
+  border-color: var(--border) !important;
+  color: var(--foreground);
+}
+.dark [data-sonner-toaster] {
+  --success-bg: #173728;
+  --success-border: #2f6849;
+  --success-text: #9debba;
+  --error-bg: #3d2327;
+  --error-border: #78434b;
+  --error-text: #ffb4b4;
+  --warning-bg: #3a301e;
+  --warning-border: #77613c;
+  --warning-text: #ffdc8a;
+  --info-bg: #1c3147;
+  --info-border: #3e6587;
+  --info-text: #a9d6ff;
 }
 
 @layer base {
