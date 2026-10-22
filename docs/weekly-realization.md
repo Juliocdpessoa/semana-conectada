@@ -26,6 +26,8 @@ O centro vem de `CenTrab`/`CENTRO_DE_TRABALHO`/`Centro de trabalho` (fallback `s
 
 ## Entrada de disponibilidade
 
+O editor permite selecionar vários centros de trabalho e datas, com busca e limpeza dos filtros. O total do recorte e a paginação refletem as linhas filtradas, mantendo o total da semana separado. Edições e remoções usam o índice original do rascunho; o salvamento valida e envia a tabela completa, inclusive linhas ocultas. Filtros não alteram o RS nem restringem o histórico semanal. Importar/reaproveitar uma tabela ou adicionar uma linha limpa os filtros para mostrar o novo conteúdo.
+
 ## Análise por local e tarefas sem apropriação
 
 `get_weekly_rs_analysis` retorna agregados por centro/local. Associações SAP/programação são calculadas em lote por confirmação normalizada, evitando varreduras correlacionadas por linha. `get_weekly_rs_pending` pagina até 100 linhas (50 na tela), com busca e filtro de justificativa no servidor. O helper `weekly_rs_activity_evidence` não pode ser executado diretamente por usuários.

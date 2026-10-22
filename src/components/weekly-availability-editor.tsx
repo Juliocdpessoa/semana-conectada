@@ -3,6 +3,11 @@ import { Plus, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Panel } from "@/components/ui-kit";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  filterAvailabilityDraft,
+  filteredAvailabilityHours,
+} from "@/lib/weekly-availability-filters";
 import {
   availabilityKey,
   parseAvailabilityGrid,
@@ -24,6 +29,86 @@ export type AvailabilityDocument = {
 type DraftRow = Omit<AvailabilityRow, "hours"> & { hours: string };
 const draftRows = (rows: AvailabilityRow[]): DraftRow[] =>
   rows.map((r) => ({ ...r, hours: serviceHoursInput(r.hours) }));
+
+function AvailabilityFilter({
+  label,
+  options,
+  selected,
+  onChange,
+}: {
+  label: string;
+  options: Array<{ value: string; label: string }>;
+  selected: string[];
+  onChange: (next: string[]) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const visible = options.filter((option) =>
+    availabilityKey(option.label).includes(availabilityKey(search)),
+  );
+  return (
+    <div className="w-full sm:w-56">
+      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+      <Popover>
+        <PopoverTrigger asChild>
+          <button
+            type="button"
+            className="input-base flex w-full items-center justify-between text-left text-xs"
+            aria-label={`Filtrar ${label}`}
+            title={options
+              .filter((option) => selected.includes(option.value))
+              .map((option) => option.label)
+              .join(", ")}
+          >
+            <span className="truncate">
+              {selected.length ? `${selected.length} selecionado(s)` : "Todos"}
+            </span>
+            <span aria-hidden="true">▾</span>
+          </button>
+        </PopoverTrigger>
+        <PopoverContent align="start" className="w-64 p-2">
+          <input
+            className="input-base mb-2 text-xs"
+            aria-label={`Buscar ${label}`}
+            placeholder="Buscar…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+          <button
+            type="button"
+            className="btn-ghost mb-1 w-full text-xs"
+            onClick={() => onChange([])}
+          >
+            Todos / limpar seleção
+          </button>
+          <div className="max-h-52 overflow-y-auto">
+            {visible.map((option) => (
+              <label
+                key={option.value}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted"
+              >
+                <input
+                  type="checkbox"
+                  checked={selected.includes(option.value)}
+                  onChange={(event) =>
+                    onChange(
+                      event.target.checked
+                        ? [...selected, option.value]
+                        : selected.filter((value) => value !== option.value),
+                    )
+                  }
+                />
+                {option.label}
+              </label>
+            ))}
+            {!visible.length && (
+              <p className="p-2 text-xs text-muted-foreground">Nenhuma opção encontrada.</p>
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    </div>
+  );
+}
 
 export function WeeklyAvailabilityEditor({
   week,
@@ -55,6 +140,9 @@ export function WeeklyAvailabilityEditor({
   const [reading, setReading] = useState(false);
   const [paste, setPaste] = useState("");
   const [page, setPage] = useState(0);
+  const [centerFilters, setCenterFilters] = useState<string[]>([]);
+  const [dateFilters, setDateFilters] = useState<string[]>([]);
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
   const file = useRef<HTMLInputElement>(null);
   const converted = useMemo(
     () =>
@@ -68,8 +156,39 @@ export function WeeklyAvailabilityEditor({
   const errors = useMemo(() => validateAvailability(converted, week), [converted, week]);
   const total = errors.length ? null : converted.reduce((sum, r) => sum + r.hours, 0);
   const dirty = JSON.stringify(rows) !== JSON.stringify(draftRows(document?.rows ?? []));
+  const filtered = useMemo(
+    () => filterAvailabilityDraft(rows, centerFilters, dateFilters, editingIndex),
+    [rows, centerFilters, dateFilters, editingIndex],
+  );
+  const filteredHours = filteredAvailabilityHours(filtered.map(({ row }) => row));
+  const centerOptions = useMemo(
+    () =>
+      [...new Set([...rows.map((row) => availabilityKey(row.center)), ...centerFilters])]
+        .filter(Boolean)
+        .sort()
+        .map((value) => ({ value, label: value })),
+    [rows, centerFilters],
+  );
+  const dateOptions = useMemo(
+    () =>
+      [...new Set([...rows.map((row) => row.date), ...dateFilters])]
+        .filter(Boolean)
+        .sort()
+        .map((value) => ({
+          value,
+          label: /^\d{4}-\d{2}-\d{2}$/.test(value) ? value.split("-").reverse().join("/") : value,
+        })),
+    [rows, dateFilters],
+  );
   const count = 40,
-    currentPage = Math.min(page, Math.max(0, Math.ceil(rows.length / count) - 1));
+    currentPage = Math.min(page, Math.max(0, Math.ceil(filtered.length / count) - 1));
+
+  function clearFilters() {
+    setCenterFilters([]);
+    setDateFilters([]);
+    setPage(0);
+    setEditingIndex(null);
+  }
 
   function edit(index: number, key: keyof DraftRow, value: string) {
     setRows((current) => current.map((r, i) => (i === index ? { ...r, [key]: value } : r)));
@@ -85,6 +204,7 @@ export function WeeklyAvailabilityEditor({
       return;
     setRows(draftRows(next));
     setSource(name);
+    clearFilters();
     setPage(0);
     toast.success(`${next.length} linhas conferidas. Revise e salve a disponibilidade.`);
   }
@@ -126,7 +246,7 @@ export function WeeklyAvailabilityEditor({
     if (errors.length || saving || !dirty) return;
     if (
       !window.confirm(
-        `Salvar ${rows.length} linhas como a disponibilidade total da semana ${weekCode(week.code)}? A versão anterior ficará registrada. Não serão alteradas atividades nem apropriações SAP.`,
+        `Salvar todas as ${rows.length} linhas da semana ${weekCode(week.code)}, inclusive as ocultas pelos filtros? A versão anterior ficará registrada. Não serão alteradas atividades nem apropriações SAP.`,
       )
     )
       return;
@@ -229,6 +349,7 @@ export function WeeklyAvailabilityEditor({
             className="btn-ghost"
             disabled={saving || rows.length >= 5000}
             onClick={() => {
+              clearFilters();
               setRows((r) => [
                 ...r,
                 {
@@ -256,7 +377,7 @@ export function WeeklyAvailabilityEditor({
             {saving ? "Salvando…" : "Salvar disponibilidade"}
           </button>
           <span className="text-xs text-muted-foreground">
-            {rows.length} linhas ·{" "}
+            Total da semana: {rows.length} linhas ·{" "}
             {total === null
               ? "Confira as pendências"
               : `${total.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} HH disponíveis`}
@@ -304,6 +425,47 @@ export function WeeklyAvailabilityEditor({
             Conferir tabela colada
           </button>
         </details>
+        <div className="flex flex-wrap items-end gap-3 rounded-md border border-border p-3">
+          <AvailabilityFilter
+            label="Centro de trabalho"
+            options={centerOptions}
+            selected={centerFilters}
+            onChange={(next) => {
+              setCenterFilters(next);
+              setPage(0);
+              setEditingIndex(null);
+            }}
+          />
+          <AvailabilityFilter
+            label="Data"
+            options={dateOptions}
+            selected={dateFilters}
+            onChange={(next) => {
+              setDateFilters(next);
+              setPage(0);
+              setEditingIndex(null);
+            }}
+          />
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={!centerFilters.length && !dateFilters.length}
+            onClick={clearFilters}
+          >
+            Limpar filtros
+          </button>
+          <p role="status" className="text-xs text-muted-foreground">
+            Recorte: {filtered.length} de {rows.length} linhas ·{" "}
+            {filteredHours === null
+              ? "HH inválido ou em branco no recorte"
+              : `${filteredHours.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} HH disponíveis`}
+          </p>
+          <p className="w-full text-[11px] text-muted-foreground">
+            Os filtros alteram apenas a visualização. Salvar disponibilidade mantém todas as linhas
+            da semana, inclusive as ocultas. O histórico abaixo continua mostrando a semana
+            completa.
+          </p>
+        </div>
         {dirty && (
           <p role="status" className="text-xs text-warning-foreground">
             Alterações ainda não salvas. O indicador abaixo continua usando a última disponibilidade
@@ -340,56 +502,72 @@ export function WeeklyAvailabilityEditor({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.slice(currentPage * count, (currentPage + 1) * count).map((row, offset) => {
-                    const index = currentPage * count + offset;
-                    return (
-                      <tr key={index} className="row-zebra">
-                        {(["center", "date", "hours"] as const).map((key) => (
-                          <td key={key} className="p-1">
-                            <input
-                              aria-label={`${key === "center" ? "Centro" : key === "date" ? "Data" : "HH disponível"} da linha ${index + 1}`}
-                              type={key === "date" ? "date" : "text"}
-                              inputMode={key === "hours" ? "decimal" : undefined}
-                              min={key === "date" ? week.start_date : undefined}
-                              max={key === "date" ? week.end_date : undefined}
-                              className="input-base min-w-28"
-                              value={row[key]}
+                  {filtered
+                    .slice(currentPage * count, (currentPage + 1) * count)
+                    .map(({ row, index }) => {
+                      return (
+                        <tr
+                          key={index}
+                          className="row-zebra"
+                          onFocusCapture={() => setEditingIndex(index)}
+                          onBlurCapture={(event) => {
+                            if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+                              setEditingIndex(null);
+                          }}
+                        >
+                          {(["center", "date", "hours"] as const).map((key) => (
+                            <td key={key} className="p-1">
+                              <input
+                                aria-label={`${key === "center" ? "Centro" : key === "date" ? "Data" : "HH disponível"} da linha ${index + 1}`}
+                                type={key === "date" ? "date" : "text"}
+                                inputMode={key === "hours" ? "decimal" : undefined}
+                                min={key === "date" ? week.start_date : undefined}
+                                max={key === "date" ? week.end_date : undefined}
+                                className="input-base min-w-28"
+                                value={row[key]}
+                                disabled={saving}
+                                onChange={(e) => edit(index, key, e.target.value)}
+                              />
+                            </td>
+                          ))}
+                          <td className="whitespace-nowrap p-2">{weekCode(week.code)}</td>
+                          {(["local", "specialty"] as const).map((key) => (
+                            <td key={key} className="p-1">
+                              <input
+                                aria-label={`${key === "local" ? "Local" : "Especialidade"} da linha ${index + 1}`}
+                                className="input-base min-w-32"
+                                maxLength={160}
+                                value={row[key]}
+                                disabled={saving}
+                                onChange={(e) => edit(index, key, e.target.value)}
+                              />
+                            </td>
+                          ))}
+                          <td className="p-1">
+                            <button
+                              className="btn-ghost"
+                              aria-label={`Remover linha ${index + 1} da tabela em edição`}
                               disabled={saving}
-                              onChange={(e) => edit(index, key, e.target.value)}
-                            />
+                              onClick={() => {
+                                setEditingIndex(null);
+                                setRows((r) => r.filter((_, i) => i !== index));
+                                setSource("Edição no NEXO");
+                              }}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
                           </td>
-                        ))}
-                        <td className="whitespace-nowrap p-2">{weekCode(week.code)}</td>
-                        {(["local", "specialty"] as const).map((key) => (
-                          <td key={key} className="p-1">
-                            <input
-                              aria-label={`${key === "local" ? "Local" : "Especialidade"} da linha ${index + 1}`}
-                              className="input-base min-w-32"
-                              maxLength={160}
-                              value={row[key]}
-                              disabled={saving}
-                              onChange={(e) => edit(index, key, e.target.value)}
-                            />
-                          </td>
-                        ))}
-                        <td className="p-1">
-                          <button
-                            className="btn-ghost"
-                            aria-label={`Remover linha ${index + 1} da tabela em edição`}
-                            disabled={saving}
-                            onClick={() => {
-                              setRows((r) => r.filter((_, i) => i !== index));
-                              setSource("Edição no NEXO");
-                            }}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })}
+                        </tr>
+                      );
+                    })}
                 </tbody>
               </table>
+              {!filtered.length && (
+                <p className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma linha encontrada para os filtros selecionados. Limpe os filtros para ver a
+                  tabela completa.
+                </p>
+              )}
             </div>
             <div className="flex items-center justify-between gap-2 text-xs">
               <button
@@ -400,11 +578,11 @@ export function WeeklyAvailabilityEditor({
                 Anterior
               </button>
               <span>
-                Página {currentPage + 1} de {Math.max(1, Math.ceil(rows.length / count))}
+                Página {currentPage + 1} de {Math.max(1, Math.ceil(filtered.length / count))}
               </span>
               <button
                 className="btn-ghost"
-                disabled={(currentPage + 1) * count >= rows.length}
+                disabled={(currentPage + 1) * count >= filtered.length}
                 onClick={() => setPage(currentPage + 1)}
               >
                 Próxima
