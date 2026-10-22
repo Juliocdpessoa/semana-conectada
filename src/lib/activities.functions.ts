@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { increasedCapacityOverloads, capacityWarningText, type ActivityCapacity } from "./activity-capacity";
 
 const updateSchema = z.object({
   activityId: z.string().uuid(),
@@ -497,6 +498,22 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       }
     }
 
+    // Check real saved dates (including paste/drag/bulk), not optimistic browser state.
+    // Capacity checks must never turn a successful edit into a failed edit.
+    const { data: datesBefore, error: datesError } = await supabase
+      .from("activities").select("id,week_id,scheduled_date").in("id", data.rows.map((row) => row.id));
+    const requestedDates = new Map(data.rows.map((row) => [row.id, row.scheduledDate]));
+    const movedWeeks = [...new Set((datesBefore ?? [])
+      .filter((row) => row.scheduled_date !== requestedDates.get(row.id)).map((row) => row.week_id))];
+    const capacityBefore = new Map<string, ActivityCapacity>();
+    let capacityCheckFailed = Boolean(datesError);
+    for (const weekId of movedWeeks) {
+      try {
+        const snapshot = await (supabase as any).rpc("get_activity_daily_capacity", { p_week_id: weekId });
+        if (snapshot.error || !snapshot.data) capacityCheckFailed = true;
+        else capacityBefore.set(weekId, snapshot.data as ActivityCapacity);
+      } catch { capacityCheckFailed = true; }
+    }
     const payload = data.rows.map((row) => ({
       id: row.id,
       expected_version: row.expectedVersion,
@@ -513,7 +530,21 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       },
     );
     if (error) return { ok: false as const, error: error.message };
-    return { ok: true as const, count: Number(updatedCount ?? 0) };
+    const capacityWarnings: string[] = [];
+    for (const weekId of movedWeeks) {
+      try {
+        const snapshot = await (supabase as any).rpc("get_activity_daily_capacity", { p_week_id: weekId });
+        const before = capacityBefore.get(weekId);
+        if (snapshot.error || !snapshot.data || !before) { capacityCheckFailed = true; continue; }
+        const after = snapshot.data as ActivityCapacity;
+        capacityWarnings.push(...increasedCapacityOverloads(before, after).map(capacityWarningText));
+        if (after.rows.some((row) => (row.available === null || row.invalidHours > 0 || !row.center || !row.date) &&
+          row.programmed > (before.rows.find((old) => old.center === row.center && old.date === row.date)?.programmed ?? 0))) {
+          capacityWarnings.push("Há centro/dia sem disponibilidade cadastrada ou com HH inválido. Confira o cartão de capacidade.");
+        }
+      } catch { capacityCheckFailed = true; }
+    }
+    return { ok: true as const, count: Number(updatedCount ?? 0), capacityWarnings, capacityCheckFailed };
   });
 
 const immediateSchema = z.object({
@@ -702,4 +733,3 @@ export const setUserApproval = createServerFn({ method: "POST" })
     }
     return { ok: true as const };
   });
-

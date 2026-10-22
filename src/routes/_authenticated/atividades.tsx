@@ -42,6 +42,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { canRetryActivityReport } from "@/lib/activity-report-conflict";
+import { ActivityCapacityCard, notifyActivityCapacity } from "@/components/activity-capacity-card";
 
 export const Route = createFileRoute("/_authenticated/atividades")({
   component: AtividadesPage,
@@ -1547,6 +1548,7 @@ function AtividadesPage() {
         for (const row of versionedPayload)
           planningVersionsRef.current.set(row.id, row.expectedVersion + 1);
         if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
+        notifyActivityCapacity(result);
         qc.invalidateQueries({ queryKey: ["activities"] });
       } catch (error: any) {
         const failedIds = new Set(payload.map((row) => row.id));
@@ -2444,7 +2446,7 @@ function AtividadesPage() {
       )}
 
       {/* KPIs */}
-      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
         <button
           type="button"
           onClick={() => toggleKpiStatus("")}
@@ -2526,6 +2528,7 @@ function AtividadesPage() {
           value={formatActivityHours(kpis.hours)}
           icon={<Clock className="h-3.5 w-3.5" />}
         />
+        <ActivityCapacityCard weekId={activeWeek.data?.id} userId={session.userId} worksiteId={session.worksiteId} centers={workCenterFilters} dates={dateFilters} />
         <KpiCard
           label="Conclusão"
           value={`${kpis.percent}%`}
@@ -3592,6 +3595,7 @@ function PlanningFieldsModal({
       const result = await saveFields({ data: { rows: parsed } });
       if (!result.ok) throw new Error(result.error);
       toast.success(`${result.count} atividade(s) atualizada(s).`);
+      notifyActivityCapacity(result);
       onSaved();
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível salvar os campos de liberação.");
