@@ -12,15 +12,17 @@ export function calculateWeeklyRealization(input: RsInputs) {
   if (values.some((v) => !Number.isFinite(v) || v < 0)) return null;
   const reference = input.reference + input.eep;
   if (input.programmed <= 0 || reference <= 0) return null;
-  const occupation = input.programmed / reference;
+  const occupation = Math.min(input.programmed / reference, 1);
   const totalCompleted = input.completed + input.immediate;
-  // Equivalent in HS to ((TCpr + TCoi) / TP) * (TP / reference) * 100.
-  // Keep TP > 0 mandatory. Do not cap OM or RS at 100%.
-  const rs = (totalCompleted / reference) * 100;
+  // Equivalent to ((TCpr + TCoi) / TP) * min(TP / reference, 1) * 100.
+  // Once OM is capped, TP no longer cancels against the reference.
+  const rsDenominator = Math.max(input.programmed, reference);
+  const rs = (totalCompleted / rsDenominator) * 100;
   if (!Number.isFinite(rs) || !Number.isFinite(occupation)) return null;
   const compare = (threshold: number) => {
-    const difference = totalCompleted * 100 - reference * threshold;
-    const tolerance = Number.EPSILON * Math.max(totalCompleted * 100, reference * threshold, 1) * 8;
+    const difference = totalCompleted * 100 - rsDenominator * threshold;
+    const tolerance =
+      Number.EPSILON * Math.max(totalCompleted * 100, rsDenominator * threshold, 1) * 8;
     return Math.abs(difference) <= tolerance ? 0 : difference < 0 ? -1 : 1;
   };
   const at95 = compare(95) === 0;

@@ -318,8 +318,9 @@ function RsContent({
         </label>
         <p className="max-w-2xl text-xs text-muted-foreground">
           O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo
-          fica somente para acompanhamento, fora do cálculo.
-          Em Todos, o teto considera a especialidade na semana inteira dos dois locais; o RS geral não é a média dos RS de IARI e ROTINA.
+          fica somente para acompanhamento, fora do cálculo. Em Todos, o teto considera a
+          especialidade na semana inteira dos dois locais; o RS geral não é a média dos RS de IARI e
+          ROTINA.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -568,9 +569,11 @@ function RsContent({
           <p className="font-mono text-foreground">
             HH considerado da especialidade = menor entre (TCpr + TCoi) e HH disponível semanal
           </p>
-          <p className="font-mono text-foreground">OM = HH programado ÷ HH disponível total</p>
           <p className="font-mono text-foreground">
-            RS geral = (Σ HH considerado por especialidade ÷ Σ HH disponível) × 100
+            OM = menor entre (HH programado ÷ HH disponível total) e 100%
+          </p>
+          <p className="font-mono text-foreground">
+            RS geral = (Σ HH considerado por especialidade ÷ TP geral) × OM geral × 100
           </p>
           <p>
             O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo a denominação
@@ -578,14 +581,16 @@ function RsContent({
             RS. Sua visualização é apenas de acompanhamento.
           </p>
           <p>
-            Forma equivalente em HH à fórmula RS = ((TCpr + TCoi) ÷ TP) × OM × 100, após aplicar o
-            teto semanal por especialidade. Não há teto diário. A tabela já inclui EEP: não somamos
-            horas adicionais nem usamos referência fixa.
+            Aplicamos RS = ((TCpr + TCoi) ÷ TP) × OM × 100, após aplicar o teto semanal por
+            especialidade. OM é limitado a 100% em cada especialidade e no geral; os HH reais são
+            preservados. Não há teto diário. A tabela já inclui EEP: não somamos horas adicionais
+            nem usamos referência fixa.
           </p>
           {result && (
             <p className="text-sm text-foreground">
-              RS = ({number(totals.considered)} ÷ {number(totals.available)}) × 100 ≈{" "}
-              <strong>{number(result.rs)}%</strong>. O cálculo usa valores sem arredondamento.
+              RS = ({number(totals.considered)} ÷ {number(totals.programmed)}) ×{" "}
+              {number(result.occupation * 100)}% × 100 ≈ <strong>{number(result.rs)}%</strong>. O
+              cálculo usa valores sem arredondamento.
             </p>
           )}
           <p>
@@ -815,11 +820,7 @@ function RsResult({ result }: { result: ReturnType<typeof calculateWeeklyRealiza
       <KpiCard
         label="Fator contratual"
         value={factor}
-        hint={
-          result?.at95
-            ? "RS = 95%: fator 0,00"
-            : "Enquadramento sobre o RS sem arredondamento"
-        }
+        hint={result?.at95 ? "RS = 95%: fator 0,00" : "Enquadramento sobre o RS sem arredondamento"}
         tone={(result?.factor ?? 0) < 0 ? "warning" : "default"}
       />
       <div className="overflow-x-auto sm:col-span-3">
@@ -834,11 +835,7 @@ function RsResult({ result }: { result: ReturnType<typeof calculateWeeklyRealiza
             {bands.map((b) => (
               <tr
                 key={b.label}
-                className={
-                  activeBand === b
-                    ? "bg-accent text-accent-foreground"
-                    : "row-zebra"
-                }
+                className={activeBand === b ? "bg-accent text-accent-foreground" : "row-zebra"}
               >
                 <td className="p-2">
                   {b.label}

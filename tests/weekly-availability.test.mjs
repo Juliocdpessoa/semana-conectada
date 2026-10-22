@@ -67,6 +67,23 @@ test("programmed SAP and immediate SAP share the same cap", () => {
   assert.equal(result.totals.excess, 30);
   assert.equal(result.result.factor, 0);
 });
+test("occupation caps independently for each specialty and for the aggregate", () => {
+  const result = calc(
+    [row(), row({ center: "PINT", specialty: "Pintura" })],
+    [
+      center({ programmed: 200, completed: 100 }),
+      center({ center: "PINT", programmed: 50, completed: 50 }),
+    ],
+    true,
+  );
+  assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").occupation, 1);
+  assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").rs, 50);
+  assert.equal(result.rows.find((r) => r.specialty === "Pintura").occupation, 0.5);
+  assert.equal(result.result.occupation, 1);
+  assert.equal(result.result.rs, 60);
+  assert.equal(result.totals.programmed, 250);
+});
+
 test("zero availability is explicit; missing availability or SAP is not zero", () => {
   assert.equal(calc([], [center()], true).result, null);
   assert.equal(calc([row()], [center()], false).result, null);
@@ -78,7 +95,7 @@ test("zero availability is explicit; missing availability or SAP is not zero", (
   );
   assert.equal(result.totals.considered, 50);
   assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").rs, null);
-  assert.equal(result.result.rs, 50);
+  assert.equal(result.result.rs, 25);
 });
 test("unmapped centers block the general result, no silent lost hours", () => {
   const result = calc([row()], [center(), center({ center: "SOLD" })], true);

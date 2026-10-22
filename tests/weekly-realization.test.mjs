@@ -47,7 +47,7 @@ test("immediate hours contribute once; EEP increases the reference", () => {
   assert.equal(result.rs, 92);
   assert.equal(result.totalCompleted, 4600);
 });
-test("no artificial cap on OM or RS", () => {
+test("OM is capped at 100 percent and the capped value participates in RS", () => {
   const result = calc({
     programmed: 6000,
     completed: 5000,
@@ -55,9 +55,22 @@ test("no artificial cap on OM or RS", () => {
     reference: 4708,
     eep: 0,
   });
-  assert.ok(result.occupation > 1);
-  assert.ok(result.rs > 100);
-  assert.equal(result.factor, 0.01);
+  assert.equal(result.occupation, 1);
+  assert.equal(result.rs, (5500 / 6000) * 100);
+  assert.equal(result.factor, -0.02);
+});
+
+test("factor boundaries use the programmed denominator when OM is capped", () => {
+  for (const [completed, factor] of [
+    [1139.9988, -0.02],
+    [1140, 0],
+    [1140.0012, -0.01],
+  ]) {
+    assert.equal(
+      calc({ programmed: 1200, completed, immediate: 0, reference: 1000, eep: 0 }).factor,
+      factor,
+    );
+  }
 });
 test("zero realized hours are a measured zero, not missing", () => {
   assert.equal(calc({ ...inputs, completed: 0 }).rs, 0);

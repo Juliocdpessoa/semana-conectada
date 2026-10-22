@@ -6,8 +6,8 @@
 - As datas e locais são detalhes da capacidade. O teto é semanal por especialidade, somando todos os centros e locais daquela especialidade antes de aplicar o limite.
 - TCpr e TCoi usam HH efetivamente apropriado na última carga SAP detalhada vinculada à semana, não status EXECUTADO.
 - HH considerado de cada especialidade = `min(TCpr + TCoi, HH disponível semanal)`.
-- OM da especialidade = `TP / HH disponível`; RS = `HH considerado / HH disponível * 100` (forma equivalente da fórmula contratual em HH).
-- Geral: somar HH considerados após os tetos por especialidade e dividir pela soma da disponibilidade. Não aplicar um único teto geral nem fazer média simples dos percentuais.
+- OM da especialidade = `min(TP / HH disponível, 1)`; RS = `HH considerado / max(TP, HH disponível) * 100`, equivalente à fórmula contratual com OM limitado a 100%.
+- Geral: somar HH considerados após os tetos por especialidade; OM geral = `min(TP geral / disponibilidade geral, 1)` e RS geral = `HH considerado geral / TP geral * OM geral * 100`. Não fazer média dos percentuais nem das ocupações. Os HH originais não são truncados.
 - Zero disponível é explícito: contribuição de HH considerada zero, RS da especialidade indefinido. Sem disponibilidade, SAP ou vínculo de centro não se fabrica resultado geral. TP geral precisa ser positivo. Uma especialidade sem TP mantém suas horas de imediatas na consolidação em HH; não se divide por TP zero.
 - Com esse teto, RS não supera 100%. A faixa contratual superior permanece apenas informativa; exatamente 95% tem fator contratual 0,00, conforme regra confirmada.
 - Alpinismo (Alpinista/Alpinistas/Alpinismo da base) fica visível, mas não entra no HH disponível, TP, TCpr, TCoi, ocupação ou RS. Nenhum registro de disponibilidade foi apagado.
