@@ -13,14 +13,15 @@ test("contract example: 4500 / 4708 = 95.58%, OM 100%, factor -0.01", () => {
   assert.equal(result.rs.toFixed(2), "95.58");
   assert.equal(result.factor, -0.01);
 });
-test("95 percent remains unclassified and is not silently assigned a factor", () => {
+test("exactly 95 percent has factor zero", () => {
   const result = calc({ ...inputs, completed: 4472.6 });
   assert.equal(result.at95, true);
-  assert.equal(result.factor, null);
+  assert.equal(result.factor, 0);
 });
 test("each contractual band including 98 and 100 uses unrounded RS", () => {
   const cases = [
     [94.9999, -0.02],
+    [95, 0],
     [95.0001, -0.01],
     [98, -0.01],
     [98.0001, 0],

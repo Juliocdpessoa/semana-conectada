@@ -59,7 +59,7 @@ const date = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString
 const example = { programmed: "4708", completed: "4500", immediate: "0", available: "4708" };
 const bands = [
   { label: "Abaixo de 95%", factor: -0.02, display: "−0,02 (−2%)" },
-  { label: "Exatamente 95%", factor: null, display: "Confirmar com a Fiscalização" },
+  { label: "Exatamente 95%", factor: 0, display: "0,00 (0%)" },
   { label: "Acima de 95% até 98%", factor: -0.01, display: "−0,01 (−1%)" },
   { label: "Acima de 98% até 100%", factor: 0, display: "0,00 (0%)" },
   { label: "Acima de 100%", factor: 0.01, display: "+0,01 (+1%)" },
@@ -612,7 +612,7 @@ function RsContent({
           )}
           <p>
             Com o teto confirmado, o RS não ultrapassa 100%; a faixa acima de 100% permanece como
-            referência contratual. Exatamente 95% continua pendente de definição da Fiscalização.
+            referência contratual. Exatamente 95% tem fator contratual 0,00.
           </p>
         </div>
       </Panel>
@@ -798,7 +798,12 @@ function HoursInput({
 }
 
 function RsResult({ result }: { result: ReturnType<typeof calculateWeeklyRealization> }) {
-  const factor = result ? bands.find((band) => band.factor === result.factor)?.display : "—";
+  const activeBand = result
+    ? result.at95
+      ? bands[1]
+      : bands.find((band, index) => index !== 1 && band.factor === result.factor)
+    : undefined;
+  const factor = activeBand?.display ?? "—";
   return (
     <div className="grid gap-3 sm:grid-cols-3">
       <KpiCard label="Ocupação · OM" value={result ? `${number(result.occupation * 100)}%` : "—"} />
@@ -809,13 +814,13 @@ function RsResult({ result }: { result: ReturnType<typeof calculateWeeklyRealiza
       />
       <KpiCard
         label="Fator contratual"
-        value={result?.at95 ? "Pendente" : factor}
+        value={factor}
         hint={
           result?.at95
-            ? "RS = 95%: confirmar com a Fiscalização"
+            ? "RS = 95%: fator 0,00"
             : "Enquadramento sobre o RS sem arredondamento"
         }
-        tone={result?.factor !== null && (result?.factor ?? 0) < 0 ? "warning" : "default"}
+        tone={(result?.factor ?? 0) < 0 ? "warning" : "default"}
       />
       <div className="overflow-x-auto sm:col-span-3">
         <table className="w-full text-xs">
@@ -830,14 +835,14 @@ function RsResult({ result }: { result: ReturnType<typeof calculateWeeklyRealiza
               <tr
                 key={b.label}
                 className={
-                  result && result.factor === b.factor
+                  activeBand === b
                     ? "bg-accent text-accent-foreground"
                     : "row-zebra"
                 }
               >
                 <td className="p-2">
                   {b.label}
-                  {result && result.factor === b.factor ? " · Faixa atual" : ""}
+                  {activeBand === b ? " · Faixa atual" : ""}
                 </td>
                 <td className="p-2 text-right">{b.display}</td>
               </tr>

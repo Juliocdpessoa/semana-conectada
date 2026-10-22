@@ -24,8 +24,8 @@ export function calculateWeeklyRealization(input: RsInputs) {
     return Math.abs(difference) <= tolerance ? 0 : difference < 0 ? -1 : 1;
   };
   const at95 = compare(95) === 0;
-  const factor: RsFactor | null = at95
-    ? null
+  const factor: RsFactor = at95
+    ? 0
     : compare(95) < 0
       ? -0.02
       : compare(98) <= 0
