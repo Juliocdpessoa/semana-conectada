@@ -317,10 +317,10 @@ function RsContent({
           </select>
         </label>
         <p className="max-w-2xl text-xs text-muted-foreground">
-          O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo
-          fica somente para acompanhamento, fora do cálculo. Em Todos, o teto considera a
-          especialidade na semana inteira dos dois locais; o RS geral não é a média dos RS de IARI e
-          ROTINA.
+          O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo e
+          os centros INSPPINT, TECNIEND, TECNINSC e HIDROJATO ficam somente para acompanhamento,
+          fora do cálculo. Em Todos, o teto considera a especialidade na semana inteira dos dois
+          locais; o RS geral não é a média dos RS de IARI e ROTINA.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
@@ -360,17 +360,17 @@ function RsContent({
         <KpiCard
           label="TP · HH programado para RS"
           value={data.availability ? hours(totals.programmed) : "—"}
-          hint={data.pendingSummary.programmed + " tarefas · sem Alpinismo"}
+          hint={data.pendingSummary.programmed + " tarefas elegíveis ao RS"}
         />
         <KpiCard
           label="HH disponível para RS"
           value={data.availability ? hours(totals.available) : "—"}
-          hint="Recorte selecionado · EEP incluída · sem Alpinismo"
+          hint="Somente elegíveis ao RS · EEP incluída"
         />
         <KpiCard
           label="HH apropriado elegível"
           value={hours(hasSource && data.availability ? totals.completed + totals.immediate : null)}
-          hint="Programação + imediatas · sem Alpinismo · antes do teto"
+          hint="Elegíveis ao RS · antes do teto"
         />
         <KpiCard
           label="HH considerado no RS"
@@ -427,18 +427,18 @@ function RsContent({
       <RsResult result={result} />
       <RsSpecialtyBars rows={rows} hasSap={hasSource} />
       {calculation.monitoring.length > 0 && (
-        <Panel title="Alpinismo · somente acompanhamento">
+        <Panel title="Fora do RS · somente acompanhamento">
           <p className="mb-2 text-xs text-muted-foreground">
             Não participa do numerador nem do denominador do RS e da ocupação. As atividades
             continuam disponíveis para acompanhamento.
           </p>
           <div className="grid gap-3 sm:grid-cols-2">
             <KpiCard
-              label="HH programado de Alpinismo"
+              label="HH programado fora do RS"
               value={hours(calculation.monitoring.reduce((s, r) => s + r.programmed, 0))}
             />
             <KpiCard
-              label="HH SAP de Alpinismo"
+              label="HH SAP fora do RS"
               value={
                 hasSource
                   ? hours(calculation.monitoring.reduce((s, r) => s + r.completed + r.immediate, 0))
@@ -463,7 +463,7 @@ function RsContent({
         <Panel title="Conferência da programação">
           <p className="text-sm text-muted-foreground">
             Cadastre a disponibilidade da semana para vincular os centros às especialidades e
-            separar Alpinismo corretamente antes de listar as pendências do RS.
+            separar os grupos de acompanhamento antes de listar as pendências do RS.
           </p>
         </Panel>
       )}
@@ -509,9 +509,12 @@ function RsContent({
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.specialty} className="row-zebra">
+                  <tr key={`${r.specialty}:${r.includedInRs}`} className="row-zebra">
                     <td className="p-2 font-medium">
                       {r.specialty}
+                      <span className="block text-[10px] font-normal text-muted-foreground">
+                        {r.centers.join(", ")}
+                      </span>
                       {!r.includedInRs && (
                         <span className="ml-2 text-[10px] text-muted-foreground">
                           Somente acompanhamento · fora do total
@@ -540,7 +543,7 @@ function RsContent({
               <tfoot className="border-t border-border font-semibold">
                 <tr>
                   <td className="p-2">
-                    Total para RS · sem Alpinismo{unmapped.length ? " · vínculo incompleto" : ""}
+                    Total elegível ao RS{unmapped.length ? " · vínculo incompleto" : ""}
                   </td>
                   <td className="p-2 text-right">{number(totals.available)}</td>
                   <td className="p-2 text-right">{number(totals.programmed)}</td>
@@ -576,9 +579,10 @@ function RsContent({
             RS geral = (Σ HH considerado por especialidade ÷ TP geral) × OM geral × 100
           </p>
           <p>
-            O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo a denominação
-            Alpinista da base) fica excluído dos HH programados, disponíveis e apropriados usados no
-            RS. Sua visualização é apenas de acompanhamento.
+            O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo
+            Alpinista/Alpinistas) e os centros INSPPINT, TECNIEND, TECNINSC e HIDROJATO ficam
+            excluídos dos HH programados, disponíveis e apropriados usados no RS. Sua visualização é
+            apenas de acompanhamento.
           </p>
           <p>
             Aplicamos RS = ((TCpr + TCoi) ÷ TP) × OM × 100, após aplicar o teto semanal por

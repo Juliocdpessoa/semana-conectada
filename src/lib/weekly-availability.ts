@@ -16,8 +16,10 @@ export type CenterHours = {
   completed: number;
   immediate: number;
 };
-export const isRsMonitoringOnly = (specialty: string) =>
-  ["ALPINISTA", "ALPINISTAS", "ALPINISMO"].includes(availabilityKey(specialty));
+export const RS_MONITORING_CENTERS = ["INSPPINT", "TECNIEND", "TECNINSC", "HIDROJATO"] as const;
+export const isRsMonitoringOnly = (specialty: string, center = "") =>
+  ["ALPINISTA", "ALPINISTAS", "ALPINISMO"].includes(availabilityKey(specialty)) ||
+  RS_MONITORING_CENTERS.some((code) => code === availabilityKey(center));
 export const availabilityKey = (value: string) =>
   value
     .trim()
@@ -131,6 +133,8 @@ export function calculateSpecialtyRealization(
     string,
     {
       specialty: string;
+      includedInRs: boolean;
+      centers: string[];
       available: number;
       programmed: number;
       completed: number;
@@ -139,7 +143,8 @@ export function calculateSpecialtyRealization(
   >();
   const invalid: string[] = [];
   for (const row of availability) {
-    const key = availabilityKey(row.specialty),
+    const includedInRs = !isRsMonitoringOnly(row.specialty, row.center);
+    const key = JSON.stringify([availabilityKey(row.specialty), includedInRs]),
       center = availabilityKey(row.center);
     if (!Number.isFinite(row.hours) || row.hours < 0) invalid.push("HH disponível inválido");
     if (mapping.has(center) && mapping.get(center) !== key)
@@ -147,12 +152,15 @@ export function calculateSpecialtyRealization(
     mapping.set(center, key);
     const group = groups.get(key) ?? {
       specialty: row.specialty.trim(),
+      includedInRs,
+      centers: [],
       available: 0,
       programmed: 0,
       completed: 0,
       immediate: 0,
     };
     group.available += row.hours;
+    if (!group.centers.includes(center)) group.centers.push(center);
     groups.set(key, group);
   }
   const unmapped = new Set<string>();
@@ -166,10 +174,15 @@ export function calculateSpecialtyRealization(
     const key = mapping.get(availabilityKey(center.center));
     if (!key) {
       const specialty = allSpecialties.get(availabilityKey(center.center));
-      if (specialty && isRsMonitoringOnly(specialty)) {
-        const monitoringKey = availabilityKey(specialty);
+      if (isRsMonitoringOnly(specialty ?? "", center.center)) {
+        const monitoringKey = JSON.stringify([
+          availabilityKey(specialty ?? `Centro ${center.center}`),
+          false,
+        ]);
         const group = groups.get(monitoringKey) ?? {
-          specialty,
+          specialty: specialty ?? `Centro ${center.center}`,
+          includedInRs: false,
+          centers: [],
           available: 0,
           programmed: 0,
           completed: 0,
@@ -178,6 +191,8 @@ export function calculateSpecialtyRealization(
         group.programmed += center.programmed;
         group.completed += center.completed;
         group.immediate += center.immediate;
+        if (!group.centers.includes(availabilityKey(center.center)))
+          group.centers.push(availabilityKey(center.center));
         groups.set(monitoringKey, group);
         continue;
       }
@@ -197,7 +212,6 @@ export function calculateSpecialtyRealization(
       const considered = Math.min(actual, g.available);
       return {
         ...g,
-        includedInRs: !isRsMonitoringOnly(g.specialty),
         actual,
         considered,
         excess: Math.max(0, actual - considered),

@@ -227,6 +227,58 @@ test("monitoring-only center with a different capacity local does not block a fi
   assert.equal(result.monitoring[0].completed, 90);
 });
 
+test("exact excluded centers never exclude eligible centers sharing the same specialty", () => {
+  for (const code of ["INSPPINT", "TECNIEND", "TECNINSC", "HIDROJATO"]) {
+    const result = calc(
+      [row(), row({ center: ` ${code.toLowerCase()} `, hours: 1000 })],
+      [
+        center({ completed: 50 }),
+        center({ center: code, programmed: 2000, completed: 1500, immediate: 100 }),
+      ],
+      true,
+    );
+    assert.equal(result.rows.length, 2);
+    assert.equal(result.monitoring.length, 1);
+    assert.equal(result.totals.available, 100);
+    assert.equal(result.totals.programmed, 100);
+    assert.equal(result.totals.completed, 50);
+    assert.equal(result.totals.immediate, 0);
+    assert.equal(result.result.rs, 50);
+    assert.equal(result.result.occupation, 1);
+  }
+});
+
+test("excluded center without availability remains monitoring and does not block RS", () => {
+  const result = calc(
+    [row()],
+    [center({ completed: 50 }), center({ center: "HIDROJATO", programmed: 900, completed: 900 })],
+    true,
+  );
+  assert.deepEqual(result.unmapped, []);
+  assert.equal(result.monitoring.length, 1);
+  assert.equal(result.result.rs, 50);
+});
+
+test("exclusion is exact, not a prefix; local filters and reset retain the same rule", () => {
+  const availability = [
+    row({ local: "IARI" }),
+    row({ center: "INSPPINT", local: "ROTINA", hours: 500 }),
+  ];
+  const centers = [
+    center({ local: "IARI", completed: 50 }),
+    center({ center: "INSPPINT", local: "ROTINA", programmed: 600, completed: 600 }),
+  ];
+  assert.equal(calc(availability, centers, true, "IARI").result.rs, 50);
+  assert.equal(calc(availability, centers, true).result.rs, 50);
+  const other = calc(
+    [row({ center: "INSPPINT2" })],
+    [center({ center: "INSPPINT2", completed: 70 })],
+    true,
+  );
+  assert.equal(other.result.rs, 70);
+  assert.equal(other.monitoring.length, 0);
+});
+
 test("reuse preserves weekday capacities and does not invent a Monday after a short week", () => {
   const target = { code: "043-2026", start_date: "2026-10-19", end_date: "2026-10-23" };
   const source = [

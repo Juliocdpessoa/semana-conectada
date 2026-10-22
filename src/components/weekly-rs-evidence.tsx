@@ -108,7 +108,7 @@ export function WeeklyRsEvidence({
     <div className="space-y-4">
       <Panel title="Conferência da programação · sem apropriação SAP">
         <p className="mb-3 text-xs text-muted-foreground">
-          Contagem por tarefa/dia do local selecionado, sem Alpinismo. Uma confirmação apropriada
+          Contagem por tarefa/dia elegível ao RS no local selecionado. Uma confirmação apropriada
           somente em parte da semana não confirma os demais dias. Justificativas e observações vêm
           do apontamento operacional do NEXO, não do SAP.
         </p>
@@ -250,7 +250,7 @@ export function WeeklyRsEvidence({
                 setPage(0);
               }}
             />
-            Incluir Alpinismo somente para acompanhamento na lista
+            Incluir grupos fora do RS somente para acompanhamento na lista
           </label>
           {!hasSap ? (
             <p className="text-sm text-muted-foreground">
@@ -365,7 +365,7 @@ export function WeeklyRsEvidence({
               </button>
               <span>
                 {pending.data ? n(pending.data.total) + " atividades · página " + (page + 1) : "—"}
-                {includeMonitoring ? " · inclui acompanhamento" : " · sem Alpinismo"}
+                {includeMonitoring ? " · inclui acompanhamento" : " · somente elegíveis ao RS"}
               </span>
               <button
                 className="btn-ghost"
@@ -402,7 +402,7 @@ export function RsSpecialtyBars({
     <Panel title="Realização por especialidade">
       <p className="mb-3 text-xs text-muted-foreground">
         HH considerado em relação à disponibilidade semanal do recorte. Linha pontilhada: referência
-        de 95%. Alpinismo não participa.
+        de 95%. Alpinismo, INSPPINT, TECNIEND, TECNINSC e HIDROJATO não participam.
       </p>
       {!hasSap ? (
         <p className="text-sm text-muted-foreground">Aguardando carga SAP.</p>
