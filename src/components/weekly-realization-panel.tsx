@@ -358,9 +358,9 @@ function RsContent({
       </p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="TP · HH programado para RS"
+          label="HH programado original"
           value={data.availability ? hours(totals.programmed) : "—"}
-          hint={data.pendingSummary.programmed + " tarefas elegíveis ao RS"}
+          hint={`Considerado: ${hours(Math.min(totals.programmed, totals.available))} · ${data.pendingSummary.programmed} tarefas`}
         />
         <KpiCard
           label="HH disponível para RS"
@@ -490,7 +490,8 @@ function RsContent({
                   {[
                     "Especialidade",
                     "Disponível",
-                    "Programado",
+                    "Programado original",
+                    "Programado considerado",
                     "OM",
                     "TCpr SAP",
                     "TCoi SAP",
@@ -523,6 +524,7 @@ function RsContent({
                     </td>
                     <td className="p-2 text-right">{number(r.available)}</td>
                     <td className="p-2 text-right">{number(r.programmed)}</td>
+                    <td className="p-2 text-right">{number(r.programmedConsidered)}</td>
                     <td className="p-2 text-right">
                       {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
                     </td>
@@ -547,6 +549,9 @@ function RsContent({
                   </td>
                   <td className="p-2 text-right">{number(totals.available)}</td>
                   <td className="p-2 text-right">{number(totals.programmed)}</td>
+                  <td className="p-2 text-right">
+                    {number(Math.min(totals.programmed, totals.available))}
+                  </td>
                   <td className="p-2 text-right">
                     {result ? number(result.occupation * 100) + "%" : "—"}
                   </td>
@@ -573,10 +578,12 @@ function RsContent({
             HH considerado da especialidade = menor entre (TCpr + TCoi) e HH disponível semanal
           </p>
           <p className="font-mono text-foreground">
-            OM = menor entre (HH programado ÷ HH disponível total) e 100%
+            TP considerado = menor entre HH programado original e HH disponível total; OM = TP
+            considerado ÷ HH disponível total
           </p>
           <p className="font-mono text-foreground">
-            RS geral = (Σ HH considerado por especialidade ÷ TP geral) × OM geral × 100
+            RS geral = (Σ HH executado considerado por especialidade ÷ TP considerado geral) × OM
+            geral × 100
           </p>
           <p>
             O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo
@@ -585,14 +592,15 @@ function RsContent({
             apenas de acompanhamento.
           </p>
           <p>
-            Aplicamos RS = ((TCpr + TCoi) ÷ TP) × OM × 100, após aplicar o teto semanal por
-            especialidade. OM é limitado a 100% em cada especialidade e no geral; os HH reais são
-            preservados. Não há teto diário. A tabela já inclui EEP: não somamos horas adicionais
-            nem usamos referência fixa.
+            Aplicamos RS = ((TCpr + TCoi) ÷ TP considerado) × OM × 100, após aplicar o teto semanal
+            por especialidade. OM é limitado a 100% em cada especialidade e no geral; os HH reais
+            são preservados. Não há teto diário. A tabela já inclui EEP: não somamos horas
+            adicionais nem usamos referência fixa.
           </p>
           {result && (
             <p className="text-sm text-foreground">
-              RS = ({number(totals.considered)} ÷ {number(totals.programmed)}) ×{" "}
+              RS = ({number(totals.considered)} ÷{" "}
+              {number(Math.min(totals.programmed, totals.available))}) ×{" "}
               {number(result.occupation * 100)}% × 100 ≈ <strong>{number(result.rs)}%</strong>. O
               cálculo usa valores sem arredondamento.
             </p>

@@ -214,13 +214,11 @@ export function calculateSpecialtyRealization(
         ...g,
         actual,
         considered,
+        programmedConsidered: Math.min(g.programmed, g.available),
         excess: Math.max(0, actual - considered),
         occupation: g.available > 0 ? Math.min(g.programmed / g.available, 1) : null,
         // Equivalent HS expression; with no TP in a specialty, retain the hours for the general consolidation.
-        rs:
-          hasSap && g.available > 0
-            ? (considered / Math.max(g.programmed, g.available)) * 100
-            : null,
+        rs: hasSap && g.available > 0 ? (considered / g.available) * 100 : null,
       };
     });
   const totals = rows

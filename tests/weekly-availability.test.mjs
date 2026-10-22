@@ -77,10 +77,11 @@ test("occupation caps independently for each specialty and for the aggregate", (
     true,
   );
   assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").occupation, 1);
-  assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").rs, 50);
+  assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").rs, 100);
   assert.equal(result.rows.find((r) => r.specialty === "Pintura").occupation, 0.5);
   assert.equal(result.result.occupation, 1);
-  assert.equal(result.result.rs, 60);
+  assert.equal(result.result.rs, 75);
+  assert.equal(result.result.programmedConsidered, 200);
   assert.equal(result.totals.programmed, 250);
 });
 
@@ -95,8 +96,23 @@ test("zero availability is explicit; missing availability or SAP is not zero", (
   );
   assert.equal(result.totals.considered, 50);
   assert.equal(result.rows.find((r) => r.specialty === "Caldeiraria").rs, null);
-  assert.equal(result.result.rs, 25);
+  assert.equal(result.result.rs, 50);
 });
+test("week 42 Andaime ROTINA uses 2252.8 considered TP, restoring 100 percent RS", () => {
+  const result = calc(
+    [row({ hours: 2252.8, specialty: "Andaime" })],
+    [center({ programmed: 2517.6, completed: 2258.4 })],
+    true,
+  );
+  assert.equal(result.rows[0].programmed, 2517.6);
+  assert.equal(result.rows[0].programmedConsidered, 2252.8);
+  assert.equal(result.rows[0].considered, 2252.8);
+  assert.equal(result.rows[0].occupation, 1);
+  assert.equal(result.rows[0].rs, 100);
+  assert.equal(result.result.programmedConsidered, 2252.8);
+  assert.equal(result.result.rs, 100);
+});
+
 test("unmapped centers block the general result, no silent lost hours", () => {
   const result = calc([row()], [center(), center({ center: "SOLD" })], true);
   assert.deepEqual(result.unmapped, ["SOLD"]);

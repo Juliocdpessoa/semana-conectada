@@ -47,7 +47,7 @@ test("immediate hours contribute once; EEP increases the reference", () => {
   assert.equal(result.rs, 92);
   assert.equal(result.totalCompleted, 4600);
 });
-test("OM is capped at 100 percent and the capped value participates in RS", () => {
+test("the same capped programmed hours participate in OM and the RS divisor", () => {
   const result = calc({
     programmed: 6000,
     completed: 5000,
@@ -56,15 +56,16 @@ test("OM is capped at 100 percent and the capped value participates in RS", () =
     eep: 0,
   });
   assert.equal(result.occupation, 1);
-  assert.equal(result.rs, (5500 / 6000) * 100);
-  assert.equal(result.factor, -0.02);
+  assert.equal(result.programmedConsidered, 4708);
+  assert.equal(result.rs, (5500 / 4708) * 100);
+  assert.equal(result.factor, 0.01);
 });
 
-test("factor boundaries use the programmed denominator when OM is capped", () => {
+test("factor boundaries use the same capped TP in OM and RS", () => {
   for (const [completed, factor] of [
-    [1139.9988, -0.02],
-    [1140, 0],
-    [1140.0012, -0.01],
+    [949.999, -0.02],
+    [950, 0],
+    [950.001, -0.01],
   ]) {
     assert.equal(
       calc({ programmed: 1200, completed, immediate: 0, reference: 1000, eep: 0 }).factor,

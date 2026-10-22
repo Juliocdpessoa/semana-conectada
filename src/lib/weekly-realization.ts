@@ -12,11 +12,12 @@ export function calculateWeeklyRealization(input: RsInputs) {
   if (values.some((v) => !Number.isFinite(v) || v < 0)) return null;
   const reference = input.reference + input.eep;
   if (input.programmed <= 0 || reference <= 0) return null;
-  const occupation = Math.min(input.programmed / reference, 1);
+  const programmedConsidered = Math.min(input.programmed, reference);
+  const occupation = programmedConsidered / reference;
   const totalCompleted = input.completed + input.immediate;
-  // Equivalent to ((TCpr + TCoi) / TP) * min(TP / reference, 1) * 100.
-  // Once OM is capped, TP no longer cancels against the reference.
-  const rsDenominator = Math.max(input.programmed, reference);
+  // ((TCpr + TCoi) / programmedConsidered) * occupation * 100.
+  // The same capped TP must be used in BOTH the divisor and OM; it cancels.
+  const rsDenominator = reference;
   const rs = (totalCompleted / rsDenominator) * 100;
   if (!Number.isFinite(rs) || !Number.isFinite(occupation)) return null;
   const compare = (threshold: number) => {
@@ -35,7 +36,7 @@ export function calculateWeeklyRealization(input: RsInputs) {
         : compare(100) <= 0
           ? 0
           : 0.01;
-  return { occupation, rs, factor, totalCompleted, reference, at95 };
+  return { occupation, rs, factor, totalCompleted, reference, programmedConsidered, at95 };
 }
 
 export function parseServiceHours(value: string): number | null {
