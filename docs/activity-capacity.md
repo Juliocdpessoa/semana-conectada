@@ -5,6 +5,7 @@
 - Disponibilidade: tabela semanal `weekly_rs_availability`, somada por centro + data, incluindo os locais da mesma equipe. Não cria capacidade a partir de outra semana.
 - Cada grupo calcula `max(programado - disponível, 0)`. O cartão soma os excessos, nunca diferenças líquidas entre centros/dias.
 - Apenas filtros de centro de trabalho e data afetam o cartão; status, cor, busca e demais filtros da tabela não escondem carga daquele centro/dia. A restrição fica explícita no detalhe.
+- Ao passar o mouse ou focar o cartão pelo teclado, uma lista mostra centros sobrecarregados e excesso de HH no mesmo recorte, em ordem alfabética. Com vários dias, identifica a data em cada linha. Não consulta o banco novamente ao abrir. O clique continua abrindo o detalhamento, inclusive no celular.
 - Sem disponibilidade, centro/data ou HH válido: grupo sem conferência, não zero. Com cobertura parcial, o cartão indica um mínimo conhecido (`≥`). Disponibilidade explicitamente zero é válida.
 - Uma RPC agregada por semana é compartilhada pelo cache; mudar filtros não baixa atividades nem provoca nova consulta. Atualização após alterações via invalidação existente/realtime; recarga a cada 60 segundos e botão manual para mudanças da disponibilidade.
 - Movimentações individuais, arraste, colagem e preenchimento em lote comparam agregados antes/depois no servidor. Alertam sobre excesso criado ou aumentado. Falha na conferência avisa separadamente e nunca desfaz uma alteração salva. Número/cor de PT sem mudança de data não dispara comparação de capacidade.

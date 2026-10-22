@@ -15,6 +15,14 @@ export type ActivityCapacity = {
 };
 
 export const capacityCenter = (value: string) => value.trim().replace(/\s+/g, " ").toUpperCase();
+export function capacityOverloadList(rows: readonly ActivityCapacityRow[]) {
+  return rows
+    .filter((row) => row.excess !== null && row.excess > 1e-8)
+    .sort(
+      (a, b) =>
+        a.center.localeCompare(b.center, "pt-BR") || (a.date ?? "").localeCompare(b.date ?? ""),
+    );
+}
 const key = (row: ActivityCapacityRow) => JSON.stringify([capacityCenter(row.center), row.date]);
 
 export function summarizeActivityCapacity(

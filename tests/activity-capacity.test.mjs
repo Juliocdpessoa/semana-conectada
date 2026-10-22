@@ -4,6 +4,7 @@ import {
   summarizeActivityCapacity as summarize,
   increasedCapacityOverloads as increases,
   capacityWarningText,
+  capacityOverloadList,
 } from "../src/lib/activity-capacity.ts";
 const row = (change = {}) => ({
   center: "CALD",
@@ -56,4 +57,30 @@ test("bulk movement reports each overloaded group once and uses Brazilian hours/
   const result = increases(data(), data(row(), row({ center: "PINT" })));
   assert.equal(result.length, 2);
   assert.match(capacityWarningText(result[0]), /22\/10\/2026: 17,6 HH/);
+});
+
+test("hover list matches card filters and totals, sorted by center then day without mutating input", () => {
+  const source = data(
+    row({ center: "PINT" }),
+    row({ center: "ANDA", date: "2026-10-23", excess: 5 }),
+    row({ center: "ANDA", excess: 10 }),
+    row({ center: "ZERO", excess: 0 }),
+    row({ center: "UNKNOWN", excess: null, available: null }),
+  );
+  const selected = summarize(source, [], ["2026-10-22"]);
+  const list = capacityOverloadList(selected.rows);
+  assert.deepEqual(
+    list.map((r) => r.center),
+    ["ANDA", "PINT"],
+  );
+  assert.equal(
+    list.reduce((sum, r) => sum + r.excess, 0),
+    selected.excess,
+  );
+  assert.equal(source.rows[0].center, "PINT");
+  assert.deepEqual(
+    capacityOverloadList(summarize(source, ["ANDA"]).rows).map((r) => r.date),
+    ["2026-10-22", "2026-10-23"],
+  );
+  assert.equal(capacityOverloadList(summarize(source, ["ZERO"]).rows).length, 0);
 });
