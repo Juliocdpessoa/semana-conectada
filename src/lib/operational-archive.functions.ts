@@ -95,7 +95,7 @@ export const loadOperationalArchiveRows = createServerFn({ method: "POST" })
       ]);
       if (worksiteError) throw new Error(worksiteError.message);
       if (batchesResult.error) throw new Error(batchesResult.error.message);
-      const batchesById = new Map((batchesResult.data ?? []).map((batch: any) => [batch.id, batch]));
+      const batchesById = new Map<string, any>((batchesResult.data ?? []).map((batch: any) => [String(batch.id), batch]));
       const enrichedRows = rows.map((row) => {
         const batch = row.payload?.batch_id ? batchesById.get(row.payload.batch_id) : null;
         return {
