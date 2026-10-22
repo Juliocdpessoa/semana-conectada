@@ -319,6 +319,7 @@ function RsContent({
         <p className="max-w-2xl text-xs text-muted-foreground">
           O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo
           fica somente para acompanhamento, fora do cálculo.
+          Em Todos, o teto considera a especialidade na semana inteira dos dois locais; o RS geral não é a média dos RS de IARI e ROTINA.
         </p>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
