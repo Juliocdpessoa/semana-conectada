@@ -708,7 +708,7 @@ function OperationalArchives() {
   }
 
   return (
-    <Panel title="Arquivos históricos" subtitle="Arquiva todos os registros antigos, inclusive pendentes, sem perder o histórico.">
+    <Panel title="Arquivos históricos" description="Arquiva todos os registros antigos, inclusive pendentes, sem perder o histórico.">
       <div className="flex flex-col gap-3 p-3">
         {archivedThrough && (
           <div className="rounded-md border border-success/30 bg-success/10 px-3 py-2 text-[12px]">

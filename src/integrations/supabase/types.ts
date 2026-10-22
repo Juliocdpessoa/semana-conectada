@@ -1251,6 +1251,96 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_rs_availability: {
+        Row: {
+          rows: Json
+          source_file_name: string | null
+          updated_at: string
+          updated_by: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Insert: {
+          rows: Json
+          source_file_name?: string | null
+          updated_at?: string
+          updated_by: string
+          version?: number
+          week_id: string
+          worksite_id: string
+        }
+        Update: {
+          rows?: Json
+          source_file_name?: string | null
+          updated_at?: string
+          updated_by?: string
+          version?: number
+          week_id?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_availability_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: true
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_rs_availability_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_availability_history: {
+        Row: {
+          rows: Json
+          source_file_name: string | null
+          updated_at: string
+          updated_by: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Insert: {
+          rows: Json
+          source_file_name?: string | null
+          updated_at?: string
+          updated_by: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Update: {
+          rows?: Json
+          source_file_name?: string | null
+          updated_at?: string
+          updated_by?: string
+          version?: number
+          week_id?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_availability_history_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_rs_availability_history_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       weeks: {
         Row: {
           activated_at: string | null
@@ -1567,6 +1657,24 @@ export type Database = {
         }
         Returns: Json
       }
+      get_weekly_realization: { Args: { p_week_id: string }; Returns: Json }
+      get_weekly_rs_analysis: {
+        Args: { p_local?: string; p_week_id: string }
+        Returns: Json
+      }
+      get_weekly_rs_pending: {
+        Args: {
+          p_include_monitoring?: boolean
+          p_justification?: string
+          p_limit?: number
+          p_local?: string
+          p_offset?: number
+          p_only_missing_justification?: boolean
+          p_query?: string
+          p_week_id: string
+        }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1588,6 +1696,10 @@ export type Database = {
         Args: { p_date: string; p_worksite_id: string }
         Returns: boolean
       }
+      list_weekly_rs_availability_history: {
+        Args: { p_before_version?: number; p_limit?: number; p_week_id: string }
+        Returns: Json
+      }
       operational_history_cutoff: {
         Args: { _reference_date?: string }
         Returns: string
@@ -1604,11 +1716,41 @@ export type Database = {
         Args: { p_reason: string; p_week_id: string }
         Returns: undefined
       }
+      save_weekly_rs_availability: {
+        Args: {
+          p_expected_version?: number
+          p_rows: Json
+          p_source_file_name?: string
+          p_week_id: string
+        }
+        Returns: undefined
+      }
       sync_overtime_from_scale_row: {
         Args: {
           p_scale: Database["public"]["Tables"]["scheduled_transport_requests"]["Row"]
         }
         Returns: undefined
+      }
+      weekly_rs_activity_evidence: {
+        Args: { p_week_id: string }
+        Returns: {
+          center: string
+          confirmation: string
+          description: string
+          id: string
+          included_in_rs: boolean
+          justification: string
+          local: string
+          observation: string
+          operation: string
+          order_number: string
+          planned_hh: number
+          sap_state: string
+          scheduled_date: string
+          specialty: string
+          status: string
+          suboperation: string
+        }[]
       }
     }
     Enums: {
