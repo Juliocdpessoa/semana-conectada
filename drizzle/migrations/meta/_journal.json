@@ -92,6 +92,20 @@
       "when": 1791547200000,
       "tag": "0012_activity_sap_filter_pagination",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1791979200000,
+      "tag": "0013_cache_activity_read_access",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1792670400000,
+      "tag": "0014_weekly_realization",
+      "breakpoints": true
     }
   ]
 }

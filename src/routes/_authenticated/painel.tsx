@@ -32,6 +32,8 @@ import {
 } from "@/components/ui-kit";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { WeeklyRealizationPanel } from "@/components/weekly-realization-panel";
+import type { SessionInfo } from "./route";
 import {
   Bar,
   Cell,
@@ -51,15 +53,17 @@ export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
 });
 function PainelPage() {
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const canAccessRs = session.roles.some((role) => role === "planning" || role === "admin");
   const requestedView =
     typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const initialView =
-    requestedView === "nao-executadas" || requestedView === "nao-justificadas"
+    requestedView === "nao-executadas" || requestedView === "nao-justificadas" || ((requestedView === "realizacao-semanal" || requestedView === "disponibilidade-hh") && canAccessRs)
       ? requestedView
       : "geral";
-  const [view, setView] = useState<"geral" | "nao-executadas" | "nao-justificadas">(initialView);
+  const [view, setView] = useState<"geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh">(initialView);
 
-  function changeView(next: "geral" | "nao-executadas" | "nao-justificadas") {
+  function changeView(next: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh") {
     setView(next);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -71,12 +75,15 @@ function PainelPage() {
 
   return (
     <>
-      {view === "geral" ? (
-        <OverviewPanel tabs={<PanelTabs view={view} onChange={changeView} />} />
+      {(view === "realizacao-semanal" || view === "disponibilidade-hh") && canAccessRs ? (
+        <WeeklyRealizationPanel key={session.worksiteId + view} mode={view === "disponibilidade-hh" ? "availability" : "indicator"} tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
+          userId={session.userId} worksiteId={session.worksiteId} worksiteCode={session.worksiteCode} />
+      ) : view === "geral" ? (
+        <OverviewPanel tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />} />
       ) : (
         <NonExecutionDashboard
           mode={view === "nao-justificadas" ? "unjustified" : "non-executed"}
-          tabs={<PanelTabs view={view} onChange={changeView} />}
+          tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
         />
       )}
     </>
@@ -86,9 +93,11 @@ function PainelPage() {
 function PanelTabs({
   view,
   onChange,
+  canAccessRs,
 }: {
-  view: "geral" | "nao-executadas" | "nao-justificadas";
-  onChange: (view: "geral" | "nao-executadas" | "nao-justificadas") => void;
+  view: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh";
+  onChange: (view: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh") => void;
+  canAccessRs: boolean;
 }) {
   return (
     <div className="mb-3 flex w-full max-w-full overflow-x-auto rounded-md border border-border bg-card p-1 text-[12px] sm:inline-flex sm:w-auto">
@@ -101,6 +110,12 @@ function PanelTabs({
       <PanelTabBtn active={view === "nao-justificadas"} onClick={() => onChange("nao-justificadas")}>
         Não justificadas
       </PanelTabBtn>
+      {canAccessRs && <PanelTabBtn active={view === "realizacao-semanal"} onClick={() => onChange("realizacao-semanal")}>
+        Realização Semanal
+      </PanelTabBtn>}
+      {canAccessRs && <PanelTabBtn active={view === "disponibilidade-hh"} onClick={() => onChange("disponibilidade-hh")}>
+        Disponibilidade HH
+      </PanelTabBtn>}
     </div>
   );
 }
@@ -2183,4 +2198,3 @@ function formatDateTimeNe(value: string | null) {
     new Date(value),
   );
 }
-
