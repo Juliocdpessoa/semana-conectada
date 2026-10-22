@@ -14,6 +14,7 @@ export type CenterHours = {
   local?: string;
   programmed: number;
   completed: number;
+  completedForRs?: number;
   immediate: number;
 };
 export const RS_MONITORING_CENTERS = ["INSPPINT", "TECNIEND", "TECNINSC", "HIDROJATO"] as const;
@@ -138,6 +139,7 @@ export function calculateSpecialtyRealization(
       available: number;
       programmed: number;
       completed: number;
+      completedForRs: number;
       immediate: number;
     }
   >();
@@ -157,6 +159,7 @@ export function calculateSpecialtyRealization(
       available: 0,
       programmed: 0,
       completed: 0,
+      completedForRs: 0,
       immediate: 0,
     };
     group.available += row.hours;
@@ -166,9 +169,12 @@ export function calculateSpecialtyRealization(
   const unmapped = new Set<string>();
   for (const center of centers) {
     if (
-      [center.programmed, center.completed, center.immediate].some(
-        (v) => !Number.isFinite(v) || v < 0,
-      )
+      [
+        center.programmed,
+        center.completed,
+        center.completedForRs ?? center.completed,
+        center.immediate,
+      ].some((v) => !Number.isFinite(v) || v < 0)
     )
       invalid.push(`HH inválido no centro ${center.center}`);
     const key = mapping.get(availabilityKey(center.center));
@@ -186,10 +192,12 @@ export function calculateSpecialtyRealization(
           available: 0,
           programmed: 0,
           completed: 0,
+          completedForRs: 0,
           immediate: 0,
         };
         group.programmed += center.programmed;
         group.completed += center.completed;
+        group.completedForRs += center.completedForRs ?? center.completed;
         group.immediate += center.immediate;
         if (!group.centers.includes(availabilityKey(center.center)))
           group.centers.push(availabilityKey(center.center));
@@ -203,13 +211,14 @@ export function calculateSpecialtyRealization(
     const group = groups.get(key)!;
     group.programmed += center.programmed;
     group.completed += center.completed;
+    group.completedForRs += center.completedForRs ?? center.completed;
     group.immediate += center.immediate;
   }
   const rows = [...groups.values()]
     .sort((a, b) => a.specialty.localeCompare(b.specialty, "pt-BR"))
     .map((g) => {
       const actual = g.completed + g.immediate;
-      const considered = Math.min(actual, g.available);
+      const considered = Math.min(g.completedForRs + g.immediate, g.available);
       return {
         ...g,
         actual,
@@ -228,11 +237,20 @@ export function calculateSpecialtyRealization(
         available: t.available + r.available,
         programmed: t.programmed + r.programmed,
         completed: t.completed + r.completed,
+        completedForRs: t.completedForRs + r.completedForRs,
         immediate: t.immediate + r.immediate,
         considered: t.considered + r.considered,
         excess: t.excess + r.excess,
       }),
-      { available: 0, programmed: 0, completed: 0, immediate: 0, considered: 0, excess: 0 },
+      {
+        available: 0,
+        programmed: 0,
+        completed: 0,
+        completedForRs: 0,
+        immediate: 0,
+        considered: 0,
+        excess: 0,
+      },
     );
   const result =
     hasSap && availability.length > 0 && unmapped.size === 0 && invalid.length === 0

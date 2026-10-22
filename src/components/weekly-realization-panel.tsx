@@ -494,6 +494,7 @@ function RsContent({
                     "Programado considerado",
                     "OM",
                     "TCpr SAP",
+                    "TCpr limitado por confirmação",
                     "TCoi SAP",
                     "Considerado",
                     "Excesso",
@@ -529,6 +530,7 @@ function RsContent({
                       {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
                     </td>
                     <td className="p-2 text-right">{hasSource ? number(r.completed) : "—"}</td>
+                    <td className="p-2 text-right">{hasSource ? number(r.completedForRs) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.immediate) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.considered) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.excess) : "—"}</td>
@@ -556,6 +558,9 @@ function RsContent({
                     {result ? number(result.occupation * 100) + "%" : "—"}
                   </td>
                   <td className="p-2 text-right">{hasSource ? number(totals.completed) : "—"}</td>
+                  <td className="p-2 text-right">
+                    {hasSource ? number(totals.completedForRs) : "—"}
+                  </td>
                   <td className="p-2 text-right">{hasSource ? number(totals.immediate) : "—"}</td>
                   <td className="p-2 text-right">{result ? number(totals.considered) : "—"}</td>
                   <td className="p-2 text-right">{result ? number(totals.excess) : "—"}</td>
@@ -575,7 +580,8 @@ function RsContent({
         <div className="space-y-2 text-xs text-muted-foreground">
           {data.source && <p className="break-words">Fonte SAP: {data.source.source_file_name}</p>}
           <p className="font-mono text-foreground">
-            HH considerado da especialidade = menor entre (TCpr + TCoi) e HH disponível semanal
+            TCpr: menor entre HH SAP e HH programado por confirmação na semana. HH considerado da
+            especialidade = menor entre (TCpr limitado + TCoi) e HH disponível semanal
           </p>
           <p className="font-mono text-foreground">
             TP considerado = menor entre HH programado original e HH disponível total; OM = TP

@@ -113,6 +113,29 @@ test("week 42 Andaime ROTINA uses 2252.8 considered TP, restoring 100 percent RS
   assert.equal(result.result.rs, 100);
 });
 
+test("confirmation cap applies before specialty cap and keeps actual SAP visible", () => {
+  const result = calc(
+    [row({ hours: 100 })],
+    [center({ programmed: 17.6, completed: 35.2, completedForRs: 17.6 })],
+    true,
+  );
+  assert.equal(result.totals.completed, 35.2);
+  assert.equal(result.totals.completedForRs, 17.6);
+  assert.equal(result.totals.considered, 17.6);
+  assert.equal(result.totals.excess, 17.6);
+  assert.equal(result.result.rs, 17.6);
+});
+
+test("confirmation over-appropriation cannot compensate missing hours on another task", () => {
+  const result = calc(
+    [row()],
+    [center({ programmed: 100, completed: 100, completedForRs: 60, immediate: 10 })],
+    true,
+  );
+  assert.equal(result.totals.considered, 70);
+  assert.equal(result.result.rs, 70);
+});
+
 test("unmapped centers block the general result, no silent lost hours", () => {
   const result = calc([row()], [center(), center({ center: "SOLD" })], true);
   assert.deepEqual(result.unmapped, ["SOLD"]);
