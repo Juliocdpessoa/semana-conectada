@@ -157,6 +157,59 @@ test("exact 95 remains pending after specialty caps", () => {
   assert.equal(result.result.factor, null);
 });
 
+test("Alpinismo stays visible but is removed from every RS numerator and denominator", () => {
+  for (const specialty of ["Alpinista", "Alpinismo", "ALPINISTAS"]) {
+    const result = calc(
+      [row(), row({ center: "ALP", specialty, hours: 1000 })],
+      [
+        center({ completed: 50 }),
+        center({ center: "ALP", programmed: 2000, completed: 2000, immediate: 500 }),
+      ],
+      true,
+    );
+    assert.equal(result.rows.length, 2);
+    assert.equal(result.monitoring.length, 1);
+    assert.equal(result.totals.available, 100);
+    assert.equal(result.totals.programmed, 100);
+    assert.equal(result.totals.completed, 50);
+    assert.equal(result.totals.immediate, 0);
+    assert.equal(result.result.rs, 50);
+    assert.equal(result.result.occupation, 1);
+  }
+});
+
+test("local filter scopes both SAP and availability and All restores the original population", () => {
+  const availability = [
+    row({ local: "ROTINA" }),
+    row({ center: "CALD_IARI", local: "IARI", hours: 300 }),
+  ];
+  const centers = [
+    center({ local: "ROTINA", completed: 50 }),
+    center({ center: "CALD_IARI", local: "IARI", programmed: 300, completed: 90 }),
+  ];
+  assert.equal(calc(availability, centers, true, "ROTINA").result.rs, 50);
+  assert.equal(calc(availability, centers, true, "IARI").result.rs, 30);
+  const restored = calc(availability, centers, true, "");
+  assert.equal(restored.totals.available, 400);
+  assert.equal(restored.totals.completed, 140);
+  assert.equal(restored.result.rs, 35);
+});
+
+test("monitoring-only center with a different capacity local does not block a filtered RS", () => {
+  const result = calc(
+    [row({ local: "IARI" }), row({ center: "ALP", specialty: "Alpinista", local: "ROTINA" })],
+    [
+      center({ local: "IARI", completed: 50 }),
+      center({ center: "ALP", local: "IARI", completed: 90 }),
+    ],
+    true,
+    "IARI",
+  );
+  assert.equal(result.result.rs, 50);
+  assert.deepEqual(result.unmapped, []);
+  assert.equal(result.monitoring[0].completed, 90);
+});
+
 test("reuse preserves weekday capacities and does not invent a Monday after a short week", () => {
   const target = { code: "043-2026", start_date: "2026-10-19", end_date: "2026-10-23" };
   const source = [

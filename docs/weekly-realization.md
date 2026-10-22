@@ -10,6 +10,8 @@
 - Geral: somar HH considerados após os tetos por especialidade e dividir pela soma da disponibilidade. Não aplicar um único teto geral nem fazer média simples dos percentuais.
 - Zero disponível é explícito: contribuição de HH considerada zero, RS da especialidade indefinido. Sem disponibilidade, SAP ou vínculo de centro não se fabrica resultado geral. TP geral precisa ser positivo. Uma especialidade sem TP mantém suas horas de imediatas na consolidação em HH; não se divide por TP zero.
 - Com esse teto, RS não supera 100%. A faixa contratual superior permanece apenas informativa; exatamente 95% continua sem enquadramento até definição da Fiscalização.
+- Alpinismo (Alpinista/Alpinistas/Alpinismo da base) fica visível, mas não entra no HH disponível, TP, TCpr, TCoi, ocupação ou RS. Nenhum registro de disponibilidade foi apagado.
+- O filtro IARI/ROTINA aplica-se à capacidade, HH SAP, RS e evidências. O teto é recalculado no recorte; devido ao teto, não se somam nem se faz média dos RS dos locais para obter o geral.
 
 ## Fontes e conciliação
 
@@ -20,6 +22,20 @@ Cada linha SAP confirmada com HH positivo é classificada uma vez. Confirmaçõe
 O centro vem de `CenTrab`/`CENTRO_DE_TRABALHO`/`Centro de trabalho` (fallback `specialty`) na programação e de `work_center` no SAP. O vínculo para o nome da especialidade vem apenas da disponibilidade fornecida. Não se inferem grupos por prefixo. Centros com HH relevante ausentes da tabela bloqueiam o geral, com lista explícita.
 
 ## Entrada de disponibilidade
+
+## Análise por local e tarefas sem apropriação
+
+`get_weekly_rs_analysis` retorna agregados por centro/local. Associações SAP/programação são calculadas em lote por confirmação normalizada, evitando varreduras correlacionadas por linha. `get_weekly_rs_pending` pagina até 100 linhas (50 na tela), com busca e filtro de justificativa no servidor. O helper `weekly_rs_activity_evidence` não pode ser executado diretamente por usuários.
+
+O local da tarefa vem de `planning_data.Local`, com fallback no vínculo único da disponibilidade. Para SAP, usa-se o local único das tarefas de mesma confirmação e intervalo real; para externas, o vínculo único do centro. Local ambíguo não é inferido por prefixo e bloqueia o RS filtrado se houver HH elegível sem local.
+
+A evidência por tarefa/dia exige linha SAP CONF com HH positivo e período cobrindo o dia. Dias sem cobertura de uma confirmação parcial continuam na lista. HH sem período identificável é indefinido, não um falso confirmado/pendente. Sem carga, os indicadores de apropriação/pendência ficam ausentes, não zero. Canceladas/não executadas mantêm seus status: ausência de apropriação não implica execução pendente.
+
+Justificativas e observações vêm do apontamento atual NEXO. O autor/data da justificativa são obtidos somente de evento que alterou esse campo para seu valor atual; não se atribui autoria ao último editor de PT/status. Ausência de evento fica explícita. Não são inventados motivos a partir do SAP. O HH programado das linhas sem apropriação não é saldo de HH SAP.
+
+Motivos clicáveis e busca afetam somente a lista. Alpinismo pode ser incluído na lista para acompanhamento sem mudar os indicadores oficiais. `tests/weekly-rs-analysis.sql` cria três dias com uma apropriação em apenas um, verifica os outros dois como pendentes, concilia locais/motivos e valida acesso ao helper; tudo termina em ROLLBACK.
+
+## Manutenção da disponibilidade
 
 Em Painel → Disponibilidade HH, selecionar semana e preencher diretamente, colar seis colunas do Excel ou importar a aba `Disponibilidade`/`Ocupação` de um arquivo Excel. A aba pode coexistir com Programação; esse importador lê somente a disponibilidade e não altera tarefas. A importação usual da programação permanece independente. O resultado fica na aba Realização Semanal.
 

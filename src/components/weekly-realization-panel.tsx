@@ -13,6 +13,12 @@ import {
   type AvailabilityDocument,
 } from "@/components/weekly-availability-editor";
 import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/ui-kit";
+import {
+  WeeklyRsEvidence,
+  RsSpecialtyBars,
+  type PendingSummary,
+  type RsReason,
+} from "@/components/weekly-rs-evidence";
 
 type Week = {
   id: string;
@@ -42,6 +48,9 @@ type RsData = {
   centers: CenterHours[];
   availability: AvailabilityDocument | null;
   previousAvailability: (AvailabilityDocument & { week_code: string }) | null;
+  pendingSummary: PendingSummary;
+  reasons: RsReason[];
+  unresolvedLocal: number;
 };
 const number = (value: number) =>
   value.toLocaleString("pt-BR", { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -172,12 +181,20 @@ function WeeklyResults({
   mode: "indicator" | "availability";
 }) {
   const qc = useQueryClient();
+  const [local, setLocal] = useState(() => {
+    const value =
+      typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("local");
+    return value === "IARI" || value === "ROTINA" ? value : "";
+  });
   const data = useQuery({
-    queryKey: ["weekly-rs", userId, worksiteId, week.id],
+    queryKey: ["weekly-rs", userId, worksiteId, week.id, mode, local],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_weekly_realization", {
-        p_week_id: week.id,
-      });
+      const { data, error } = await (supabase as any).rpc(
+        mode === "availability" ? "get_weekly_realization" : "get_weekly_rs_analysis",
+        mode === "availability"
+          ? { p_week_id: week.id }
+          : { p_week_id: week.id, p_local: local || null },
+      );
       if (error) throw error;
       return data as RsData;
     },
@@ -218,12 +235,25 @@ function WeeklyResults({
     );
   return (
     <RsContent
-      key={week.id}
+      key={week.id + local}
       week={week}
       data={data.data}
+      userId={userId}
+      worksiteId={worksiteId}
+      local={local}
+      onLocalChange={(next) => {
+        setLocal(next);
+        const url = new URL(window.location.href);
+        if (next) url.searchParams.set("local", next);
+        else url.searchParams.delete("local");
+        window.history.replaceState({}, "", url);
+      }}
       worksiteCode={worksiteCode}
       refreshing={data.isFetching}
-      refresh={() => void data.refetch()}
+      refresh={() => {
+        void data.refetch();
+        void qc.invalidateQueries({ queryKey: ["weekly-rs-pending", userId, worksiteId, week.id] });
+      }}
       onSaved={() => qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })}
     />
   );
@@ -235,6 +265,10 @@ function RsContent({
   refreshing,
   refresh,
   onSaved,
+  userId,
+  worksiteId,
+  local,
+  onLocalChange,
 }: {
   week: Week;
   data: RsData;
@@ -242,6 +276,10 @@ function RsContent({
   refreshing: boolean;
   refresh: () => void;
   onSaved: () => Promise<unknown>;
+  userId: string;
+  worksiteId: string;
+  local: string;
+  onLocalChange: (value: string) => void;
 }) {
   const errors = useMemo(
     () => (data.availability ? validateAvailability(data.availability.rows, week) : []),
@@ -253,14 +291,36 @@ function RsContent({
         data.availability?.rows ?? [],
         data.centers ?? [],
         !!data.source,
+        local,
       ),
-    [data.availability, data.centers, data.source],
+    [data.availability, data.centers, data.source, local],
   );
   const { totals, rows, unmapped } = calculation;
-  const result = data.invalidPlannedHours === 0 && !errors.length ? calculation.result : null;
+  const result =
+    data.invalidPlannedHours === 0 && !errors.length && (!local || !data.unresolvedLocal)
+      ? calculation.result
+      : null;
   const hasSource = !!data.source;
   return (
     <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-border bg-card p-3">
+        <label className="w-full text-xs sm:w-60">
+          Local da realização semanal
+          <select
+            className="input-base mt-1"
+            value={local}
+            onChange={(e) => onLocalChange(e.target.value)}
+          >
+            <option value="">IARI + ROTINA · todos os locais</option>
+            <option value="IARI">IARI</option>
+            <option value="ROTINA">ROTINA</option>
+          </select>
+        </label>
+        <p className="max-w-2xl text-xs text-muted-foreground">
+          O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo
+          fica somente para acompanhamento, fora do cálculo.
+        </p>
+      </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
           {data.source
@@ -296,19 +356,19 @@ function RsContent({
       </p>
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
-          label="TP · HH programado"
-          value={hours(data.programmed)}
-          hint={data.programmedTasks + " tarefas · coluna Trab"}
+          label="TP · HH programado para RS"
+          value={data.availability ? hours(totals.programmed) : "—"}
+          hint={data.pendingSummary.programmed + " tarefas · sem Alpinismo"}
         />
         <KpiCard
-          label="HH disponível total"
+          label="HH disponível para RS"
           value={data.availability ? hours(totals.available) : "—"}
-          hint="Tabela semanal · já inclui EEP"
+          hint="Recorte selecionado · EEP incluída · sem Alpinismo"
         />
         <KpiCard
           label="HH apropriado elegível"
-          value={hours(hasSource ? data.completed! + data.immediate! : null)}
-          hint="Programação + imediatas · antes do teto"
+          value={hours(hasSource && data.availability ? totals.completed + totals.immediate : null)}
+          hint="Programação + imediatas · sem Alpinismo · antes do teto"
         />
         <KpiCard
           label="HH considerado no RS"
@@ -346,6 +406,14 @@ function RsContent({
           Confira a disponibilidade e os HH de origem antes de calcular o indicador.
         </p>
       )}
+      {data.unresolvedLocal > 0 && (
+        <p role="alert" className="text-xs text-warning-foreground">
+          Há {data.unresolvedLocal} apropriações elegíveis sem local identificável na carga.{" "}
+          {local
+            ? "O RS do recorte ficará indisponível até resolver o vínculo, para não omitir HH."
+            : "Confira os vínculos antes de usar os filtros por local."}
+        </p>
+      )}
       {(data.outsidePeriod > 0 || data.missingDates > 0 || data.unclassified > 0) && (
         <p className="rounded-md border border-warning/40 bg-warning/10 p-3 text-xs text-warning-foreground">
           RS em prévia: há {data.outsidePeriod} registros SAP com execução fora da semana;{" "}
@@ -355,6 +423,48 @@ function RsContent({
         </p>
       )}
       <RsResult result={result} />
+      <RsSpecialtyBars rows={rows} hasSap={hasSource} />
+      {calculation.monitoring.length > 0 && (
+        <Panel title="Alpinismo · somente acompanhamento">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Não participa do numerador nem do denominador do RS e da ocupação. As atividades
+            continuam disponíveis para acompanhamento.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <KpiCard
+              label="HH programado de Alpinismo"
+              value={hours(calculation.monitoring.reduce((s, r) => s + r.programmed, 0))}
+            />
+            <KpiCard
+              label="HH SAP de Alpinismo"
+              value={
+                hasSource
+                  ? hours(calculation.monitoring.reduce((s, r) => s + r.completed + r.immediate, 0))
+                  : "—"
+              }
+            />
+          </div>
+        </Panel>
+      )}
+      {data.availability ? (
+        <WeeklyRsEvidence
+          key={week.id + local}
+          weekId={week.id}
+          userId={userId}
+          worksiteId={worksiteId}
+          local={local}
+          summary={data.pendingSummary}
+          reasons={data.reasons}
+          hasSap={hasSource}
+        />
+      ) : (
+        <Panel title="Conferência da programação">
+          <p className="text-sm text-muted-foreground">
+            Cadastre a disponibilidade da semana para vincular os centros às especialidades e
+            separar Alpinismo corretamente antes de listar as pendências do RS.
+          </p>
+        </Panel>
+      )}
       {!result &&
         data.availability &&
         hasSource &&
@@ -368,8 +478,8 @@ function RsContent({
         <Panel title="Realização por especialidade · teto semanal">
           <p className="mb-3 text-xs text-muted-foreground">
             O limite é aplicado à soma de TCpr + TCoi de cada especialidade na semana inteira,
-            incluindo todos os locais. O excesso de uma especialidade não compensa outra. Valores em
-            HH.
+            dentro do local selecionado. O excesso de uma especialidade não compensa outra. Valores
+            em HH.
           </p>
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-xs">
@@ -398,7 +508,14 @@ function RsContent({
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.specialty} className="row-zebra">
-                    <td className="p-2 font-medium">{r.specialty}</td>
+                    <td className="p-2 font-medium">
+                      {r.specialty}
+                      {!r.includedInRs && (
+                        <span className="ml-2 text-[10px] text-muted-foreground">
+                          Somente acompanhamento · fora do total
+                        </span>
+                      )}
+                    </td>
                     <td className="p-2 text-right">{number(r.available)}</td>
                     <td className="p-2 text-right">{number(r.programmed)}</td>
                     <td className="p-2 text-right">
@@ -408,13 +525,21 @@ function RsContent({
                     <td className="p-2 text-right">{hasSource ? number(r.immediate) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.considered) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.excess) : "—"}</td>
-                    <td className="p-2 text-right">{r.rs === null ? "—" : number(r.rs) + "%"}</td>
+                    <td className="p-2 text-right">
+                      {!r.includedInRs
+                        ? "Acompanhamento"
+                        : r.rs === null
+                          ? "—"
+                          : number(r.rs) + "%"}
+                    </td>
                   </tr>
                 ))}
               </tbody>
               <tfoot className="border-t border-border font-semibold">
                 <tr>
-                  <td className="p-2">Geral{unmapped.length ? " · vínculo incompleto" : ""}</td>
+                  <td className="p-2">
+                    Total para RS · sem Alpinismo{unmapped.length ? " · vínculo incompleto" : ""}
+                  </td>
                   <td className="p-2 text-right">{number(totals.available)}</td>
                   <td className="p-2 text-right">{number(totals.programmed)}</td>
                   <td className="p-2 text-right">
@@ -445,6 +570,11 @@ function RsContent({
           <p className="font-mono text-foreground">OM = HH programado ÷ HH disponível total</p>
           <p className="font-mono text-foreground">
             RS geral = (Σ HH considerado por especialidade ÷ Σ HH disponível) × 100
+          </p>
+          <p>
+            O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo a denominação
+            Alpinista da base) fica excluído dos HH programados, disponíveis e apropriados usados no
+            RS. Sua visualização é apenas de acompanhamento.
           </p>
           <p>
             Forma equivalente em HH à fórmula RS = ((TCpr + TCoi) ÷ TP) × OM × 100, após aplicar o

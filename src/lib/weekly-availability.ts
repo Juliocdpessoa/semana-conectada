@@ -11,10 +11,13 @@ export type AvailabilityRow = {
 export type AvailabilityWeek = { code: string; start_date: string; end_date: string };
 export type CenterHours = {
   center: string;
+  local?: string;
   programmed: number;
   completed: number;
   immediate: number;
 };
+export const isRsMonitoringOnly = (specialty: string) =>
+  ["ALPINISTA", "ALPINISTAS", "ALPINISMO"].includes(availabilityKey(specialty));
 export const availabilityKey = (value: string) =>
   value
     .trim()
@@ -112,8 +115,18 @@ export function calculateSpecialtyRealization(
   availability: AvailabilityRow[],
   centers: CenterHours[],
   hasSap: boolean,
+  selectedLocal = "",
 ) {
+  const local = availabilityKey(selectedLocal);
+  const allAvailability = availability;
+  availability = local
+    ? availability.filter((r) => availabilityKey(r.local) === local)
+    : availability;
+  centers = local ? centers.filter((r) => availabilityKey(r.local ?? "") === local) : centers;
   const mapping = new Map<string, string>();
+  const allSpecialties = new Map(
+    allAvailability.map((r) => [availabilityKey(r.center), r.specialty]),
+  );
   const groups = new Map<
     string,
     {
@@ -152,6 +165,22 @@ export function calculateSpecialtyRealization(
       invalid.push(`HH inválido no centro ${center.center}`);
     const key = mapping.get(availabilityKey(center.center));
     if (!key) {
+      const specialty = allSpecialties.get(availabilityKey(center.center));
+      if (specialty && isRsMonitoringOnly(specialty)) {
+        const monitoringKey = availabilityKey(specialty);
+        const group = groups.get(monitoringKey) ?? {
+          specialty,
+          available: 0,
+          programmed: 0,
+          completed: 0,
+          immediate: 0,
+        };
+        group.programmed += center.programmed;
+        group.completed += center.completed;
+        group.immediate += center.immediate;
+        groups.set(monitoringKey, group);
+        continue;
+      }
       if (center.programmed > 0 || center.completed > 0 || center.immediate > 0)
         unmapped.add(center.center || "Sem centro de trabalho");
       continue;
@@ -168,6 +197,7 @@ export function calculateSpecialtyRealization(
       const considered = Math.min(actual, g.available);
       return {
         ...g,
+        includedInRs: !isRsMonitoringOnly(g.specialty),
         actual,
         considered,
         excess: Math.max(0, actual - considered),
@@ -176,17 +206,19 @@ export function calculateSpecialtyRealization(
         rs: hasSap && g.available > 0 ? (considered / g.available) * 100 : null,
       };
     });
-  const totals = rows.reduce(
-    (t, r) => ({
-      available: t.available + r.available,
-      programmed: t.programmed + r.programmed,
-      completed: t.completed + r.completed,
-      immediate: t.immediate + r.immediate,
-      considered: t.considered + r.considered,
-      excess: t.excess + r.excess,
-    }),
-    { available: 0, programmed: 0, completed: 0, immediate: 0, considered: 0, excess: 0 },
-  );
+  const totals = rows
+    .filter((r) => r.includedInRs)
+    .reduce(
+      (t, r) => ({
+        available: t.available + r.available,
+        programmed: t.programmed + r.programmed,
+        completed: t.completed + r.completed,
+        immediate: t.immediate + r.immediate,
+        considered: t.considered + r.considered,
+        excess: t.excess + r.excess,
+      }),
+      { available: 0, programmed: 0, completed: 0, immediate: 0, considered: 0, excess: 0 },
+    );
   const result =
     hasSap && availability.length > 0 && unmapped.size === 0 && invalid.length === 0
       ? calculateWeeklyRealization({
@@ -197,7 +229,8 @@ export function calculateSpecialtyRealization(
           eep: 0,
         })
       : null;
-  return { rows, totals, result, unmapped: [...unmapped].sort(), invalid };
+  const monitoring = rows.filter((r) => !r.includedInRs);
+  return { rows, totals, result, monitoring, unmapped: [...unmapped].sort(), invalid };
 }
 
 export function availabilityDate(value: unknown): string {
