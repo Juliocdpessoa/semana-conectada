@@ -457,56 +457,6 @@ function RsContent({
       )}
       <RsResult result={result} />
       <RsSpecialtyBars rows={rows} hasSap={hasSource} />
-      {!hideNonRs && calculation.monitoring.length > 0 && (
-        <Panel title="Fora do RS · somente acompanhamento">
-          <p className="mb-2 text-xs text-muted-foreground">
-            Não participa do numerador nem do denominador do RS e da ocupação. As atividades
-            continuam disponíveis para acompanhamento.
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <KpiCard
-              label="HH programado fora do RS"
-              value={hours(calculation.monitoring.reduce((s, r) => s + r.programmed, 0))}
-            />
-            <KpiCard
-              label="HH SAP fora do RS"
-              value={
-                hasSource
-                  ? hours(calculation.monitoring.reduce((s, r) => s + r.completed + r.immediate, 0))
-                  : "—"
-              }
-            />
-          </div>
-        </Panel>
-      )}
-      {data.availability ? (
-        <WeeklyRsEvidence
-          key={week.id + local}
-          weekId={week.id}
-          userId={userId}
-          worksiteId={worksiteId}
-          local={local}
-          summary={data.pendingSummary}
-          reasons={data.reasons}
-          hasSap={hasSource}
-        />
-      ) : (
-        <Panel title="Conferência da programação">
-          <p className="text-sm text-muted-foreground">
-            Cadastre a disponibilidade da semana para vincular os centros às especialidades e
-            separar os grupos de acompanhamento antes de listar as pendências do RS.
-          </p>
-        </Panel>
-      )}
-      {!result &&
-        data.availability &&
-        hasSource &&
-        !unmapped.length &&
-        !data.invalidPlannedHours && (
-          <p className="text-sm text-muted-foreground">
-            O RS requer disponibilidade total positiva, HH válidos e TP semanal maior que zero.
-          </p>
-        )}
       {data.availability && (
         <Panel title="Realização Semanal (RS)">
           <p className="mb-3 text-xs text-muted-foreground">
@@ -677,6 +627,56 @@ function RsContent({
           </p>
         </Panel>
       )}
+      {!hideNonRs && calculation.monitoring.length > 0 && (
+        <Panel title="Fora do RS · somente acompanhamento">
+          <p className="mb-2 text-xs text-muted-foreground">
+            Não participa do numerador nem do denominador do RS e da ocupação. As atividades
+            continuam disponíveis para acompanhamento.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <KpiCard
+              label="HH programado fora do RS"
+              value={hours(calculation.monitoring.reduce((s, r) => s + r.programmed, 0))}
+            />
+            <KpiCard
+              label="HH SAP fora do RS"
+              value={
+                hasSource
+                  ? hours(calculation.monitoring.reduce((s, r) => s + r.completed + r.immediate, 0))
+                  : "—"
+              }
+            />
+          </div>
+        </Panel>
+      )}
+      {data.availability ? (
+        <WeeklyRsEvidence
+          key={week.id + local}
+          weekId={week.id}
+          userId={userId}
+          worksiteId={worksiteId}
+          local={local}
+          summary={data.pendingSummary}
+          reasons={data.reasons}
+          hasSap={hasSource}
+        />
+      ) : (
+        <Panel title="Conferência da programação">
+          <p className="text-sm text-muted-foreground">
+            Cadastre a disponibilidade da semana para vincular os centros às especialidades e
+            separar os grupos de acompanhamento antes de listar as pendências do RS.
+          </p>
+        </Panel>
+      )}
+      {!result &&
+        data.availability &&
+        hasSource &&
+        !unmapped.length &&
+        !data.invalidPlannedHours && (
+          <p className="text-sm text-muted-foreground">
+            O RS requer disponibilidade total positiva, HH válidos e TP semanal maior que zero.
+          </p>
+        )}
       <Panel title="Memória de cálculo">
         <div className="space-y-2 text-xs text-muted-foreground">
           {data.source && <p className="break-words">Fonte SAP: {data.source.source_file_name}</p>}
