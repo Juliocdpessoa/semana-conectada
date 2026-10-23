@@ -298,6 +298,8 @@ function RsContent({
     [data.availability, data.centers, data.source, local],
   );
   const { totals, rows, unmapped } = calculation;
+  const [hideNonRs, setHideNonRs] = useState(false);
+  const visibleRows = hideNonRs ? rows.filter((row) => row.includedInRs) : rows;
   const [selectedSpecialty, setSelectedSpecialty] = useState<{
     specialty: string;
     includedInRs: boolean;
@@ -331,6 +333,19 @@ function RsContent({
             <option value="IARI">IARI</option>
             <option value="ROTINA">ROTINA</option>
           </select>
+        </label>
+        <label className="flex cursor-pointer items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={hideNonRs}
+            onChange={(event) => {
+              setHideNonRs(event.target.checked);
+              if (event.target.checked && selectedSpecialty?.includedInRs === false) {
+                setSelectedSpecialty(null);
+              }
+            }}
+          />
+          Ocultar centros fora do RS
         </label>
         <p className="max-w-2xl text-xs text-muted-foreground">
           O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo e
@@ -442,7 +457,7 @@ function RsContent({
       )}
       <RsResult result={result} />
       <RsSpecialtyBars rows={rows} hasSap={hasSource} />
-      {calculation.monitoring.length > 0 && (
+      {!hideNonRs && calculation.monitoring.length > 0 && (
         <Panel title="Fora do RS · somente acompanhamento">
           <p className="mb-2 text-xs text-muted-foreground">
             Não participa do numerador nem do denominador do RS e da ocupação. As atividades
@@ -526,7 +541,7 @@ function RsContent({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r, index) => {
+                {visibleRows.map((r, index) => {
                   const expanded =
                     selectedSpecialty?.specialty === r.specialty &&
                     selectedSpecialty.includedInRs === r.includedInRs;
