@@ -2488,7 +2488,7 @@ function AtividadesPage() {
       )}
 
       {/* KPIs */}
-      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+      <section className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-7">
         <button
           type="button"
           onClick={() => toggleKpiStatus("")}
@@ -2577,23 +2577,13 @@ function AtividadesPage() {
           centers={workCenterFilters}
           dates={dateFilters}
         />
-        <KpiCard
-          label="Conclusão SAP · HH"
-          value={completionLabel}
-          tone="primary"
-          icon={<Percent className="h-3.5 w-3.5" />}
-        />
       </section>
 
-      <p className="mb-3 text-xs text-muted-foreground">
-        Conclusão SAP = HH apropriado considerado ÷ HH programado, limitado por confirmação e pelo
-        período real SAP. Respeita os filtros; imediatas não aumentam a conclusão da programação.
-        Sem carga SAP ou HH programado válido, o percentual fica indisponível. Os cartões de status
-        permanecem como apontamento operacional.
-      </p>
-
-      {canAccessSap && sapOverview.data?.hasImport && (
-        <section className="mb-5 rounded-md border border-border bg-card p-3">
+      <section
+        aria-label="Indicadores SAP"
+        className="mb-5 rounded-md border border-border bg-card p-3"
+      >
+        {canAccessSap && sapOverview.data?.hasImport && (
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1 overflow-x-auto">
               <div className="flex min-w-max items-baseline gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
@@ -2625,73 +2615,94 @@ function AtividadesPage() {
               O status SAP não altera o apontamento operacional.
             </span>
           </div>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
-            {SAP_STATUS_OPTIONS.map((status) => (
+        )}
+        <div
+          className={cn(
+            "grid grid-cols-2 gap-2 sm:grid-cols-4",
+            canAccessSap && sapOverview.data?.hasImport ? "xl:grid-cols-9" : "xl:grid-cols-7",
+          )}
+        >
+          {canAccessSap && sapOverview.data?.hasImport && (
+            <>
+              {SAP_STATUS_OPTIONS.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  onClick={() => toggleSapStatus(status)}
+                  aria-pressed={sapStatusFilters.includes(status)}
+                  className={cn(
+                    "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
+                    sapStatusFilters.includes(status) && "ring-2 ring-primary/60",
+                  )}
+                  title={`Filtrar por ${status}`}
+                >
+                  <KpiCard
+                    label={
+                      status === "Confirmada no SAP"
+                        ? "Confirmadas no SAP"
+                        : status === "Confirmada sem HH"
+                          ? "Confirmadas sem HH"
+                          : status === "Não confirmada no SAP"
+                            ? "Não confirmadas"
+                            : status === "Confirmação não esperada"
+                              ? "Não esperadas"
+                              : status === "Divergência"
+                                ? "Divergências"
+                                : status
+                    }
+                    value={sapCount(status)}
+                    tone={
+                      status === "Confirmada no SAP"
+                        ? "success"
+                        : status === "Não confirmada no SAP"
+                          ? "destructive"
+                          : status === "Aguardando confirmação" || status === "Divergência"
+                            ? "warning"
+                            : undefined
+                    }
+                  />
+                </button>
+              ))}
               <button
-                key={status}
                 type="button"
-                onClick={() => toggleSapStatus(status)}
-                aria-pressed={sapStatusFilters.includes(status)}
-                className={cn(
-                  "rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50",
-                  sapStatusFilters.includes(status) && "ring-2 ring-primary/60",
-                )}
-                title={`Filtrar por ${status}`}
+                onClick={() => setSapUnprogrammedOpen("NÃO PROGRAMADA")}
+                className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                title="Ver apropriações com cód.plan.ordem 1 ausentes da programação semanal"
               >
                 <KpiCard
-                  label={
-                    status === "Confirmada no SAP"
-                      ? "Confirmadas no SAP"
-                      : status === "Confirmada sem HH"
-                        ? "Confirmadas sem HH"
-                        : status === "Não confirmada no SAP"
-                          ? "Não confirmadas"
-                          : status === "Confirmação não esperada"
-                            ? "Não esperadas"
-                            : status === "Divergência"
-                              ? "Divergências"
-                              : status
-                  }
-                  value={sapCount(status)}
-                  tone={
-                    status === "Confirmada no SAP"
-                      ? "success"
-                      : status === "Não confirmada no SAP"
-                        ? "destructive"
-                        : status === "Aguardando confirmação" || status === "Divergência"
-                          ? "warning"
-                          : undefined
-                  }
+                  label="Não programadas"
+                  value={effectiveOutsideSchedule.unprogrammedCount}
+                  tone="primary"
                 />
               </button>
-            ))}
-            <button
-              type="button"
-              onClick={() => setSapUnprogrammedOpen("NÃO PROGRAMADA")}
-              className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              title="Ver apropriações com cód.plan.ordem 1 ausentes da programação semanal"
-            >
-              <KpiCard
-                label="Não programadas"
-                value={effectiveOutsideSchedule.unprogrammedCount}
-                tone="primary"
-              />
-            </button>
-            <button
-              type="button"
-              onClick={() => setSapUnprogrammedOpen("IMEDIATA")}
-              className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
-              title="Ver apropriações com cód.plan.ordem 2 ausentes da programação semanal"
-            >
-              <KpiCard
-                label="Imediatas"
-                value={effectiveOutsideSchedule.immediateCount}
-                tone="warning"
-              />
-            </button>
-          </div>
-        </section>
-      )}
+              <button
+                type="button"
+                onClick={() => setSapUnprogrammedOpen("IMEDIATA")}
+                className="rounded-md text-left transition hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                title="Ver apropriações com cód.plan.ordem 2 ausentes da programação semanal"
+              >
+                <KpiCard
+                  label="Imediatas"
+                  value={effectiveOutsideSchedule.immediateCount}
+                  tone="warning"
+                />
+              </button>
+            </>
+          )}
+          <KpiCard
+            label="Conclusão SAP · HH"
+            value={completionLabel}
+            tone="primary"
+            icon={<Percent className="h-3.5 w-3.5" />}
+          />
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Conclusão SAP = HH apropriado considerado ÷ HH programado, limitado por confirmação e pelo
+          período real SAP. Respeita os filtros; imediatas não aumentam a conclusão da programação.
+          Sem carga SAP ou HH programado válido, o percentual fica indisponível. Os cartões de
+          status permanecem como apontamento operacional.
+        </p>
+      </section>
 
       {/* Toolbar */}
       <Toolbar className="mb-3">
