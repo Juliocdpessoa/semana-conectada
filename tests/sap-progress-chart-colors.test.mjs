@@ -11,7 +11,10 @@ test("SAP curve uses complete theme color values directly, compatible with OKLCH
   assert.match(theme, /--primary:\s*oklch\(/);
   assert.match(theme, /--primary:\s*#/);
   assert.doesNotMatch(component, /hsl\(var\(/);
-  assert.match(component, /stroke="var\(--primary\)"/);
+  assert.match(component, /stroke="#2563EB"/);
+  assert.match(component, /fill="#9CA3AF"/);
+  assert.match(component, /fill="#2563EB"/);
+  assert.match(component, /fill="#16A34A"/);
   assert.match(component, /stroke="var\(--muted-foreground\)"/);
   assert.match(component, /background: "var\(--card\)"/);
 });

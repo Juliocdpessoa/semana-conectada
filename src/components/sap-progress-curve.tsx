@@ -49,7 +49,7 @@ export function SapProgressCurve({
   const series = sapProgressSeries(startDate, endDate, progress);
   return (
     <Panel
-      title="Curva de avanço · SAP"
+      title="Curva de Avanço"
       description="HH apropriado limitado ao programado por confirmação ÷ HH programado. Status operacional não interfere no avanço."
     >
       {query.isPending ? (
@@ -80,7 +80,7 @@ export function SapProgressCurve({
               correção.
             </p>
           )}
-          <div className="mb-3 flex flex-wrap gap-5 text-sm">
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 [&>span]:rounded-md [&>span]:border [&>span]:border-border [&>span]:bg-muted/30 [&>span]:px-3 [&>span]:py-2 [&>span]:text-xs [&_strong]:mt-1 [&_strong]:block [&_strong]:text-sm">
             <span>
               HH programado: <strong>{number(progress.planned)}</strong>
             </span>
@@ -97,78 +97,89 @@ export function SapProgressCurve({
               </strong>
             </span>
           </div>
-          <div
-            className="h-80 min-w-0 w-full"
-            role="img"
-            aria-label="Colunas de HH diário programado, apropriado SAP e restante; linhas de percentual acumulado"
-          >
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={series} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis
-                  yAxisId="hours"
-                  domain={[0, "auto"]}
-                  tick={{ fontSize: 11 }}
-                  label={{ value: "HH", position: "insideTopLeft" }}
-                />
-                <YAxis
-                  yAxisId="percent"
-                  orientation="right"
-                  domain={[0, 100]}
-                  unit="%"
-                  tick={{ fontSize: 11 }}
-                />
-                <Tooltip
-                  formatter={(value: number, name: string) =>
-                    `${number(value)}${name.includes("acumulado") ? "%" : " HH"}`
-                  }
-                  contentStyle={{
-                    background: "var(--card)",
-                    borderColor: "var(--border)",
-                    color: "var(--foreground)",
-                  }}
-                />
-                <Legend />
-                <Bar
-                  yAxisId="hours"
-                  dataKey="dailyPlanned"
-                  name="Programado (dia)"
-                  fill="var(--muted-foreground)"
-                  maxBarSize={22}
-                />
-                <Bar
-                  yAxisId="hours"
-                  dataKey="dailyEarned"
-                  name="Apropriado SAP considerado (dia)"
-                  fill="var(--primary)"
-                  maxBarSize={22}
-                />
-                <Bar
-                  yAxisId="hours"
-                  dataKey="dailyRemaining"
-                  name="Restante (dia)"
-                  fill="#f59e0b"
-                  maxBarSize={22}
-                />
-                <Line
-                  yAxisId="percent"
-                  type="linear"
-                  dataKey="planned"
-                  name="Planejado acumulado"
-                  stroke="var(--muted-foreground)"
-                  strokeDasharray="5 4"
-                />
-                <Line
-                  yAxisId="percent"
-                  type="linear"
-                  dataKey="earned"
-                  name="Apropriado SAP acumulado"
-                  stroke="var(--primary)"
-                  strokeWidth={2}
-                />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="w-full overflow-x-auto">
+            <div
+              className="h-[360px]"
+              style={{ minWidth: Math.max(560, series.length * 70) }}
+              role="img"
+              aria-label="Colunas de HH diário programado, apropriado SAP e restante; linhas de percentual acumulado"
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={series} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="date" tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" />
+                  <YAxis
+                    yAxisId="hours"
+                    domain={[0, "auto"]}
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--muted-foreground)"
+                    label={{ value: "HH", position: "insideTopLeft" }}
+                  />
+                  <YAxis
+                    yAxisId="percent"
+                    orientation="right"
+                    domain={[0, 100]}
+                    unit="%"
+                    tick={{ fontSize: 11 }}
+                    stroke="var(--muted-foreground)"
+                  />
+                  <Tooltip
+                    formatter={(value: number, name: string) =>
+                      `${number(value)}${name.includes("%") ? "%" : " HH"}`
+                    }
+                    contentStyle={{
+                      background: "var(--card)",
+                      borderColor: "var(--border)",
+                      color: "var(--foreground)",
+                      fontSize: 12,
+                      borderRadius: 8,
+                    }}
+                  />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Bar
+                    yAxisId="hours"
+                    dataKey="dailyPlanned"
+                    name="Planejado (dia)"
+                    fill="#9CA3AF"
+                    barSize={14}
+                  />
+                  <Bar
+                    yAxisId="hours"
+                    dataKey="dailyEarned"
+                    name="Realizado SAP (dia)"
+                    fill="#2563EB"
+                    barSize={14}
+                  />
+                  <Bar
+                    yAxisId="hours"
+                    dataKey="dailyRemaining"
+                    name="Restante (dia)"
+                    fill="#16A34A"
+                    barSize={14}
+                  />
+                  <Line
+                    yAxisId="percent"
+                    type="monotone"
+                    dataKey="planned"
+                    name="Planejado acumulado %"
+                    className="text-[#111827] dark:text-slate-100"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    dot={false}
+                  />
+                  <Line
+                    yAxisId="percent"
+                    type="monotone"
+                    dataKey="earned"
+                    name="Realizado acumulado %"
+                    stroke="#2563EB"
+                    strokeWidth={2.5}
+                    dot={{ r: 3 }}
+                    connectNulls={false}
+                  />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
             Apropriações parciais geram avanço parcial nos dias programados cobertos pelo período
