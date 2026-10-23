@@ -62,8 +62,8 @@ const date = (value: string) => new Date(`${value}T12:00:00`).toLocaleDateString
 const example = { programmed: "4708", completed: "4500", immediate: "0", available: "4708" };
 const bands = [
   { label: "Abaixo de 95%", factor: -0.02, display: "−0,02 (−2%)" },
-  { label: "De 95% até 98% (inclusive)", factor: -0.01, display: "−0,01 (−1%)" },
-  { label: "Acima de 98% até 100%", factor: 0, display: "0,00 (0%)" },
+  { label: "De 95% até menos de 98%", factor: -0.01, display: "−0,01 (−1%)" },
+  { label: "De 98% até 100% (inclusive)", factor: 0, display: "0,00 (0%)" },
   { label: "Acima de 100%", factor: 0.01, display: "+0,01 (+1%)" },
 ];
 
@@ -669,11 +669,11 @@ function RsContent({
             </table>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            Cores contratuais: vermelho abaixo de 95%; amarelo de 95% até 98%, inclusive; verde
-            acima de 98% até 100%; azul acima de 100%. Cinza indica acompanhamento ou RS
-            indisponível. O geral usa os totais ponderados pela disponibilidade, não a média simples
-            dos percentuais. Especialidades com disponibilidade zero têm RS indefinido e HH
-            considerado igual a zero.
+            Cores contratuais: vermelho abaixo de 95%; amarelo de 95% até menos de 98%; verde de 98%
+            até 100%, inclusive; azul acima de 100%. Cinza indica acompanhamento ou RS indisponível.
+            O geral usa os totais ponderados pela disponibilidade, não a média simples dos
+            percentuais. Especialidades com disponibilidade zero têm RS indefinido e HH considerado
+            igual a zero.
           </p>
         </Panel>
       )}
@@ -736,7 +736,8 @@ function RsContent({
           )}
           <p>
             Com o teto confirmado, o RS não ultrapassa 100%; a faixa acima de 100% permanece como
-            referência contratual. De 95% até 98%, inclusive, o fator contratual é −0,01.
+            referência contratual. De 95% até menos de 98%, o fator é −0,01; de 98% até 100%,
+            inclusive, é 0,00.
           </p>
         </div>
       </Panel>

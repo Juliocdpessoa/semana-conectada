@@ -28,7 +28,7 @@ export function calculateWeeklyRealization(input: RsInputs) {
   };
   const at95 = compare(95) === 0;
   const factor: RsFactor =
-    compare(95) < 0 ? -0.02 : compare(98) <= 0 ? -0.01 : compare(100) <= 0 ? 0 : 0.01;
+    compare(95) < 0 ? -0.02 : compare(98) < 0 ? -0.01 : compare(100) <= 0 ? 0 : 0.01;
   return { occupation, rs, factor, totalCompleted, reference, programmedConsidered, at95 };
 }
 
