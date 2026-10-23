@@ -33,6 +33,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { WeeklyRealizationPanel } from "@/components/weekly-realization-panel";
+import { SapProgressCurve, useSapProgress } from "@/components/sap-progress-curve";
 import type { SessionInfo } from "./route";
 import {
   Bar,
@@ -58,12 +59,20 @@ function PainelPage() {
   const requestedView =
     typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("view") : null;
   const initialView =
-    requestedView === "nao-executadas" || requestedView === "nao-justificadas" || ((requestedView === "realizacao-semanal" || requestedView === "disponibilidade-hh") && canAccessRs)
+    requestedView === "nao-executadas" ||
+    requestedView === "nao-justificadas" ||
+    ((requestedView === "realizacao-semanal" || requestedView === "disponibilidade-hh") &&
+      canAccessRs)
       ? requestedView
       : "geral";
-  const [view, setView] = useState<"geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh">(initialView);
+  const [view, setView] = useState<
+    "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh"
+  >(initialView);
 
-  function changeView(next: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh") {
+  function changeView(
+    next:
+      "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh",
+  ) {
     setView(next);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -76,10 +85,18 @@ function PainelPage() {
   return (
     <>
       {(view === "realizacao-semanal" || view === "disponibilidade-hh") && canAccessRs ? (
-        <WeeklyRealizationPanel key={session.worksiteId + view} mode={view === "disponibilidade-hh" ? "availability" : "indicator"} tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
-          userId={session.userId} worksiteId={session.worksiteId} worksiteCode={session.worksiteCode} />
+        <WeeklyRealizationPanel
+          key={session.worksiteId + view}
+          mode={view === "disponibilidade-hh" ? "availability" : "indicator"}
+          tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
+          userId={session.userId}
+          worksiteId={session.worksiteId}
+          worksiteCode={session.worksiteCode}
+        />
       ) : view === "geral" ? (
-        <OverviewPanel tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />} />
+        <OverviewPanel
+          tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
+        />
       ) : (
         <NonExecutionDashboard
           mode={view === "nao-justificadas" ? "unjustified" : "non-executed"}
@@ -95,8 +112,12 @@ function PanelTabs({
   onChange,
   canAccessRs,
 }: {
-  view: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh";
-  onChange: (view: "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh") => void;
+  view:
+    "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh";
+  onChange: (
+    view:
+      "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh",
+  ) => void;
   canAccessRs: boolean;
 }) {
   return (
@@ -107,15 +128,28 @@ function PanelTabs({
       <PanelTabBtn active={view === "nao-executadas"} onClick={() => onChange("nao-executadas")}>
         Não execução
       </PanelTabBtn>
-      <PanelTabBtn active={view === "nao-justificadas"} onClick={() => onChange("nao-justificadas")}>
+      <PanelTabBtn
+        active={view === "nao-justificadas"}
+        onClick={() => onChange("nao-justificadas")}
+      >
         Não justificadas
       </PanelTabBtn>
-      {canAccessRs && <PanelTabBtn active={view === "realizacao-semanal"} onClick={() => onChange("realizacao-semanal")}>
-        Realização Semanal
-      </PanelTabBtn>}
-      {canAccessRs && <PanelTabBtn active={view === "disponibilidade-hh"} onClick={() => onChange("disponibilidade-hh")}>
-        Disponibilidade HH
-      </PanelTabBtn>}
+      {canAccessRs && (
+        <PanelTabBtn
+          active={view === "realizacao-semanal"}
+          onClick={() => onChange("realizacao-semanal")}
+        >
+          Realização Semanal
+        </PanelTabBtn>
+      )}
+      {canAccessRs && (
+        <PanelTabBtn
+          active={view === "disponibilidade-hh"}
+          onClick={() => onChange("disponibilidade-hh")}
+        >
+          Disponibilidade HH
+        </PanelTabBtn>
+      )}
     </div>
   );
 }
@@ -160,15 +194,16 @@ type Row = {
 };
 
 function OverviewPanel({ tabs }: { tabs: ReactNode }) {
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
   const [selectedJustification, setSelectedJustification] = useState<string | null>(null);
   const activeWeek = useQuery({
-    queryKey: ["active-week"],
+    queryKey: ["active-week", session.userId, session.worksiteId],
     queryFn: async () =>
       (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
   });
 
   const activities = useQuery({
-    queryKey: ["panel-activities", activeWeek.data?.id],
+    queryKey: ["panel-activities", session.userId, session.worksiteId, activeWeek.data?.id],
     enabled: !!activeWeek.data?.id,
     queryFn: async () => {
       const chunk = 1000;
@@ -191,6 +226,11 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
   });
 
   const rows = useMemo(() => activities.data ?? [], [activities.data]);
+  const sapProgress = useSapProgress(activeWeek.data?.id, session.userId, session.worksiteId);
+  const completionLabel =
+    sapProgress.data?.hasSource && sapProgress.data.planned > 0 && !sapProgress.data.invalidHours
+      ? `${((sapProgress.data.earned / sapProgress.data.planned) * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+      : "—";
 
   const kpis = useMemo(() => {
     const programmed = rows.filter((r) => !r.is_immediate);
@@ -296,8 +336,8 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
         description={`${activeWeek.data.start_date} a ${activeWeek.data.end_date} · ${kpis.total} atividades`}
         actions={
           <div className="hidden items-center gap-4 sm:flex">
-            <MiniStat label="Aderência" value={`${kpis.aderencia}%`} tone="success" />
-            <MiniStat label="Progresso" value={`${kpis.progresso}%`} />
+            <MiniStat label="Conclusão SAP" value={completionLabel} tone="success" />
+            <MiniStat label="Apontamentos registrados" value={`${kpis.progresso}%`} />
           </div>
         }
       />
@@ -309,7 +349,7 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
           icon={<ListChecks className="h-3.5 w-3.5" />}
         />
         <KpiCard
-          label="Executadas"
+          label="Apontadas executadas"
           value={kpis.executado}
           tone="success"
           icon={<CheckCircle2 className="h-3.5 w-3.5" />}
@@ -332,8 +372,8 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
           icon={<Zap className="h-3.5 w-3.5" />}
         />
         <KpiCard
-          label="Aderência"
-          value={`${kpis.aderencia}%`}
+          label="Conclusão SAP · HH"
+          value={completionLabel}
           tone="primary"
           icon={<Percent className="h-3.5 w-3.5" />}
         />
@@ -342,8 +382,10 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
       {tabs}
 
       <section className="mb-4">
-        <ProgressCurve
-          rows={rows}
+        <SapProgressCurve
+          weekId={activeWeek.data.id}
+          userId={session.userId}
+          worksiteId={session.worksiteId}
           startDate={activeWeek.data.start_date}
           endDate={activeWeek.data.end_date}
         />
@@ -351,8 +393,8 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
 
       <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Panel
-          title="Execução por dia"
-          description="Somente tarefas programadas · barras empilhadas executado/não executado"
+          title="Apontamento operacional por dia"
+          description="Status informado pelos encarregados; não representa avanço SAP."
         >
           <div className="space-y-3">
             {byDay.length === 0 ? (
@@ -663,407 +705,6 @@ function hoursOf(pd: Record<string, unknown> | null): number {
     n = NaN;
   }
   return Number.isFinite(n) && n > 0 ? n : 0;
-}
-
-function ProgressCurve({
-  rows,
-  startDate,
-  endDate,
-}: {
-  rows: CurveRow[];
-  startDate: string;
-  endDate: string;
-}) {
-  const [metric, setMetric] = useState<"count" | "hours">("count");
-
-  const days = useMemo(() => daysBetween(startDate, endDate), [startDate, endDate]);
-  const daySet = useMemo(() => new Set(days), [days]);
-  const totalHours = useMemo(
-    () => rows.filter((r) => !r.is_immediate).reduce((a, r) => a + hoursOf(r.planning_data), 0),
-    [rows],
-  );
-  const hoursDisabled = totalHours <= 0;
-  const effectiveMetric = hoursDisabled && metric === "hours" ? "count" : metric;
-
-  const unitOf = useCallback(
-    (r: CurveRow) => (effectiveMetric === "hours" ? hoursOf(r.planning_data) : 1),
-    [effectiveMetric],
-  );
-
-  const { data, totalPlanned, cutoffIso, indicators } = useMemo(() => {
-    const dPlanned = new Map<string, number>();
-    const dExec = new Map<string, number>();
-    const dPlannedExec = new Map<string, number>();
-    const dImmediateExec = new Map<string, number>();
-    let total = 0;
-
-    for (const r of rows) {
-      // Em HH a curva considera apenas tarefas programadas (imediatas ficam fora)
-      if (effectiveMetric === "hours" && r.is_immediate) continue;
-      const unit = unitOf(r);
-      if (unit <= 0) continue;
-
-      const reportedIso = reportedIsoDay(r.reported_at);
-      const reportedInWeek = reportedIso && daySet.has(reportedIso) ? reportedIso : null;
-
-      if (r.is_immediate) {
-        if (r.status === "EXECUTADO") {
-          const immediateDay =
-            reportedInWeek ??
-            (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
-          if (immediateDay)
-            dImmediateExec.set(immediateDay, (dImmediateExec.get(immediateDay) ?? 0) + unit);
-        }
-        continue;
-      }
-
-      // Planned day
-      let plannedIso: string | null =
-        r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null;
-      if (!plannedIso && r.is_immediate && reportedInWeek) plannedIso = reportedInWeek;
-
-      if (plannedIso) {
-        dPlanned.set(plannedIso, (dPlanned.get(plannedIso) ?? 0) + unit);
-        total += unit;
-      }
-
-      // Executed day
-      if (r.status === "EXECUTADO") {
-        const execIso =
-          reportedInWeek ??
-          (r.scheduled_date && daySet.has(r.scheduled_date) ? r.scheduled_date : null);
-        if (execIso) {
-          dExec.set(execIso, (dExec.get(execIso) ?? 0) + unit);
-          if (plannedIso === execIso) {
-            dPlannedExec.set(plannedIso, (dPlannedExec.get(plannedIso) ?? 0) + unit);
-          } else if (plannedIso) {
-            dPlannedExec.set(plannedIso, (dPlannedExec.get(plannedIso) ?? 0) + unit);
-          }
-        }
-      }
-    }
-
-    // Cutoff
-    const todayIso = isoDay(new Date());
-    let cutoff: string;
-    if (todayIso < days[0]) cutoff = days[0];
-    else if (todayIso > days[days.length - 1]) cutoff = days[days.length - 1];
-    else cutoff = todayIso;
-    const cutoffIdx = days.indexOf(cutoff);
-
-    // Series
-    let cumP = 0;
-    let cumE = 0;
-    const series = days.map((day, idx) => {
-      const planned = dPlanned.get(day) ?? 0;
-      const exec = dExec.get(day) ?? 0;
-      const plannedExec = dPlannedExec.get(day) ?? 0;
-      const remaining = Math.max(planned - plannedExec, 0);
-      const immediateExec = dImmediateExec.get(day) ?? 0;
-      cumP += planned;
-      cumE += exec;
-      const pctP = total > 0 ? (cumP / total) * 100 : 0;
-      const pctR = total > 0 ? (cumE / total) * 100 : 0;
-      const label = (() => {
-        const d = parseIsoDay(day);
-        const dd = String(d.getDate()).padStart(2, "0");
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        return `${dd}/${mm} ${WEEKDAY_PT[d.getDay()]}`;
-      })();
-      return {
-        day,
-        label,
-        planned: round2(planned),
-        exec: round2(exec),
-        remaining: round2(remaining),
-        immediateExec: round2(immediateExec),
-        pctPlanned: round2(pctP),
-        pctReal: idx <= cutoffIdx ? round2(pctR) : null,
-        _cumE: cumE,
-      };
-    });
-
-    // Projection
-    const realizedAtCut = series[cutoffIdx]?._cumE ?? 0;
-    const daysElapsed = cutoffIdx + 1;
-    if (realizedAtCut > 0 && total > 0 && daysElapsed > 0) {
-      const rate = realizedAtCut / daysElapsed; // units per day
-      let projected = realizedAtCut;
-      for (let i = cutoffIdx; i < series.length; i++) {
-        const s = series[i];
-        if (i === cutoffIdx) {
-          (s as Record<string, unknown>).pctProj = round2((realizedAtCut / total) * 100);
-        } else {
-          projected = Math.min(projected + rate, total);
-          (s as Record<string, unknown>).pctProj = round2(
-            Math.min(100, Math.max(0, (projected / total) * 100)),
-          );
-        }
-      }
-    }
-
-    const cumPlannedCut = series[cutoffIdx]?.pctPlanned ?? 0;
-    const realizedPctCut = total > 0 ? (realizedAtCut / total) * 100 : 0;
-    const impacted = rows.filter((r) => {
-      if (r.is_immediate) return false;
-      const linked = r.planning_data?.__linked_immediate_ids;
-      return Array.isArray(linked) && linked.length > 0;
-    }).length;
-    const immediateExecuted = Array.from(dImmediateExec.values()).reduce(
-      (sum, value) => sum + value,
-      0,
-    );
-
-    return {
-      data: series,
-      totalPlanned: total,
-      cutoffIso: cutoff,
-      indicators: {
-        plannedPct: round2(cumPlannedCut),
-        realPct: round2(realizedPctCut),
-        deviation: round2(realizedPctCut - cumPlannedCut),
-        remaining: round2(total - realizedAtCut),
-        impacted,
-        immediateExecuted: round2(immediateExecuted),
-      },
-    };
-  }, [rows, days, daySet, effectiveMetric, unitOf]);
-
-  const cutoffLabel = data.find((d) => d.day === cutoffIso)?.label ?? "";
-  const unitLabel = effectiveMetric === "hours" ? "h" : "";
-
-  return (
-    <Panel
-      title="Curva de Avanço"
-      description="Planejamento original congelado · imediatas exibidas separadamente sem alterar a curva planejada"
-      actions={
-        <div className="flex items-center gap-1 rounded-md border border-border bg-muted/40 p-0.5 text-[11px]">
-          <button
-            type="button"
-            onClick={() => setMetric("count")}
-            className={cn(
-              "rounded px-2 py-1 font-medium transition",
-              effectiveMetric === "count"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-            )}
-          >
-            Atividades
-          </button>
-          <button
-            type="button"
-            disabled={hoursDisabled}
-            onClick={() => setMetric("hours")}
-            title={
-              hoursDisabled ? "Sem horas planejadas suficientes nos dados desta semana" : undefined
-            }
-            className={cn(
-              "rounded px-2 py-1 font-medium transition",
-              effectiveMetric === "hours"
-                ? "bg-card text-foreground shadow-sm"
-                : "text-muted-foreground hover:text-foreground",
-              hoursDisabled && "cursor-not-allowed opacity-50",
-            )}
-          >
-            Horas planejadas
-          </button>
-        </div>
-      }
-    >
-      {totalPlanned <= 0 ? (
-        <div className="py-8 text-center text-xs text-muted-foreground">
-          Sem dados suficientes para calcular a curva de avanço nesta semana.
-        </div>
-      ) : (
-        <>
-          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            <CurveStat label="Planejado até corte" value={`${indicators.plannedPct.toFixed(1)}%`} />
-            <CurveStat
-              label="Realizado"
-              value={`${indicators.realPct.toFixed(1)}%`}
-              tone="primary"
-            />
-            <CurveStat
-              label="Desvio"
-              value={`${indicators.deviation >= 0 ? "+" : ""}${indicators.deviation.toFixed(1)} pp`}
-              tone={indicators.deviation >= 0 ? "success" : "destructive"}
-            />
-            <CurveStat
-              label="Restante"
-              value={`${indicators.remaining.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`}
-            />
-            <CurveStat
-              label="Impactadas por imediatas"
-              value={indicators.impacted.toLocaleString("pt-BR")}
-              tone="destructive"
-            />
-            <CurveStat
-              label="Imediatas executadas"
-              value={`${indicators.immediateExecuted.toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`}
-              tone="warning"
-            />
-          </div>
-
-          {hoursDisabled && metric === "hours" && (
-            <p className="mb-2 text-[11px] text-muted-foreground">
-              Modo "Horas planejadas" indisponível: nenhum registro possui HH válido na coluna TRAB.
-            </p>
-          )}
-
-          <div className="w-full overflow-x-auto">
-            <div style={{ minWidth: Math.max(560, data.length * 70) }} className="h-[360px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <ComposedChart data={data} margin={{ top: 8, right: 12, left: 0, bottom: 8 }}>
-                  <CartesianGrid
-                    stroke="hsl(var(--border))"
-                    strokeDasharray="3 3"
-                    vertical={false}
-                  />
-                  <XAxis
-                    dataKey="label"
-                    tick={{ fontSize: 11 }}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
-                  <YAxis
-                    yAxisId="left"
-                    tick={{ fontSize: 11 }}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
-                  <YAxis
-                    yAxisId="right"
-                    orientation="right"
-                    domain={[0, 100]}
-                    tickFormatter={(v) => `${v}%`}
-                    tick={{ fontSize: 11 }}
-                    stroke="hsl(var(--muted-foreground))"
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      fontSize: 12,
-                      borderRadius: 8,
-                      border: "1px solid hsl(var(--border))",
-                    }}
-                    formatter={(value: number | string, name: string) => {
-                      if (name.includes("%")) return [`${Number(value).toFixed(1)}%`, name];
-                      return [
-                        `${Number(value).toLocaleString("pt-BR")}${unitLabel ? ` ${unitLabel}` : ""}`,
-                        name,
-                      ];
-                    }}
-                  />
-                  <Legend wrapperStyle={{ fontSize: 11 }} />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="planned"
-                    name="Planejado (dia)"
-                    fill="#9CA3AF"
-                    barSize={14}
-                  />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="exec"
-                    name="Executado (dia)"
-                    fill="#2563EB"
-                    barSize={14}
-                  />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="remaining"
-                    name="Restante (dia)"
-                    fill="#16A34A"
-                    barSize={14}
-                  />
-                  <Bar
-                    yAxisId="left"
-                    dataKey="immediateExec"
-                    name="Imediatas executadas (dia)"
-                    fill="#F59E0B"
-                    barSize={14}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="pctPlanned"
-                    name="Planejado acumulado %"
-                    stroke="#111827"
-                    strokeWidth={2}
-                    dot={false}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="pctReal"
-                    name="Realizado acumulado %"
-                    stroke="#2563EB"
-                    strokeWidth={2.5}
-                    dot={{ r: 3 }}
-                    connectNulls={false}
-                  />
-                  <Line
-                    yAxisId="right"
-                    type="monotone"
-                    dataKey="pctProj"
-                    name="Projeção %"
-                    stroke="#DC2626"
-                    strokeWidth={2}
-                    strokeDasharray="5 4"
-                    dot={false}
-                    connectNulls
-                  />
-                  {cutoffLabel && (
-                    <ReferenceLine
-                      yAxisId="right"
-                      x={cutoffLabel}
-                      stroke="#2563EB"
-                      strokeDasharray="4 3"
-                      label={{
-                        value: "Data de corte",
-                        position: "top",
-                        fill: "#2563EB",
-                        fontSize: 11,
-                      }}
-                    />
-                  )}
-                </ComposedChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </>
-      )}
-    </Panel>
-  );
-}
-
-function CurveStat({
-  label,
-  value,
-  tone = "default",
-}: {
-  label: string;
-  value: string;
-  tone?: "default" | "success" | "destructive" | "primary" | "warning";
-}) {
-  const toneCls = {
-    default: "text-foreground",
-    success: "text-success",
-    destructive: "text-destructive",
-    primary: "text-primary",
-    warning: "text-warning-foreground",
-  }[tone];
-  return (
-    <div className="rounded-md border border-border bg-muted/30 px-3 py-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div className={cn("mt-0.5 text-lg font-semibold leading-none tabular", toneCls)}>
-        {value}
-      </div>
-    </div>
-  );
-}
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
 }
 
 const PAGE_SIZE = 30;

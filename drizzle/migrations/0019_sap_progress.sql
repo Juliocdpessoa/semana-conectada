@@ -1,0 +1,173 @@
+-- Read-only earned progress, independent of operational statuses and RS exclusions.
+-- Only derived task HH is exposed; source SAP records retain their planning-only permissions.
+CREATE OR REPLACE FUNCTION public.activity_sap_earned(p_week_id uuid)
+RETURNS TABLE(activity_id uuid, progress_date date, planned numeric, earned numeric, has_source boolean)
+LANGUAGE plpgsql STABLE SECURITY DEFINER SET search_path=public AS $$
+DECLARE w public.weeks%ROWTYPE; source_id uuid; g record; s record; t record;
+  credits jsonb; remaining numeric; allocation numeric; weight numeric;
+BEGIN
+  SELECT * INTO w FROM public.weeks WHERE id=p_week_id;
+  IF NOT FOUND OR auth.uid() IS NULL OR NOT coalesce(public.can_access_worksite(auth.uid(),w.worksite_id),false)
+    OR (w.lifecycle_status='preparation' AND NOT (coalesce(public.has_role(auth.uid(),'planning'),false)
+      OR coalesce(public.has_role(auth.uid(),'admin'),false) OR coalesce(public.has_role(auth.uid(),'operation'),false))) THEN
+    RAISE EXCEPTION 'Sem acesso ao avanço desta semana';
+  END IF;
+  SELECT i.id INTO source_id FROM public.sap_confirmation_imports i
+    WHERE i.week_id=p_week_id AND i.worksite_id=w.worksite_id
+      AND EXISTS(SELECT 1 FROM public.sap_confirmation_rows r WHERE r.import_id=i.id AND r.worksite_id=w.worksite_id)
+    ORDER BY i.imported_at DESC,i.id DESC LIMIT 1;
+  -- Group before allocating. Neither filtering nor pagination can reset a confirmation budget.
+  FOR g IN WITH program AS MATERIALIZED (
+    SELECT a.id,a.scheduled_date,
+      regexp_replace(regexp_replace(btrim(coalesce(a.planning_data->>'Confirmação',a.planning_data->>'Confirmacao','')),'([,.]0+)$','','g'),'^0+','') confirmation,
+      CASE WHEN h.normalized ~ '^[0-9]+(\.[0-9]+)?$' THEN h.normalized::numeric END planned_hh
+    FROM public.activities a CROSS JOIN LATERAL (
+      SELECT regexp_replace(btrim(coalesce(a.planning_data->>'Trab',a.planning_data->>'TRAB',a.planning_data->>'trab','')),'\s*h(oras?)?$','','i') cleaned
+    ) raw CROSS JOIN LATERAL (SELECT CASE WHEN position(',' in raw.cleaned)>0 THEN replace(replace(raw.cleaned,'.',''),',','.') ELSE raw.cleaned END normalized) h
+    WHERE a.week_id=p_week_id AND a.worksite_id=w.worksite_id AND NOT a.is_immediate
+  ), programs AS (
+    SELECT p.confirmation,jsonb_agg(jsonb_build_object('id',p.id,'date',p.scheduled_date,'hh',p.planned_hh) ORDER BY p.scheduled_date,p.id) tasks
+    FROM program p GROUP BY p.confirmation
+  ), sap AS (
+    SELECT regexp_replace(regexp_replace(btrim(coalesce(r.confirmation,'')),'([,.]0+)$','','g'),'^0+','') confirmation,
+      jsonb_agg(jsonb_build_object('id',r.id,'actual_work',r.actual_work,'first_day',coalesce(r.actual_start_date,r.actual_end_date),'last_day',coalesce(r.actual_end_date,r.actual_start_date))) records
+    FROM public.sap_confirmation_rows r WHERE r.import_id=source_id AND r.worksite_id=w.worksite_id AND r.week_id=p_week_id
+      AND r.has_confirmation AND r.actual_work>0 AND (r.actual_start_date IS NOT NULL OR r.actual_end_date IS NOT NULL)
+    GROUP BY 1
+  ) SELECT p.*,coalesce(matched.records,'[]'::jsonb) sap FROM programs p LEFT JOIN sap matched ON matched.confirmation=p.confirmation AND p.confirmation<>''
+  LOOP
+    credits:='{}'::jsonb;
+    -- Narrow execution windows first, so an aggregate spanning the week cannot consume their slots.
+    FOR s IN SELECT * FROM jsonb_to_recordset(g.sap) AS r(id uuid,actual_work numeric,first_day date,last_day date)
+      ORDER BY r.last_day-r.first_day,r.first_day,r.id
+    LOOP
+      SELECT coalesce(sum(greatest(0,(v->>'hh')::numeric-coalesce((credits->>(v->>'id'))::numeric,0))),0) INTO weight
+        FROM jsonb_array_elements(g.tasks) v WHERE (v->>'date')::date BETWEEN s.first_day AND s.last_day;
+      remaining:=least(s.actual_work,weight);
+      IF weight>0 THEN
+        FOR t IN SELECT v FROM jsonb_array_elements(g.tasks) v WHERE (v->>'date')::date BETWEEN s.first_day AND s.last_day LOOP
+          allocation:=remaining*greatest(0,(t.v->>'hh')::numeric-coalesce((credits->>(t.v->>'id'))::numeric,0))/weight;
+          credits:=jsonb_set(credits,ARRAY[t.v->>'id'],to_jsonb(coalesce((credits->>(t.v->>'id'))::numeric,0)+allocation));
+        END LOOP;
+      END IF;
+    END LOOP;
+    FOR t IN SELECT v FROM jsonb_array_elements(g.tasks) v LOOP
+      activity_id:=(t.v->>'id')::uuid; progress_date:=(t.v->>'date')::date;
+      planned:=(t.v->>'hh')::numeric; earned:=least(planned,coalesce((credits->>(t.v->>'id'))::numeric,0));
+      has_source:=source_id IS NOT NULL; RETURN NEXT;
+    END LOOP;
+  END LOOP;
+END $$;
+REVOKE ALL ON FUNCTION public.activity_sap_earned(uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.activity_sap_earned(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_activity_sap_progress(p_week_id uuid)
+RETURNS jsonb LANGUAGE sql STABLE SET search_path=public AS $$
+WITH earned AS MATERIALIZED (SELECT * FROM public.activity_sap_earned(p_week_id)),
+days AS (SELECT progress_date, sum(planned) planned,sum(earned) earned FROM earned GROUP BY progress_date)
+SELECT jsonb_build_object('hasSource',coalesce((SELECT bool_or(has_source) FROM earned),false),
+  'invalidHours',(SELECT count(*) FROM earned WHERE planned IS NULL),
+  'planned',(SELECT coalesce(sum(planned),0) FROM earned),'earned',(SELECT coalesce(sum(earned),0) FROM earned),
+  'days',coalesce((SELECT jsonb_agg(jsonb_build_object('date',progress_date,'planned',planned,'earned',earned) ORDER BY progress_date) FROM days),'[]'::jsonb));
+$$;
+REVOKE ALL ON FUNCTION public.get_activity_sap_progress(uuid) FROM PUBLIC,anon;
+GRANT EXECUTE ON FUNCTION public.get_activity_sap_progress(uuid) TO authenticated;
+
+CREATE OR REPLACE FUNCTION public.get_activities_page(p_week_id uuid, p_filters jsonb DEFAULT '{}'::jsonb, p_page integer DEFAULT 0, p_page_size integer DEFAULT 50)
+ RETURNS jsonb
+ LANGUAGE sql
+ STABLE
+ SET search_path TO 'public'
+AS $function$
+WITH params AS (
+  SELECT
+    lower(btrim(coalesce(p_filters->>'search',''))) search,
+    coalesce(p_filters->'statuses','[]'::jsonb) statuses,
+    coalesce(p_filters->'releaseTypes','[]'::jsonb) release_types,
+    coalesce(p_filters->'ptColors','[]'::jsonb) pt_colors,
+    coalesce(p_filters->'areas','[]'::jsonb) areas,
+    coalesce(p_filters->'locations','[]'::jsonb) locations,
+    coalesce(p_filters->'workCenters','[]'::jsonb) work_centers,
+    coalesce(p_filters->'planningGroups','[]'::jsonb) planning_groups,
+    coalesce(p_filters->'gers','[]'::jsonb) gers,
+    coalesce(p_filters->'dates','[]'::jsonb) dates,
+    coalesce(p_filters->'origins','[]'::jsonb) origins,
+     CASE WHEN (SELECT public.can_access_sap(auth.uid())) THEN coalesce(p_filters->'sapStatuses','[]'::jsonb) ELSE '[]'::jsonb END sap_statuses
+), base AS (
+  SELECT a.*,
+     CASE WHEN (SELECT public.can_access_sap(auth.uid())) THEN p_filters->'sapStatusById'->>a.id::text END AS effective_sap_status,
+    CASE
+      WHEN coalesce(a.planning_data->>'Gerência','') !~ '^[0-9 .,]+$' AND btrim(coalesce(a.planning_data->>'Gerência','')) <> '' THEN btrim(a.planning_data->>'Gerência')
+      WHEN coalesce(a.area,'') !~ '^[0-9 .,]+$' AND btrim(coalesce(a.area,'')) <> '' THEN btrim(a.area)
+      ELSE NULL
+    END AS area_label,
+    nullif(btrim(coalesce(a.planning_data->>'Localização','')),'') AS location_label,
+    coalesce(nullif(btrim(a.planning_data->>'CenTrab'),''), nullif(btrim(a.planning_data->>'CENTRO_DE_TRABALHO'),''), nullif(btrim(a.planning_data->>'Centro de trabalho'),'')) AS work_center,
+    coalesce(nullif(btrim(a.planning_data->>'Gr pl'),''), nullif(btrim(a.planning_data->>'GR PL'),''), nullif(btrim(a.planning_data->>'Gr Pl'),'')) AS planning_group,
+    CASE upper(btrim(coalesce(a.planning_data->>'Área op',a.planning_data->>'Área Op',a.planning_data->>'Area Op','')))
+      WHEN '50' THEN 'TE' WHEN '20' THEN 'CRA' WHEN '40' THEN 'HDT' WHEN '30' THEN 'DE'
+      WHEN '10' THEN 'CQG' WHEN '60' THEN 'UT' WHEN '70' THEN 'SMS' WHEN '4' THEN 'OFICINAS'
+      WHEN '6' THEN 'INFRA' WHEN 'LAB' THEN 'LAB' WHEN 'PRO' THEN 'UTE' WHEN 'MAN' THEN 'UTE'
+      WHEN 'SMS' THEN 'UTE' ELSE 'Não mapeado' END AS ger_label,
+    CASE WHEN a.release_type IN ('ATRE','OFICINAS') THEN NULL WHEN a.pt_color IS NOT NULL THEN a.pt_color WHEN a.release_type='PTT' THEN 'white' ELSE NULL END AS effective_pt_color,
+    CASE WHEN a.is_immediate THEN 'immediate' ELSE 'programmed' END AS origin_label,
+    CASE
+      WHEN jsonb_typeof(a.planning_data->'Trab')='number' THEN greatest(0,(a.planning_data->>'Trab')::numeric)
+      WHEN btrim(coalesce(a.planning_data->>'Trab',a.planning_data->>'TRAB',a.planning_data->>'trab','')) ~ '^[0-9]+(\.[0-9]+)?$'
+        THEN btrim(coalesce(a.planning_data->>'Trab',a.planning_data->>'TRAB',a.planning_data->>'trab',''))::numeric
+      WHEN btrim(coalesce(a.planning_data->>'Trab',a.planning_data->>'TRAB',a.planning_data->>'trab','')) ~ '^[0-9]+(,[0-9]+)?$'
+        THEN replace(btrim(coalesce(a.planning_data->>'Trab',a.planning_data->>'TRAB',a.planning_data->>'trab','')),',','.')::numeric
+      ELSE 0 END AS planned_hours
+  FROM public.activities a WHERE a.week_id=p_week_id
+), marked AS (
+  SELECT b.*,
+     (jsonb_array_length(p.sap_statuses)=0 OR p.sap_statuses ? coalesce(b.effective_sap_status,'')) pass_sap,
+    (p.search='' OR lower(coalesce(b.order_number,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.note_number,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.description,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.area,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.specialty,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.planning_data->>'Op','')) LIKE '%'||p.search||'%' OR lower(coalesce(b.planning_data->>'Subop','')) LIKE '%'||p.search||'%' OR lower(coalesce(b.pt_number,'')) LIKE '%'||p.search||'%' OR lower(coalesce(b.reported_by_name,'')) LIKE '%'||p.search||'%') pass_search,
+    (jsonb_array_length(p.statuses)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.statuses) s WHERE s=b.status OR (s='__PENDING_REPORT__' AND b.status IN ('Sem apontamento','AGUARDANDO PRÉ-EMISSÃO DE PT','PT EM ASSINATURA','PT ENVIADA P/ CAMPO')))) pass_status,
+    (jsonb_array_length(p.release_types)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.release_types) x WHERE x=b.release_type OR (x='__EMPTY__' AND b.release_type IS NULL))) pass_release,
+    (jsonb_array_length(p.pt_colors)=0 OR p.pt_colors ? coalesce(b.effective_pt_color,'')) pass_color,
+    (jsonb_array_length(p.areas)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.areas) x WHERE upper(btrim(x))=upper(btrim(coalesce(b.area_label,''))))) pass_area,
+    (jsonb_array_length(p.locations)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.locations) x WHERE (x='__EMPTY__' AND b.location_label IS NULL) OR upper(btrim(x))=upper(btrim(coalesce(b.location_label,''))))) pass_location,
+    (jsonb_array_length(p.work_centers)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.work_centers) x WHERE upper(btrim(x))=upper(btrim(coalesce(b.work_center,''))))) pass_work_center,
+    (jsonb_array_length(p.planning_groups)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.planning_groups) x WHERE upper(btrim(x))=upper(btrim(coalesce(b.planning_group,''))))) pass_planning_group,
+    (jsonb_array_length(p.gers)=0 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(p.gers) x WHERE upper(btrim(x))=upper(btrim(b.ger_label)))) pass_ger,
+    (jsonb_array_length(p.dates)=0 OR p.dates ? coalesce(b.scheduled_date::text,'')) pass_date,
+    (jsonb_array_length(p.origins)=0 OR p.origins ? b.origin_label) pass_origin
+  FROM base b CROSS JOIN params p
+), filtered AS (
+  SELECT * FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin
+), summary AS (
+  SELECT count(*)::int total,
+    count(*) FILTER (WHERE status='EXECUTADO')::int concluded,
+    count(*) FILTER (WHERE status='NÃO EXECUTADO')::int impeded,
+    count(*) FILTER (WHERE status IN ('Sem apontamento','AGUARDANDO PRÉ-EMISSÃO DE PT','PT EM ASSINATURA','PT ENVIADA P/ CAMPO'))::int no_report,
+    count(*) FILTER (WHERE status='CANCELADA')::int cancelled,
+    coalesce(sum(planned_hours),0)::numeric hours
+  FROM filtered
+)
+SELECT jsonb_build_object(
+  'rows',coalesce((SELECT jsonb_agg(to_jsonb(x) - ARRAY['effective_sap_status','pass_sap','area_label','location_label','work_center','planning_group','ger_label','effective_pt_color','origin_label','planned_hours','pass_search','pass_status','pass_release','pass_color','pass_area','pass_location','pass_work_center','pass_planning_group','pass_ger','pass_date','pass_origin']::text[]) FROM (SELECT * FROM filtered ORDER BY nullif(order_number,'') NULLS LAST, nullif(planning_data->>'Op','') NULLS LAST, nullif(planning_data->>'Subop','') NULLS LAST, source_row_number NULLS LAST LIMIT greatest(1,least(p_page_size,5000)) OFFSET greatest(0,p_page)*greatest(1,least(p_page_size,5000))) x),'[]'::jsonb),
+  'progress',(SELECT jsonb_build_object('hasSource',coalesce(bool_or(e.has_source),false),'invalidHours',count(*) FILTER(WHERE e.planned IS NULL),'planned',coalesce(sum(e.planned),0),'earned',coalesce(sum(e.earned),0),'percent',CASE WHEN sum(e.planned)>0 AND bool_or(e.has_source) AND count(*) FILTER(WHERE e.planned IS NULL)=0 THEN round(sum(e.earned)*100/sum(e.planned),1) END)
+    FROM public.activity_sap_earned(p_week_id) e JOIN filtered f ON f.id=e.activity_id),
+  'sapCounts',coalesce((SELECT jsonb_object_agg(sap_status,total) FROM
+      (SELECT effective_sap_status sap_status,count(*)::integer total FROM filtered
+       WHERE effective_sap_status IS NOT NULL GROUP BY effective_sap_status) counts),'{}'::jsonb),
+     'totalAll',(SELECT count(*) FROM base),
+  'kpis',(SELECT jsonb_build_object('total',total,'concluded',concluded,'impeded',impeded,'noReport',no_report,'cancelled',cancelled,'hours',hours,'percent',CASE WHEN total-cancelled>0 THEN round(concluded*100.0/(total-cancelled)) ELSE 0 END) FROM summary),
+  'options',jsonb_build_object(
+    'statuses',coalesce((SELECT jsonb_agg(DISTINCT status) FROM marked WHERE pass_sap AND pass_search AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'releaseTypes',coalesce((SELECT jsonb_agg(DISTINCT release_type) FILTER (WHERE release_type IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'hasEmptyReleaseType',EXISTS(SELECT 1 FROM marked WHERE pass_sap AND release_type IS NULL AND pass_search AND pass_status AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),
+    'ptColors',coalesce((SELECT jsonb_agg(DISTINCT effective_pt_color) FILTER (WHERE effective_pt_color IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'areas',coalesce((SELECT jsonb_agg(DISTINCT area_label) FILTER (WHERE area_label IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'locations',coalesce((SELECT jsonb_agg(DISTINCT location_label) FILTER (WHERE location_label IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'hasEmptyLocation',EXISTS(SELECT 1 FROM marked WHERE pass_sap AND location_label IS NULL AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),
+    'workCenters',coalesce((SELECT jsonb_agg(DISTINCT work_center) FILTER (WHERE work_center IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_planning_group AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'planningGroups',coalesce((SELECT jsonb_agg(DISTINCT planning_group) FILTER (WHERE planning_group IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_ger AND pass_date AND pass_origin),'[]'::jsonb),
+    'gers',coalesce((SELECT jsonb_agg(DISTINCT ger_label) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_date AND pass_origin),'[]'::jsonb),
+    'dates',coalesce((SELECT jsonb_agg(DISTINCT scheduled_date) FILTER (WHERE scheduled_date IS NOT NULL) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_origin),'[]'::jsonb),
+    'origins',coalesce((SELECT jsonb_agg(DISTINCT origin_label) FROM marked WHERE pass_sap AND pass_search AND pass_status AND pass_release AND pass_color AND pass_area AND pass_location AND pass_work_center AND pass_planning_group AND pass_ger AND pass_date),'[]'::jsonb)
+  )
+);
+$function$;
+NOTIFY pgrst,'reload schema';

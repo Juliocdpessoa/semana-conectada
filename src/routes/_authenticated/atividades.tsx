@@ -104,7 +104,6 @@ type SapOutsideSchedule = {
   rows: SapConfirmationOverview["unprogrammed"];
 };
 
-
 type SapConfirmationStatus =
   | "Aguardando confirmação"
   | "Confirmada no SAP"
@@ -157,7 +156,9 @@ function readPersistedActivityFilters(storageKey: string): PersistedActivityFilt
   try {
     const parsed = JSON.parse(localStorage.getItem(storageKey) ?? "{}") as Record<string, unknown>;
     const strings = (key: string) =>
-      Array.isArray(parsed[key]) ? parsed[key].filter((value): value is string => typeof value === "string") : [];
+      Array.isArray(parsed[key])
+        ? parsed[key].filter((value): value is string => typeof value === "string")
+        : [];
     return {
       search: typeof parsed.search === "string" ? parsed.search : "",
       statuses: strings("statuses"),
@@ -282,10 +283,7 @@ const PLANNING_WORKFLOW_STATUSES = new Set([
   "PT PRÉ-EMITIDA",
   "PT ENVIADA P/ CAMPO",
 ]);
-const OPERATION_WORKFLOW_STATUSES = new Set([
-  "PT EM ASSINATURA",
-  "PT PRÉ-EMITIDA",
-]);
+const OPERATION_WORKFLOW_STATUSES = new Set(["PT EM ASSINATURA", "PT PRÉ-EMITIDA"]);
 const PENDING_REPORT_FILTER = "__PENDING_REPORT__";
 const PENDING_REPORT_STATUSES = new Set([
   "Sem apontamento",
@@ -408,24 +406,26 @@ async function parseSapWorkbook(file: File): Promise<SapImportPreview> {
     if (!order || !confirmation) {
       throw new Error(`Linha ${index + 2}: Ordem e Confirmação são obrigatórias.`);
     }
-    return [{
-      source_row_number: index + 2,
-      order_number: order,
-      operation: sapText(value("operation")),
-      suboperation: sapText(value("suboperation")),
-      planning_code: sapText(value("planning_code")),
-      work_center: sapText(value("work_center")),
-      description: sapText(value("description")),
-      actual_start_date: sapDate(value("actual_start_date"), XLSX),
-      actual_end_date: sapDate(value("actual_end_date"), XLSX),
-      system_status: sapText(value("system_status")),
-      normal_duration: sapNumber(value("normal_duration")),
-      planned_work: sapNumber(value("planned_work")),
-      actual_work: sapNumber(value("actual_work")),
-      user_status: sapText(value("user_status")),
-      operational_area: sapText(value("operational_area")),
-      confirmation,
-    } satisfies SapImportRow];
+    return [
+      {
+        source_row_number: index + 2,
+        order_number: order,
+        operation: sapText(value("operation")),
+        suboperation: sapText(value("suboperation")),
+        planning_code: sapText(value("planning_code")),
+        work_center: sapText(value("work_center")),
+        description: sapText(value("description")),
+        actual_start_date: sapDate(value("actual_start_date"), XLSX),
+        actual_end_date: sapDate(value("actual_end_date"), XLSX),
+        system_status: sapText(value("system_status")),
+        normal_duration: sapNumber(value("normal_duration")),
+        planned_work: sapNumber(value("planned_work")),
+        actual_work: sapNumber(value("actual_work")),
+        user_status: sapText(value("user_status")),
+        operational_area: sapText(value("operational_area")),
+        confirmation,
+      } satisfies SapImportRow,
+    ];
   });
   if (!rows.length) throw new Error("A planilha SAP não contém registros válidos.");
   if (rows.length > 5000) throw new Error("A planilha excede o limite de 5.000 registros.");
@@ -855,7 +855,8 @@ function PlanningGridCell({
 function AtividadesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const filterStorageKey = `nexo:activity-filters:${session.userId}:${session.worksiteId}`;
-  const effectiveRoles = session.roles.length > 0 ? session.roles : session.role ? [session.role] : [];
+  const effectiveRoles =
+    session.roles.length > 0 ? session.roles : session.role ? [session.role] : [];
   const isLeaderOnly = effectiveRoles.length === 1 && effectiveRoles[0] === "leader";
   const hasFullActivityUpdate = effectiveRoles.some((role) =>
     ["admin", "manager", "planning", "leader"].includes(role),
@@ -979,9 +980,13 @@ function AtividadesPage() {
     queryFn: async () => {
       let request = (supabase as any)
         .from("weeks")
-        .select("id,code,label,start_date,end_date,is_active,lifecycle_status,sap_closure_status,sap_closure_deadline")
+        .select(
+          "id,code,label,start_date,end_date,is_active,lifecycle_status,sap_closure_status,sap_closure_deadline",
+        )
         .order("start_date", { ascending: false });
-      request = canAccessSap ? request.limit(6) : request.in("lifecycle_status", ["operational", "preparation"]);
+      request = canAccessSap
+        ? request.limit(6)
+        : request.in("lifecycle_status", ["operational", "preparation"]);
       const { data, error } = await request;
       if (error) throw error;
       return data ?? [];
@@ -992,10 +997,7 @@ function AtividadesPage() {
     queryKey: ["active-week", session.userId, session.worksiteId, selectedWeekId || "operational"],
     queryFn: async () => {
       let request = (supabase as any).from("weeks").select("*");
-      request =
-        selectedWeekId
-          ? request.eq("id", selectedWeekId)
-          : request.eq("is_active", true);
+      request = selectedWeekId ? request.eq("id", selectedWeekId) : request.eq("is_active", true);
       const { data, error } = await request.maybeSingle();
       if (error) throw error;
       return data;
@@ -1022,20 +1024,25 @@ function AtividadesPage() {
   };
   const hasSapSummaryFilters = Boolean(
     deferredSearch.trim() ||
-      statusFilters.length ||
-      releaseTypeFilters.length ||
-      ptColorFilters.length ||
-      areaFilters.length ||
-      locationFilters.length ||
-      workCenterFilters.length ||
-      planningGroupFilters.length ||
-      gerFilters.length ||
-      dateFilters.length ||
-      originFilters.length ||
-      sapStatusFilters.length,
+    statusFilters.length ||
+    releaseTypeFilters.length ||
+    ptColorFilters.length ||
+    areaFilters.length ||
+    locationFilters.length ||
+    workCenterFilters.length ||
+    planningGroupFilters.length ||
+    gerFilters.length ||
+    dateFilters.length ||
+    originFilters.length ||
+    sapStatusFilters.length,
   );
 
-  async function fetchActivitiesPage(pageIndex: number, size: number, signal?: AbortSignal, filters: Record<string, unknown> = activityFilters) {
+  async function fetchActivitiesPage(
+    pageIndex: number,
+    size: number,
+    signal?: AbortSignal,
+    filters: Record<string, unknown> = activityFilters,
+  ) {
     let request = (supabase as any).rpc("get_activities_page", {
       p_week_id: activeWeek.data!.id,
       p_filters: filters,
@@ -1047,6 +1054,7 @@ function AtividadesPage() {
     if (error) throw error;
     return data as {
       rows: ActivityRow[];
+      progress?: { hasSource: boolean; planned: number; earned: number; percent: number | null };
       sapCounts?: Partial<Record<SapConfirmationStatus, number>>;
       totalAll: number;
       kpis: {
@@ -1133,10 +1141,7 @@ function AtividadesPage() {
 
   const sapOutsideSchedule = useQuery({
     queryKey: ["sap-outside-schedule", activeWeek.data?.id, sapOverview.data?.importedRows],
-    enabled:
-      Boolean(activeWeek.data?.id) &&
-      canAccessSap &&
-      Boolean(sapOverview.data?.hasImport),
+    enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapOverview.data?.hasImport),
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_sap_outside_schedule", {
         p_week_id: activeWeek.data!.id,
@@ -1153,7 +1158,9 @@ function AtividadesPage() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("sap_confirmation_imports")
-        .select("id,source_file_name,row_count,imported_at,imported_by,imported_by_name,imported_by_email")
+        .select(
+          "id,source_file_name,row_count,imported_at,imported_by,imported_by_name,imported_by_email",
+        )
         .eq("week_id", activeWeek.data!.id)
         .order("imported_at", { ascending: false })
         .limit(1)
@@ -1229,8 +1236,10 @@ function AtividadesPage() {
 
       const withinExecutionPeriod = group.filter((activity) => {
         if (!activity.scheduled_date) return false;
-        if (sapRow.actual_start_date && activity.scheduled_date < sapRow.actual_start_date) return false;
-        if (sapRow.actual_end_date && activity.scheduled_date > sapRow.actual_end_date) return false;
+        if (sapRow.actual_start_date && activity.scheduled_date < sapRow.actual_start_date)
+          return false;
+        if (sapRow.actual_end_date && activity.scheduled_date > sapRow.actual_end_date)
+          return false;
         return true;
       });
       let candidates = withinExecutionPeriod.length > 0 ? withinExecutionPeriod : group;
@@ -1238,9 +1247,10 @@ function AtividadesPage() {
         (activity) => activityConfirmation(activity) === String(sapRow.confirmation ?? "").trim(),
       );
       if (confirmationMatches.length > 0) candidates = confirmationMatches;
-      candidates.sort((left, right) =>
-        String(left.scheduled_date ?? "").localeCompare(String(right.scheduled_date ?? "")) ||
-        (left.source_row_number ?? 0) - (right.source_row_number ?? 0),
+      candidates.sort(
+        (left, right) =>
+          String(left.scheduled_date ?? "").localeCompare(String(right.scheduled_date ?? "")) ||
+          (left.source_row_number ?? 0) - (right.source_row_number ?? 0),
       );
 
       for (let index = 0; index < candidates.length && remaining > 0; index += 1) {
@@ -1271,7 +1281,12 @@ function AtividadesPage() {
       }
     }
     return statuses;
-  }, [sapAllocationActivities.data, sapHoursByActivity, sapOverview.data?.deadline, sapOverview.data?.statuses]);
+  }, [
+    sapAllocationActivities.data,
+    sapHoursByActivity,
+    sapOverview.data?.deadline,
+    sapOverview.data?.statuses,
+  ]);
 
   // The server applies every filter and returns page + KPIs + SAP counts once.
   // Keep the established daily HH allocation as the source of effective statuses.
@@ -1280,7 +1295,14 @@ function AtividadesPage() {
     ...(canAccessSap ? { sapStatuses: sapStatusFilters, sapStatusById: effectiveSapStatuses } : {}),
   };
   const activities = useQuery({
-    queryKey: ["activities", activeWeek.data?.id, page, serverActivityFilters, session.userId, session.worksiteId],
+    queryKey: [
+      "activities",
+      activeWeek.data?.id,
+      page,
+      serverActivityFilters,
+      session.userId,
+      session.worksiteId,
+    ],
     enabled: Boolean(activeWeek.data?.id),
     queryFn: ({ signal }) => fetchActivitiesPage(page, pageSize, signal, serverActivityFilters),
     staleTime: 30_000,
@@ -1329,9 +1351,7 @@ function AtividadesPage() {
       ...(serverOptions?.locations ?? []),
       ...locationFilters,
     ]),
-  ).sort((a, b) =>
-    a === "__EMPTY__" ? -1 : b === "__EMPTY__" ? 1 : a.localeCompare(b, "pt-BR"),
-  );
+  ).sort((a, b) => (a === "__EMPTY__" ? -1 : b === "__EMPTY__" ? 1 : a.localeCompare(b, "pt-BR")));
   const gerOptions = Array.from(new Set([...(serverOptions?.gers ?? []), ...gerFilters])).sort(
     (a, b) => (a === "Não mapeado" ? 1 : b === "Não mapeado" ? -1 : a.localeCompare(b, "pt-BR")),
   );
@@ -1356,6 +1376,12 @@ function AtividadesPage() {
     percent: 0,
   };
   const totalPages = Math.max(1, Math.ceil(kpis.total / pageSize));
+  const sapProgress = activityResult?.progress;
+  const completionPercent = sapProgress?.hasSource ? sapProgress.percent : null;
+  const completionLabel =
+    completionPercent == null
+      ? "—"
+      : `${completionPercent.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`;
   const effectiveSapCounts = Object.values(effectiveSapStatuses).reduce(
     (counts, status) => {
       counts[status] = (counts[status] ?? 0) + 1;
@@ -1363,19 +1389,16 @@ function AtividadesPage() {
     },
     {} as Partial<Record<SapConfirmationStatus, number>>,
   );
-  const sapCounts = hasSapSummaryFilters
-    ? (activities.data?.sapCounts ?? {})
-    : effectiveSapCounts;
+  const sapCounts = hasSapSummaryFilters ? (activities.data?.sapCounts ?? {}) : effectiveSapCounts;
   const sapCount = (status: SapConfirmationStatus) => sapCounts[status] ?? 0;
   const effectiveOutsideSchedule = sapOutsideSchedule.data ?? {
     unprogrammedCount: sapOverview.data?.unprogrammedCount ?? 0,
     immediateCount: sapOverview.data?.immediateCount ?? 0,
     rows: sapOverview.data?.unprogrammed ?? [],
   };
-  const sapUnprogrammedRows =
-    effectiveOutsideSchedule.rows.filter(
-      (row) => row.classification === sapUnprogrammedOpen,
-    );
+  const sapUnprogrammedRows = effectiveOutsideSchedule.rows.filter(
+    (row) => row.classification === sapUnprogrammedOpen,
+  );
 
   function activityConfirmation(row: ActivityRow) {
     return String(
@@ -1848,11 +1871,15 @@ function AtividadesPage() {
       });
       if (error) throw error;
       const count = Number(data?.count ?? sapImportPreview.rows.length);
-      toast.success(`${count.toLocaleString("pt-BR")} registros SAP importados para ${activeWeek.data.label}.`);
+      toast.success(
+        `${count.toLocaleString("pt-BR")} registros SAP importados para ${activeWeek.data.label}.`,
+      );
       setSapImportPreview(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["sap-confirmation-overview", activeWeek.data.id] }),
         qc.invalidateQueries({ queryKey: ["sap-confirmation-latest-import", activeWeek.data.id] }),
+        qc.invalidateQueries({ queryKey: ["sap-earned-progress"] }),
+        qc.invalidateQueries({ queryKey: ["activities", activeWeek.data.id] }),
       ]);
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível importar as confirmações SAP.");
@@ -2259,7 +2286,9 @@ function AtividadesPage() {
         eyebrow={
           activeWeek.data?.lifecycle_status === "preparation"
             ? "Semana em preparação"
-            : activeWeek.data?.lifecycle_status === "operational" ? "Semana operacional" : "Fechamento SAP"
+            : activeWeek.data?.lifecycle_status === "operational"
+              ? "Semana operacional"
+              : "Fechamento SAP"
         }
         title={activeWeek.data?.label ?? "—"}
         description={
@@ -2283,7 +2312,11 @@ function AtividadesPage() {
                 {(availableWeeks.data ?? []).map((week: any) => (
                   <option key={week.id} value={week.id}>
                     {week.label} —{" "}
-                    {week.lifecycle_status === "preparation" ? "Em preparação" : week.lifecycle_status === "operational" ? "Operacional" : "Fechamento SAP"}
+                    {week.lifecycle_status === "preparation"
+                      ? "Em preparação"
+                      : week.lifecycle_status === "operational"
+                        ? "Operacional"
+                        : "Fechamento SAP"}
                   </option>
                 ))}
               </select>
@@ -2292,7 +2325,13 @@ function AtividadesPage() {
               <>
                 <button
                   onClick={() => sapImportInputRef.current?.click()}
-                  disabled={isSapImporting || !activeWeek.data || activeWeek.data.sap_closure_status === "closed" || (activeWeek.data.sap_closure_deadline && new Date(activeWeek.data.sap_closure_deadline) < new Date())}
+                  disabled={
+                    isSapImporting ||
+                    !activeWeek.data ||
+                    activeWeek.data.sap_closure_status === "closed" ||
+                    (activeWeek.data.sap_closure_deadline &&
+                      new Date(activeWeek.data.sap_closure_deadline) < new Date())
+                  }
                   className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
                   title={`Importar a extração SAP para ${activeWeek.data?.label ?? "a semana selecionada"}`}
                 >
@@ -2375,10 +2414,10 @@ function AtividadesPage() {
             </button>
             <div className="hidden text-right sm:block">
               <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-                Conclusão
+                Conclusão SAP
               </div>
               <div className="text-lg font-semibold leading-none text-foreground tabular">
-                {kpis.percent}%
+                {completionLabel}
               </div>
             </div>
           </div>
@@ -2391,9 +2430,12 @@ function AtividadesPage() {
         role="progressbar"
         aria-valuemin={0}
         aria-valuemax={100}
-        aria-valuenow={kpis.percent}
+        aria-valuenow={completionPercent ?? undefined}
       >
-        <div className="h-full bg-success transition-all" style={{ width: `${kpis.percent}%` }} />
+        <div
+          className="h-full bg-success transition-all"
+          style={{ width: `${completionPercent ?? 0}%` }}
+        />
       </div>
 
       {canLoadDateEditSettings && (
@@ -2528,14 +2570,27 @@ function AtividadesPage() {
           value={formatActivityHours(kpis.hours)}
           icon={<Clock className="h-3.5 w-3.5" />}
         />
-        <ActivityCapacityCard weekId={activeWeek.data?.id} userId={session.userId} worksiteId={session.worksiteId} centers={workCenterFilters} dates={dateFilters} />
+        <ActivityCapacityCard
+          weekId={activeWeek.data?.id}
+          userId={session.userId}
+          worksiteId={session.worksiteId}
+          centers={workCenterFilters}
+          dates={dateFilters}
+        />
         <KpiCard
-          label="Conclusão"
-          value={`${kpis.percent}%`}
+          label="Conclusão SAP · HH"
+          value={completionLabel}
           tone="primary"
           icon={<Percent className="h-3.5 w-3.5" />}
         />
       </section>
+
+      <p className="mb-3 text-xs text-muted-foreground">
+        Conclusão SAP = HH apropriado considerado ÷ HH programado, limitado por confirmação e pelo
+        período real SAP. Respeita os filtros; imediatas não aumentam a conclusão da programação.
+        Sem carga SAP ou HH programado válido, o percentual fica indisponível. Os cartões de status
+        permanecem como apontamento operacional.
+      </p>
 
       {canAccessSap && sapOverview.data?.hasImport && (
         <section className="mb-5 rounded-md border border-border bg-card p-3">
@@ -2547,14 +2602,15 @@ function AtividadesPage() {
                 </h2>
                 <span>|</span>
                 <span>
-                  {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais - prazo até{" "}
-                  {formatDateTime(sapOverview.data.deadline)}
+                  {sapOverview.data.importedRows.toLocaleString("pt-BR")} linhas oficiais - prazo
+                  até {formatDateTime(sapOverview.data.deadline)}
                 </span>
                 {sapLatestImport.data && (
                   <>
                     <span>|</span>
                     <span>
-                      Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} | Responsável:{" "}
+                      Atualizado em {formatDateTime(sapLatestImport.data.imported_at)} |
+                      Responsável:{" "}
                       <span className="font-medium text-foreground">
                         {sapLatestImport.data.imported_by_name ||
                           sapLatestImport.data.imported_by_email ||
@@ -3049,7 +3105,11 @@ function AtividadesPage() {
                             onClick={() => setEditing(r)}
                             className="btn-primary py-1 text-[11px]"
                           >
-                            {isOperationOnly ? "Atualizar PT" : r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
+                            {isOperationOnly
+                              ? "Atualizar PT"
+                              : r.status === "Sem apontamento"
+                                ? "Apontar"
+                                : "Atualizar"}
                           </button>
                         </td>
                       )}
@@ -3135,13 +3195,15 @@ function AtividadesPage() {
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusPill status={r.status} />
-                    {canAccessSap && (
-                      <SapStatusPill status={sapStatusForActivity(r)} />
-                    )}
+                    {canAccessSap && <SapStatusPill status={sapStatusForActivity(r)} />}
                   </div>
                   {canUpdateActivities && (
                     <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
-                      {isOperationOnly ? "Atualizar PT" : r.status === "Sem apontamento" ? "Apontar" : "Atualizar"}
+                      {isOperationOnly
+                        ? "Atualizar PT"
+                        : r.status === "Sem apontamento"
+                          ? "Apontar"
+                          : "Atualizar"}
                     </button>
                   )}
                 </div>
@@ -3257,7 +3319,9 @@ function AtividadesPage() {
                     <td className="px-2 py-2">{row.description ?? "—"}</td>
                     <td className="px-2 py-2 text-center font-mono">{row.planning_code ?? "—"}</td>
                     <td className="px-2 py-2 tabular">{formatDate(row.actual_end_date)}</td>
-                    <td className="px-2 py-2 tabular">{formatActivityHours(row.actual_work ?? 0)}</td>
+                    <td className="px-2 py-2 tabular">
+                      {formatActivityHours(row.actual_work ?? 0)}
+                    </td>
                     <td className="px-2 py-2 font-mono">{row.confirmation}</td>
                   </tr>
                 ))}
@@ -3306,10 +3370,15 @@ function AtividadesPage() {
               <KpiCard label="Linhas" value={sapImportPreview.rows.length} />
               <KpiCard label="Confirmadas" value={sapImportPreview.confirmed} tone="success" />
               <KpiCard label="Confirmadas sem HH" value={sapImportPreview.confirmedWithoutHours} />
-              <KpiCard label="Sem CONF" value={sapImportPreview.withoutConfirmation} tone="warning" />
+              <KpiCard
+                label="Sem CONF"
+                value={sapImportPreview.withoutConfirmation}
+                tone="warning"
+              />
             </div>
             <div className="text-xs text-muted-foreground">
-              Arquivo: <span className="font-medium text-foreground">{sapImportPreview.fileName}</span>
+              Arquivo:{" "}
+              <span className="font-medium text-foreground">{sapImportPreview.fileName}</span>
             </div>
             <div className="max-h-72 overflow-auto rounded-md border border-border">
               <table className="min-w-[760px] w-full text-xs">
@@ -3359,7 +3428,8 @@ function AtividadesPage() {
             </div>
             {sapImportPreview.rows.length > 50 && (
               <p className="text-[11px] text-muted-foreground">
-                Prévia das primeiras 50 linhas. Todos os {sapImportPreview.rows.length.toLocaleString("pt-BR")} registros serão importados.
+                Prévia das primeiras 50 linhas. Todos os{" "}
+                {sapImportPreview.rows.length.toLocaleString("pt-BR")} registros serão importados.
               </p>
             )}
           </div>
@@ -3701,13 +3771,13 @@ function ApontarModal({
     setSaving(true);
     try {
       const data = {
-          activityId: activity.id,
-          expectedVersion: reportBaseline.current.version,
-          status,
-          justification: justification.trim() || null,
-          observation: observation.trim() || null,
-          immediateActivityIds: needsImmediateLink ? Array.from(selectedImmediateIds) : [],
-        };
+        activityId: activity.id,
+        expectedVersion: reportBaseline.current.version,
+        status,
+        justification: justification.trim() || null,
+        observation: observation.trim() || null,
+        immediateActivityIds: needsImmediateLink ? Array.from(selectedImmediateIds) : [],
+      };
       let res = await call({ data });
       // A colour/PT update (including our own) can advance the version.
       // Keep optimistic locking on every attempt; never overwrite a changed report.
@@ -3722,21 +3792,34 @@ function ApontarModal({
           const current = res.current;
           if (canRetryActivityReport(reportBaseline.current, current)) {
             reportBaseline.current = { ...reportBaseline.current, ...current };
-            toast.info("A tarefa recebeu atualizações. Seu preenchimento foi mantido; tente salvar novamente.");
+            toast.info(
+              "A tarefa recebeu atualizações. Seu preenchimento foi mantido; tente salvar novamente.",
+            );
           } else {
             reportBaseline.current = { ...reportBaseline.current, ...current };
             setStatus(current.status);
             setJustification(current.justification ?? "");
             setObservation(current.observation ?? "");
             const planningData = current.planning_data;
-            setSelectedImmediateIds(new Set(getLinkedImmediateIds(
-              planningData && typeof planningData === "object" && !Array.isArray(planningData)
-                ? planningData : null,
-            )));
-            toast.info("O apontamento mudou desde a abertura. Os dados atuais foram carregados; revise antes de salvar.");
+            setSelectedImmediateIds(
+              new Set(
+                getLinkedImmediateIds(
+                  planningData && typeof planningData === "object" && !Array.isArray(planningData)
+                    ? planningData
+                    : null,
+                ),
+              ),
+            );
+            toast.info(
+              "O apontamento mudou desde a abertura. Os dados atuais foram carregados; revise antes de salvar.",
+            );
           }
-        }
-        else toast.error("error" in res ? res.error ?? "Erro ao salvar apontamento." : "Não foi possível carregar a tarefa. Atualize a lista.");
+        } else
+          toast.error(
+            "error" in res
+              ? (res.error ?? "Erro ao salvar apontamento.")
+              : "Não foi possível carregar a tarefa. Atualize a lista.",
+          );
         return;
       }
       toast.success("Apontamento salvo.");
@@ -3750,7 +3833,11 @@ function ApontarModal({
   return (
     <Modal
       title="Apontar atividade"
-      description={statusOnly ? "Atualize o andamento da emissão da PT." : "Registre status, justificativa e observações."}
+      description={
+        statusOnly
+          ? "Atualize o andamento da emissão da PT."
+          : "Registre status, justificativa e observações."
+      }
       onClose={onClose}
       footer={
         <>
@@ -3790,8 +3877,8 @@ function ApontarModal({
             }}
             className="input-base"
           >
-            {STATUSES.filter(
-              (s) => allowedStatuses
+            {STATUSES.filter((s) =>
+              allowedStatuses
                 ? allowedStatuses.has(s) || activity.status === s
                 : (!PLANNING_WORKFLOW_STATUSES.has(s) && s !== "CANCELADA") ||
                   canCancel ||
@@ -3812,26 +3899,28 @@ function ApontarModal({
           </select>
         </Field>
 
-        {!statusOnly && <Field label="Justificativa" required={needsJust}>
-          <select
-            value={needsJust ? justification : ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              setJustification(value);
-              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
-                setImmediatePickerOpen(true);
-            }}
-            className="input-base"
-            disabled={!needsJust}
-          >
-            <option value="">— Selecione —</option>
-            {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
-              <option key={j} value={j}>
-                {j}
-              </option>
-            ))}
-          </select>
-        </Field>}
+        {!statusOnly && (
+          <Field label="Justificativa" required={needsJust}>
+            <select
+              value={needsJust ? justification : ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                setJustification(value);
+                if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
+                  setImmediatePickerOpen(true);
+              }}
+              className="input-base"
+              disabled={!needsJust}
+            >
+              <option value="">— Selecione —</option>
+              {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
 
         {!statusOnly && needsImmediateLink && (
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
@@ -3858,15 +3947,17 @@ function ApontarModal({
           </div>
         )}
 
-        {!statusOnly && <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
-          <textarea
-            value={observation}
-            onChange={(e) => setObservation(e.target.value)}
-            rows={3}
-            maxLength={2000}
-            className="input-base"
-          />
-        </Field>}
+        {!statusOnly && (
+          <Field label="Observações" hint="Você será registrado automaticamente como responsável.">
+            <textarea
+              value={observation}
+              onChange={(e) => setObservation(e.target.value)}
+              rows={3}
+              maxLength={2000}
+              className="input-base"
+            />
+          </Field>
+        )}
       </div>
 
       <ActivityTimeline activityId={activity.id} />
@@ -4275,26 +4366,28 @@ function BulkModal({
             ))}
           </select>
         </Field>
-        {!statusOnly && <Field label="Justificativa" required={needsJust}>
-          <select
-            value={needsJust ? justification : ""}
-            onChange={(e) => {
-              const value = e.target.value;
-              setJustification(value);
-              if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
-                setImmediatePickerOpen(true);
-            }}
-            className="input-base"
-            disabled={!needsJust}
-          >
-            <option value="">— Selecione —</option>
-            {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
-              <option key={j} value={j}>
-                {j}
-              </option>
-            ))}
-          </select>
-        </Field>}
+        {!statusOnly && (
+          <Field label="Justificativa" required={needsJust}>
+            <select
+              value={needsJust ? justification : ""}
+              onChange={(e) => {
+                const value = e.target.value;
+                setJustification(value);
+                if (status === "NÃO EXECUTADO" && value === IMMEDIATE_JUSTIFICATION)
+                  setImmediatePickerOpen(true);
+              }}
+              className="input-base"
+              disabled={!needsJust}
+            >
+              <option value="">— Selecione —</option>
+              {(status === "CANCELADA" ? CANCELLATION_JUSTIFICATIONS : JUSTIFICATIONS).map((j) => (
+                <option key={j} value={j}>
+                  {j}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {!statusOnly && needsImmediateLink && (
           <div className="rounded-md border border-warning/50 bg-warning/10 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -4319,15 +4412,17 @@ function BulkModal({
             </div>
           </div>
         )}
-        {!statusOnly && <Field label="Observação (opcional)">
-          <textarea
-            value={observation}
-            onChange={(e) => setObservation(e.target.value)}
-            rows={2}
-            maxLength={2000}
-            className="input-base"
-          />
-        </Field>}
+        {!statusOnly && (
+          <Field label="Observação (opcional)">
+            <textarea
+              value={observation}
+              onChange={(e) => setObservation(e.target.value)}
+              rows={2}
+              maxLength={2000}
+              className="input-base"
+            />
+          </Field>
+        )}
       </div>
       {immediatePickerOpen && (
         <ImmediatePicker

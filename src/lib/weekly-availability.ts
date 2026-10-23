@@ -266,6 +266,32 @@ export function calculateSpecialtyRealization(
   return { rows, totals, result, monitoring, unmapped: [...unmapped].sort(), invalid };
 }
 
+/** Independent center diagnostics; the official cap remains the weekly specialty cap. */
+export function calculateCenterRealization(
+  availability: AvailabilityRow[],
+  centers: CenterHours[],
+  hasSap: boolean,
+  specialty: string,
+  includedInRs: boolean,
+  local = "",
+) {
+  const selected = availability.filter(
+    (r) =>
+      availabilityKey(r.specialty) === availabilityKey(specialty) &&
+      !isRsMonitoringOnly(r.specialty, r.center) === includedInRs &&
+      (!local || availabilityKey(r.local) === availabilityKey(local)),
+  );
+  return [...new Set(selected.map((r) => availabilityKey(r.center)))].sort().flatMap((center) => {
+    const result = calculateSpecialtyRealization(
+      selected.filter((r) => availabilityKey(r.center) === center),
+      centers.filter((r) => availabilityKey(r.center) === center),
+      hasSap,
+      local,
+    );
+    return result.rows.map((r) => ({ ...r, center }));
+  });
+}
+
 export function availabilityDate(value: unknown): string {
   if (value instanceof Date && Number.isFinite(value.getTime()))
     return value.toISOString().slice(0, 10);

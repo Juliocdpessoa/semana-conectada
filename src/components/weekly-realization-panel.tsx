@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import {
   calculateSpecialtyRealization,
+  calculateCenterRealization,
   validateAvailability,
   type CenterHours,
 } from "@/lib/weekly-availability";
@@ -12,7 +13,7 @@ import {
   WeeklyAvailabilityEditor,
   type AvailabilityDocument,
 } from "@/components/weekly-availability-editor";
-import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/ui-kit";
+import { EmptyState, KpiCard, PageHeader, Panel, Modal } from "@/components/ui-kit";
 import {
   WeeklyRsEvidence,
   RsSpecialtyBars,
@@ -296,6 +297,20 @@ function RsContent({
     [data.availability, data.centers, data.source, local],
   );
   const { totals, rows, unmapped } = calculation;
+  const [selectedSpecialty, setSelectedSpecialty] = useState<{
+    specialty: string;
+    includedInRs: boolean;
+  } | null>(null);
+  const centerRows = selectedSpecialty
+    ? calculateCenterRealization(
+        data.availability?.rows ?? [],
+        data.centers ?? [],
+        !!data.source,
+        selectedSpecialty.specialty,
+        selectedSpecialty.includedInRs,
+        local,
+      )
+    : [];
   const result =
     data.invalidPlannedHours === 0 && !errors.length && (!local || !data.unresolvedLocal)
       ? calculation.result
@@ -513,7 +528,14 @@ function RsContent({
                 {rows.map((r) => (
                   <tr key={`${r.specialty}:${r.includedInRs}`} className="row-zebra">
                     <td className="p-2 font-medium">
-                      {r.specialty}
+                      <button
+                        type="button"
+                        className="text-primary underline underline-offset-2 hover:opacity-80"
+                        onClick={() => setSelectedSpecialty(r)}
+                        aria-label={`Ver RS dos centros de ${r.specialty}`}
+                      >
+                        {r.specialty}
+                      </button>
                       <span className="block text-[10px] font-normal text-muted-foreground">
                         {r.centers.join(", ")}
                       </span>
@@ -575,6 +597,71 @@ function RsContent({
             igual a zero.
           </p>
         </Panel>
+      )}
+      {selectedSpecialty && (
+        <Modal
+          size="lg"
+          title={`RS por centro · ${selectedSpecialty.specialty}`}
+          description={`${week.label} · ${local || "IARI + ROTINA"}`}
+          onClose={() => setSelectedSpecialty(null)}
+        >
+          <p className="mb-3 text-xs text-muted-foreground">
+            Detalhamento em HH. Cada centro mostra seu próprio teto de disponibilidade. O resultado
+            oficial da especialidade continua consolidado na semana; os RS dos centros não devem ser
+            somados nem ter média simples.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full whitespace-nowrap text-xs">
+              <thead>
+                <tr>
+                  {[
+                    "Centro",
+                    "Disponível",
+                    "Programado",
+                    "TP considerado",
+                    "OM",
+                    "TCpr SAP",
+                    "TCpr limitado",
+                    "TCoi SAP",
+                    "Considerado",
+                    "RS",
+                  ].map((h) => (
+                    <th key={h} className="p-2 text-right first:text-left">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {centerRows.map((r) => (
+                  <tr className="row-zebra" key={r.center}>
+                    <td className="p-2 font-medium">{r.center}</td>
+                    {[r.available, r.programmed, r.programmedConsidered].map((v, i) => (
+                      <td key={i} className="p-2 text-right">
+                        {number(v)}
+                      </td>
+                    ))}
+                    <td className="p-2 text-right">
+                      {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
+                    </td>
+                    {[r.completed, r.completedForRs, r.immediate, r.considered].map((v, i) => (
+                      <td key={i} className="p-2 text-right">
+                        {hasSource ? number(v) : "—"}
+                      </td>
+                    ))}
+                    <td className="p-2 text-right">
+                      {!r.includedInRs
+                        ? "Acompanhamento"
+                        : r.rs === null
+                          ? "—"
+                          : number(r.rs) + "%"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
       )}
       <Panel title="Memória de cálculo">
         <div className="space-y-2 text-xs text-muted-foreground">
