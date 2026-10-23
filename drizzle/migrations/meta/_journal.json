@@ -148,6 +148,13 @@
       "when": 1792760400000,
       "tag": "0020_ignore_empty_progress_rows",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1792764000000,
+      "tag": "0021_availability_history_details",
+      "breakpoints": true
     }
   ]
 }

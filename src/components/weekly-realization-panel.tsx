@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
+import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import {
@@ -776,6 +777,7 @@ function AvailabilityScreen({
   onSaved: () => Promise<unknown>;
 }) {
   const [revision, setRevision] = useState(0);
+  const [expandedHistoryVersion, setExpandedHistoryVersion] = useState<number | null>(null);
   const [cursors, setCursors] = useState<Array<number | null>>([null]);
   const qc = useQueryClient();
   const cursor = cursors[cursors.length - 1];
@@ -841,6 +843,7 @@ function AvailabilityScreen({
                     "HH salvo",
                     "Linhas",
                     "Origem",
+                    "Alterações por centro",
                   ].map((label) => (
                     <th key={label} className="whitespace-nowrap p-2 text-left">
                       {label}
@@ -850,19 +853,50 @@ function AvailabilityScreen({
               </thead>
               <tbody>
                 {history.data.slice(0, 20).map((entry) => (
-                  <tr key={entry.version} className="row-zebra">
-                    <td className="p-2">{entry.version}</td>
-                    <td className="whitespace-nowrap p-2">
-                      {new Date(entry.updated_at).toLocaleString("pt-BR")}
-                    </td>
-                    <td className="p-2">{entry.updated_by_name}</td>
-                    <td className="whitespace-nowrap p-2">{hours(entry.previous_total_hh)}</td>
-                    <td className="whitespace-nowrap p-2">{hours(entry.total_hh)}</td>
-                    <td className="p-2">{entry.row_count}</td>
-                    <td className="min-w-40 p-2">
-                      {entry.source_file_name ?? "Preenchimento no NEXO"}
-                    </td>
-                  </tr>
+                  <Fragment key={entry.version}>
+                    <tr className="row-zebra">
+                      <td className="p-2">{entry.version}</td>
+                      <td className="whitespace-nowrap p-2">
+                        {new Date(entry.updated_at).toLocaleString("pt-BR")}
+                      </td>
+                      <td className="p-2">{entry.updated_by_name}</td>
+                      <td className="whitespace-nowrap p-2">{hours(entry.previous_total_hh)}</td>
+                      <td className="whitespace-nowrap p-2">{hours(entry.total_hh)}</td>
+                      <td className="p-2">{entry.row_count}</td>
+                      <td className="min-w-40 p-2">
+                        {entry.source_file_name ?? "Preenchimento no NEXO"}
+                      </td>
+                      <td className="p-2">
+                        <button
+                          type="button"
+                          className="btn-ghost whitespace-nowrap text-xs"
+                          aria-expanded={expandedHistoryVersion === entry.version}
+                          onClick={() =>
+                            setExpandedHistoryVersion((old) =>
+                              old === entry.version ? null : entry.version,
+                            )
+                          }
+                        >
+                          {expandedHistoryVersion === entry.version
+                            ? "Ocultar detalhes"
+                            : "Ver alterações"}
+                        </button>
+                      </td>
+                    </tr>
+                    {expandedHistoryVersion === entry.version && (
+                      <tr className="bg-primary/5">
+                        <td colSpan={8} className="p-4">
+                          <AvailabilityHistoryDetails
+                            key={`${week.id}:${entry.version}`}
+                            weekId={week.id}
+                            version={entry.version}
+                            userId={userId}
+                            worksiteId={worksiteId}
+                          />
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
