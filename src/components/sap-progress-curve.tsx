@@ -1,7 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Panel } from "@/components/ui-kit";
+import { sapProgressSeries, type SapEarnedProgress } from "@/lib/sap-progress-series";
 import {
+  Bar,
   CartesianGrid,
   ComposedChart,
   Legend,
@@ -12,13 +14,6 @@ import {
   YAxis,
 } from "recharts";
 
-type Progress = {
-  hasSource: boolean;
-  invalidHours: number;
-  planned: number;
-  earned: number;
-  days: { date: string | null; planned: number; earned: number }[];
-};
 const number = (v: number) => v.toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
 export function useSapProgress(weekId: string | undefined, userId: string, worksiteId: string) {
@@ -31,7 +26,7 @@ export function useSapProgress(weekId: string | undefined, userId: string, works
         .rpc("get_activity_sap_progress", { p_week_id: weekId })
         .abortSignal(signal);
       if (error) throw error;
-      return data as Progress;
+      return data as SapEarnedProgress;
     },
   });
 }
@@ -51,29 +46,7 @@ export function SapProgressCurve({
   const query = useSapProgress(weekId, userId, worksiteId);
   const progress = query.data;
   const hasMeasuredProgress = !!progress?.hasSource && !progress.invalidHours;
-  const days: string[] = [];
-  for (
-    const dt = new Date(startDate + "T12:00:00");
-    dt <= new Date(endDate + "T12:00:00");
-    dt.setDate(dt.getDate() + 1)
-  ) {
-    days.push(
-      `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`,
-    );
-  }
-  let planned = 0,
-    earned = 0;
-  const series = days.map((date) => {
-    const day = progress?.days.find((d) => d.date === date);
-    planned += day?.planned ?? 0;
-    earned += day?.earned ?? 0;
-    return {
-      date: date.slice(8) + "/" + date.slice(5, 7),
-      planned: progress?.planned ? (planned / progress.planned) * 100 : 0,
-      earned:
-        hasMeasuredProgress && progress!.planned > 0 ? (earned / progress!.planned) * 100 : null,
-    };
-  });
+  const series = sapProgressSeries(startDate, endDate, progress);
   return (
     <Panel
       title="Curva de avanço · SAP"
@@ -127,15 +100,29 @@ export function SapProgressCurve({
           <div
             className="h-80 min-w-0 w-full"
             role="img"
-            aria-label="Curva acumulada do planejamento e da apropriação SAP, em percentual de HH"
+            aria-label="Colunas de HH diário programado, apropriado SAP e restante; linhas de percentual acumulado"
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={series} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-                <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
+                <YAxis
+                  yAxisId="hours"
+                  domain={[0, "auto"]}
+                  tick={{ fontSize: 11 }}
+                  label={{ value: "HH", position: "insideTopLeft" }}
+                />
+                <YAxis
+                  yAxisId="percent"
+                  orientation="right"
+                  domain={[0, 100]}
+                  unit="%"
+                  tick={{ fontSize: 11 }}
+                />
                 <Tooltip
-                  formatter={(value: number) => `${number(value)}%`}
+                  formatter={(value: number, name: string) =>
+                    `${number(value)}${name.includes("acumulado") ? "%" : " HH"}`
+                  }
                   contentStyle={{
                     background: "var(--card)",
                     borderColor: "var(--border)",
@@ -143,7 +130,29 @@ export function SapProgressCurve({
                   }}
                 />
                 <Legend />
+                <Bar
+                  yAxisId="hours"
+                  dataKey="dailyPlanned"
+                  name="Programado (dia)"
+                  fill="var(--muted-foreground)"
+                  maxBarSize={22}
+                />
+                <Bar
+                  yAxisId="hours"
+                  dataKey="dailyEarned"
+                  name="Apropriado SAP considerado (dia)"
+                  fill="var(--primary)"
+                  maxBarSize={22}
+                />
+                <Bar
+                  yAxisId="hours"
+                  dataKey="dailyRemaining"
+                  name="Restante (dia)"
+                  fill="#f59e0b"
+                  maxBarSize={22}
+                />
                 <Line
+                  yAxisId="percent"
                   type="linear"
                   dataKey="planned"
                   name="Planejado acumulado"
@@ -151,6 +160,7 @@ export function SapProgressCurve({
                   strokeDasharray="5 4"
                 />
                 <Line
+                  yAxisId="percent"
                   type="linear"
                   dataKey="earned"
                   name="Apropriado SAP acumulado"
