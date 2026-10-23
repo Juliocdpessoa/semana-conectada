@@ -6,9 +6,10 @@
 - Ano, mês e semana permitem consultar o histórico da obra. São carregados apenas os identificadores das semanas; detalhes e pendências são consultados por semana/página.
 - Planejamento mantém até seis semanas recentes na lista curta (preparação, operacional e quatro anteriores quando presentes). As demais continuam no histórico do Painel. O antigo bloqueio de quatro semanas foi removido; não é preciso apagar uma semana para importar outra.
 - O administrador usa **Fechar agora** com justificativa. São preservados resultados geral/IARI/ROTINA, regras, programação completa, apontamentos, justificativas, históricos, disponibilidade e carga SAP oficial.
-- O prazo SAP bloqueia novas cargas, mas **não cria sozinho um fechamento oficial**. Após a conferência, o administrador precisa fechar. Prorrogar prazo permanece disponível no Planejamento.
+- O prazo SAP bloqueia novas cargas, mas **não cria sozinho um fechamento oficial**. Após a conferência, o administrador precisa fechar. Prorrogar prazo está disponível também no RS para semanas abertas, com justificativa e identificação do horário do dispositivo; a tela exibe o prazo vigente em Brasília.
 - **Reabrir fechamento** não apaga versões. O próximo fechamento gera nova versão. A consulta de uma versão antiga lê seus dados congelados, sem aplicar fórmulas futuras.
 - Exportar fechamento Excel gera abas analíticas e fontes; Arquivo completo JSON preserva também estruturas aninhadas. Um campo além do limite do Excel exige usar JSON.
+- Os nomes dos arquivos identificam o código da semana e a versão. A memória de cálculo usa os dados congelados da semana, e a aba Atividades expande os campos da programação e conferência em colunas.
 - Histórico de cargas SAP abre sob demanda e permite baixar cada carga estruturada ainda existente. Não é uma cópia binária do Excel originalmente enviado.
 
 ## Segurança e conservação

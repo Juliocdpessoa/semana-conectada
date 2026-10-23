@@ -51,3 +51,20 @@ test('new imports no longer require destructive four-week cleanup',()=>{
   assert.match(imports,/weekly_rs_closures/);
   assert.match(read('src/routes/_authenticated/planejamento.tsx'),/\.limit\(6\)/);
 });
+test('archive offers deadline extension with explicit timezone and refreshes operational views',()=>{
+  const archive=read('src/components/weekly-rs-archive.tsx');
+  assert.match(archive,/extend_sap_week_deadline/);
+  assert.match(archive,/p_deadline: new Date\(deadline\).toISOString\(\)/);
+  assert.match(archive,/new Date\(deadline\).getTime\(\) <= Date.now\(\)/);
+  assert.match(archive,/Prorrogar prazo/);
+  assert.match(archive,/America\/Sao_Paulo/);
+  assert.match(archive,/queryKey: \["sap-confirmation-overview"\]/);
+});
+test('historical exports use frozen week metadata and expose task fields as columns',()=>{
+  const archive=read('src/components/weekly-rs-archive.tsx');
+  assert.match(archive,/closure.week_info\?\.code/);
+  assert.match(archive,/week: closure.week_info/);
+  assert.doesNotMatch(archive,/week: data.week/);
+  assert.match(archive,/fields\("Programação · ", planning_data\)/);
+  assert.match(archive,/fields\("Conferência · ", archived_evidence\)/);
+});

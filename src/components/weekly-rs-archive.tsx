@@ -13,6 +13,7 @@ export type RsClosure = {
   reason: string;
   rule_version: string;
   summary?: Record<string, unknown>;
+  week_info?: { code?: string; label?: string; start_date?: string; end_date?: string };
 };
 type Catalog = { status: string; deadline: string | null; versions: RsClosure[] };
 const kinds = [
@@ -55,10 +56,11 @@ export function WeeklyRsArchive({
   deadlinePassed?: boolean;
 }) {
   const qc = useQueryClient();
-  const [action, setAction] = useState<"close" | "reopen" | null>(null),
+  const [action, setAction] = useState<"close" | "reopen" | "extend" | null>(null),
     [reason, setReason] = useState(""),
     [busy, setBusy] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [deadline, setDeadline] = useState("");
   const catalog = useQuery({
     queryKey: ["weekly-rs-closures", userId, worksiteId, weekId],
     staleTime: 30_000,
@@ -72,17 +74,38 @@ export function WeeklyRsArchive({
   });
   async function save() {
     if (!action || reason.trim().length < 3 || busy) return;
+    if (
+      action === "extend" &&
+      (!deadline ||
+        !Number.isFinite(new Date(deadline).getTime()) ||
+        new Date(deadline).getTime() <= Date.now() ||
+        (catalog.data?.deadline &&
+          new Date(deadline).getTime() <= new Date(catalog.data.deadline).getTime()))
+    ) {
+      toast.error("Informe um prazo futuro e posterior ao prazo vigente.");
+      return;
+    }
     setBusy(true);
     try {
       const { error } = await (supabase as any).rpc(
-        action === "close" ? "close_sap_week" : "reopen_sap_week",
-        { p_week_id: weekId, p_reason: reason.trim() },
+        action === "close"
+          ? "close_sap_week"
+          : action === "extend"
+            ? "extend_sap_week_deadline"
+            : "reopen_sap_week",
+        {
+          p_week_id: weekId,
+          p_reason: reason.trim(),
+          ...(action === "extend" ? { p_deadline: new Date(deadline).toISOString() } : {}),
+        },
       );
       if (error) throw error;
       toast.success(
         action === "close"
           ? "Fechamento SAP + RS preservado em nova versão."
-          : "Semana reaberta. As versões anteriores continuam preservadas.",
+          : action === "extend"
+            ? "Prazo prorrogado. As versões anteriores continuam preservadas."
+            : "Semana reaberta. As versões anteriores continuam preservadas.",
       );
       setAction(null);
       setReason("");
@@ -93,6 +116,8 @@ export function WeeklyRsArchive({
         qc.invalidateQueries({ queryKey: ["weekly-rs-weeks"] }),
         qc.invalidateQueries({ queryKey: ["weeks-list"] }),
         qc.invalidateQueries({ queryKey: ["activity-working-weeks"] }),
+        qc.invalidateQueries({ queryKey: ["active-week"] }),
+        qc.invalidateQueries({ queryKey: ["sap-confirmation-overview"] }),
       ]);
     } catch (e: any) {
       toast.error(e.message ?? "Não foi possível concluir a ação.");
@@ -130,7 +155,7 @@ export function WeeklyRsArchive({
         }
         records[kind] = rows;
       }
-      const filename = `RS-${weekId}-v${closure.version}`;
+      const filename = `RS-${(closure.week_info?.code || weekId).replace(/[^\p{L}\p{N}._-]+/gu, "-")}-v${closure.version}`;
       if (format === "json") {
         const url = URL.createObjectURL(
           new Blob([JSON.stringify({ closure, scopes, records }, null, 2)], {
@@ -170,7 +195,7 @@ export function WeeklyRsArchive({
                 ...data.frozenCalculation.result,
                 rule_version: closure.rule_version,
                 rules: data.rules,
-                week: data.week,
+                week: closure.week_info,
               }),
             ]),
             `Memória ${local}`,
@@ -191,6 +216,22 @@ export function WeeklyRsArchive({
             workbook,
             XLSX.utils.json_to_sheet(
               records[kind].flatMap((record) => {
+                if (kind === "activity") {
+                  const { planning_data, archived_evidence, ...activity } = record;
+                  const fields = (prefix: string, value: unknown) =>
+                    value && typeof value === "object" && !Array.isArray(value)
+                      ? Object.fromEntries(
+                          Object.entries(value).map(([key, cell]) => [prefix + key, cell]),
+                        )
+                      : { [prefix + "dados"]: value };
+                  return [
+                    flat({
+                      ...activity,
+                      ...fields("Programação · ", planning_data),
+                      ...fields("Conferência · ", archived_evidence),
+                    }),
+                  ];
+                }
                 if (kind !== "availability" && kind !== "availability_history")
                   return [flat(record)];
                 const { rows, ...metadata } = record;
@@ -225,6 +266,15 @@ export function WeeklyRsArchive({
           <p className="mb-3 text-xs">
             Fechado em {new Date(closure.closed_at).toLocaleString("pt-BR")} por{" "}
             {closure.closed_by_name} · Motivo: {closure.reason} · Regra: {closure.rule_version}
+          </p>
+        )}
+        {catalog.data?.deadline && !isFrozen && (
+          <p className="mb-3 text-xs text-muted-foreground">
+            Prazo vigente:{" "}
+            {new Date(catalog.data.deadline).toLocaleString("pt-BR", {
+              timeZone: "America/Sao_Paulo",
+            })}{" "}
+            (Brasília)
           </p>
         )}
         {legacy && (
@@ -276,15 +326,37 @@ export function WeeklyRsArchive({
               </select>
             </label>
             {isAdmin && catalog.data && (
-              <button
-                className="btn-outline text-xs"
-                onClick={() => {
-                  setReason("");
-                  setAction(catalog.data.status === "closed" ? "reopen" : "close");
-                }}
-              >
-                {catalog.data.status === "closed" ? "Reabrir fechamento" : "Fechar agora"}
-              </button>
+              <>
+                <button
+                  className="btn-outline text-xs"
+                  onClick={() => {
+                    setReason("");
+                    setAction(catalog.data.status === "closed" ? "reopen" : "close");
+                  }}
+                >
+                  {catalog.data.status === "closed" ? "Reabrir fechamento" : "Fechar agora"}
+                </button>
+                {catalog.data.status !== "closed" && (
+                  <button
+                    className="btn-outline text-xs"
+                    onClick={() => {
+                      setReason("");
+                      const date = new Date(
+                        Math.max(Date.now(), new Date(catalog.data.deadline ?? 0).getTime()) +
+                          2 * 3600000,
+                      );
+                      setDeadline(
+                        new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                          .toISOString()
+                          .slice(0, 16),
+                      );
+                      setAction("extend");
+                    }}
+                  >
+                    Prorrogar prazo
+                  </button>
+                )}
+              </>
             )}
             {closure && (
               <>
@@ -310,7 +382,13 @@ export function WeeklyRsArchive({
       </Panel>
       {action && (
         <Modal
-          title={action === "close" ? "Fechar semana · SAP + RS" : "Reabrir fechamento"}
+          title={
+            action === "close"
+              ? "Fechar semana · SAP + RS"
+              : action === "extend"
+                ? "Prorrogar prazo SAP"
+                : "Reabrir fechamento"
+          }
           onClose={() => {
             if (!busy) setAction(null);
           }}
@@ -327,8 +405,22 @@ export function WeeklyRsArchive({
           <p className="mb-3 text-xs">
             {action === "close"
               ? "O resultado oficial será congelado junto da carga SAP, programação, disponibilidade e justificativas."
-              : "A versão anterior será mantida. O próximo fechamento criará uma nova versão com a regra vigente."}
+              : action === "extend"
+                ? "A apuração continuará aberta até o novo prazo. Os fechamentos anteriores não serão alterados."
+                : "A versão anterior será mantida. O próximo fechamento criará uma nova versão com a regra vigente."}
           </p>
+          {action === "extend" && (
+            <label className="mb-3 block text-xs">
+              Novo prazo (horário deste dispositivo)
+              <input
+                className="input-base mt-1"
+                type="datetime-local"
+                value={deadline}
+                onChange={(e) => setDeadline(e.target.value)}
+                disabled={busy}
+              />
+            </label>
+          )}
           <label className="text-xs">
             Justificativa obrigatória
             <textarea
