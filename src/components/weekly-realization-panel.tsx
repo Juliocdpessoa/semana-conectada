@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { RefreshCw } from "lucide-react";
+import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import {
@@ -557,11 +558,7 @@ function RsContent({
                     <td className="p-2 text-right">{hasSource ? number(r.considered) : "—"}</td>
                     <td className="p-2 text-right">{hasSource ? number(r.excess) : "—"}</td>
                     <td className="p-2 text-right">
-                      {!r.includedInRs
-                        ? "Acompanhamento"
-                        : r.rs === null
-                          ? "—"
-                          : number(r.rs) + "%"}
+                      <RsAlertBadge value={r.rs} included={r.includedInRs} />
                     </td>
                   </tr>
                 ))}
@@ -592,9 +589,11 @@ function RsContent({
             </table>
           </div>
           <p className="mt-2 text-xs text-muted-foreground">
-            O geral usa os totais ponderados pela disponibilidade, não a média simples dos
-            percentuais. Especialidades com disponibilidade zero têm RS indefinido e HH considerado
-            igual a zero.
+            Cores contratuais: vermelho abaixo de 95%; amarelo acima de 95% até 98%; verde em 95%
+            exatos e acima de 98% até 100%; azul acima de 100%. Cinza indica acompanhamento ou RS
+            indisponível. O geral usa os totais ponderados pela disponibilidade, não a média simples
+            dos percentuais. Especialidades com disponibilidade zero têm RS indefinido e HH
+            considerado igual a zero.
           </p>
         </Panel>
       )}
@@ -650,11 +649,7 @@ function RsContent({
                       </td>
                     ))}
                     <td className="p-2 text-right">
-                      {!r.includedInRs
-                        ? "Acompanhamento"
-                        : r.rs === null
-                          ? "—"
-                          : number(r.rs) + "%"}
+                      <RsAlertBadge value={r.rs} included={r.includedInRs} />
                     </td>
                   </tr>
                 ))}

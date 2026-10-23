@@ -50,6 +50,7 @@ export function SapProgressCurve({
 }) {
   const query = useSapProgress(weekId, userId, worksiteId);
   const progress = query.data;
+  const hasMeasuredProgress = !!progress?.hasSource && !progress.invalidHours;
   const days: string[] = [];
   for (
     const dt = new Date(startDate + "T12:00:00");
@@ -70,7 +71,7 @@ export function SapProgressCurve({
       date: date.slice(8) + "/" + date.slice(5, 7),
       planned: progress?.planned ? (planned / progress.planned) * 100 : 0,
       earned:
-        progress?.hasSource && progress.planned > 0 ? (earned / progress.planned) * 100 : null,
+        hasMeasuredProgress && progress!.planned > 0 ? (earned / progress!.planned) * 100 : null,
     };
   });
   return (
@@ -87,33 +88,47 @@ export function SapProgressCurve({
             Tentar novamente
           </button>
         </p>
-      ) : !progress?.hasSource ? (
-        <p className="text-sm text-muted-foreground">
-          Sem carga SAP detalhada nesta semana. O avanço ainda não está disponível.
-        </p>
-      ) : progress.invalidHours > 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Há {progress.invalidHours} tarefas sem HH programado válido. Corrija a programação para
-          calcular o avanço com segurança.
-        </p>
-      ) : progress.planned <= 0 ? (
+      ) : !progress || progress.planned <= 0 ? (
         <p className="text-sm text-muted-foreground">
           Sem HH programado válido para calcular o avanço.
         </p>
       ) : (
         <>
+          {!progress.hasSource && (
+            <p className="mb-3 text-sm text-muted-foreground">
+              Sem carga SAP detalhada nesta semana. A curva planejada permanece visível; o avanço
+              realizado fica indisponível até a importação.
+            </p>
+          )}
+          {progress.invalidHours > 0 && (
+            <p className="mb-3 text-sm text-amber-800 dark:text-amber-300">
+              Há {progress.invalidHours} tarefas reais sem HH válido. Exibimos somente o
+              planejamento com HH conhecido; o percentual realizado fica indisponível até a
+              correção.
+            </p>
+          )}
           <div className="mb-3 flex flex-wrap gap-5 text-sm">
             <span>
               HH programado: <strong>{number(progress.planned)}</strong>
             </span>
             <span>
-              HH apropriado considerado: <strong>{number(progress.earned)}</strong>
+              HH apropriado considerado:{" "}
+              <strong>{hasMeasuredProgress ? number(progress.earned) : "—"}</strong>
             </span>
             <span>
-              Conclusão SAP: <strong>{number((progress.earned / progress.planned) * 100)}%</strong>
+              Conclusão SAP:{" "}
+              <strong>
+                {hasMeasuredProgress
+                  ? number((progress.earned / progress.planned) * 100) + "%"
+                  : "—"}
+              </strong>
             </span>
           </div>
-          <div className="h-80 w-full">
+          <div
+            className="h-80 min-w-0 w-full"
+            role="img"
+            aria-label="Curva acumulada do planejamento e da apropriação SAP, em percentual de HH"
+          >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={series} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
