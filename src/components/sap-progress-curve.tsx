@@ -131,15 +131,15 @@ export function SapProgressCurve({
           >
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={series} margin={{ top: 10, right: 20, left: 0, bottom: 10 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
                 <XAxis dataKey="date" tick={{ fontSize: 11 }} />
                 <YAxis domain={[0, 100]} unit="%" tick={{ fontSize: 11 }} />
                 <Tooltip
                   formatter={(value: number) => `${number(value)}%`}
                   contentStyle={{
-                    background: "hsl(var(--card))",
-                    borderColor: "hsl(var(--border))",
-                    color: "hsl(var(--foreground))",
+                    background: "var(--card)",
+                    borderColor: "var(--border)",
+                    color: "var(--foreground)",
                   }}
                 />
                 <Legend />
@@ -147,14 +147,14 @@ export function SapProgressCurve({
                   type="linear"
                   dataKey="planned"
                   name="Planejado acumulado"
-                  stroke="hsl(var(--muted-foreground))"
+                  stroke="var(--muted-foreground)"
                   strokeDasharray="5 4"
                 />
                 <Line
                   type="linear"
                   dataKey="earned"
                   name="Apropriado SAP acumulado"
-                  stroke="hsl(var(--primary))"
+                  stroke="var(--primary)"
                   strokeWidth={2}
                 />
               </ComposedChart>
