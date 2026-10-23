@@ -1,6 +1,6 @@
 import { calculateWeeklyRealization } from "./weekly-realization.ts";
 
-/** Contractual bands, including the user-confirmed zero factor at exactly 95%. */
+/** Contractual bands: 95% through 98%, inclusive, has factor -0.01. */
 export function rsAlert(rs: number | null, included = true) {
   if (!included)
     return {

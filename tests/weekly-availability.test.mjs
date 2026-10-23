@@ -207,10 +207,10 @@ test("Excel serial dates independent of local timezone", () => {
   assert.equal(availabilityDate(46300), "2026-10-05");
   assert.equal(availabilityDate("5/10/2026"), "2026-10-05");
 });
-test("exact 95 has factor zero after specialty caps", () => {
+test("exact 95 has factor -0.01 after specialty caps", () => {
   const result = calc([row()], [center({ completed: 95 })], true);
   assert.equal(result.result.at95, true);
-  assert.equal(result.result.factor, 0);
+  assert.equal(result.result.factor, -0.01);
 });
 
 test("Alpinismo stays visible but is removed from every RS numerator and denominator", () => {

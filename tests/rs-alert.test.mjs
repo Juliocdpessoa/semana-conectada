@@ -1,9 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { rsAlert } from "../src/lib/rs-alert.ts";
-test("RS colors use contractual bands, including exactly 95 with zero factor", () => {
+test("RS colors use contractual bands, including exactly 95 with negative factor", () => {
   assert.match(rsAlert(94.99).className, /red-/);
-  assert.match(rsAlert(95).className, /green-/);
+  assert.match(rsAlert(95).className, /amber-/);
   assert.match(rsAlert(95.01).className, /amber-/);
   assert.match(rsAlert(98).className, /amber-/);
   assert.match(rsAlert(98.01).className, /green-/);
