@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
+import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import {
@@ -30,8 +31,16 @@ type Week = {
   start_date: string;
   end_date: string;
   is_active: boolean;
+  sap_closure_status?: string;
 };
 type RsData = {
+  isFrozen?: boolean;
+  frozenCalculation?: ReturnType<typeof calculateSpecialtyRealization> & {
+    centerRows: ReturnType<typeof calculateCenterRealization>;
+  };
+  closure?: RsClosure | null;
+  legacyClosedWithoutSnapshot?: boolean;
+  deadlinePassed?: boolean;
   programmed: number;
   programmedTasks: number;
   emptyProgrammedRows: number;
@@ -73,12 +82,14 @@ export function WeeklyRealizationPanel({
   worksiteId,
   worksiteCode,
   mode = "indicator",
+  isAdmin = false,
 }: {
   tabs: ReactNode;
   userId: string;
   worksiteId: string;
   worksiteCode: string;
   mode?: "indicator" | "availability";
+  isAdmin?: boolean;
 }) {
   const [selected, setSelected] = useState(() =>
     typeof window !== "undefined"
@@ -90,19 +101,27 @@ export function WeeklyRealizationPanel({
     queryFn: async () => {
       const { data, error } = await supabase
         .from("weeks")
-        .select("id,label,code,start_date,end_date,is_active")
+        .select("id,label,code,start_date,end_date,is_active,sap_closure_status")
         .eq("worksite_id", worksiteId)
         .order("start_date", { ascending: false })
-        .limit(8);
+        .limit(600);
       if (error) throw error;
       return (data ?? []) as Week[];
     },
     staleTime: 60_000,
   });
+  const [year, setYear] = useState("");
+  const [month, setMonth] = useState("");
+  const availableYears = [...new Set(weeks.data?.map((w) => w.start_date.slice(0, 4)) ?? [])];
+  const visibleWeeks =
+    weeks.data?.filter(
+      (w) =>
+        (!year || w.start_date.startsWith(year)) && (!month || w.start_date.slice(5, 7) === month),
+    ) ?? [];
   const week =
-    weeks.data?.find((w) => w.id === selected) ??
-    weeks.data?.find((w) => w.is_active) ??
-    weeks.data?.[0];
+    visibleWeeks.find((w) => w.id === selected) ??
+    visibleWeeks.find((w) => w.is_active) ??
+    visibleWeeks[0];
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
@@ -113,10 +132,49 @@ export function WeeklyRealizationPanel({
         description={
           mode === "availability"
             ? "Mantenha a base da semana e consulte quem alterou cada versão."
-            : "Cálculo em HH com as apropriações da última carga SAP da semana."
+            : "Semana atual em apuração e histórico oficial dos fechamentos SAP + RS."
         }
       />
       {tabs}
+      <div className="mb-3 flex flex-wrap gap-2">
+        <label className="text-xs">
+          Ano
+          <select
+            className="input-base mt-1"
+            value={year}
+            onChange={(e) => {
+              setYear(e.target.value);
+              setMonth("");
+              setSelected("");
+            }}
+          >
+            <option value="">Todos os anos</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs">
+          Mês
+          <select
+            className="input-base mt-1"
+            value={month}
+            onChange={(e) => {
+              setMonth(e.target.value);
+              setSelected("");
+            }}
+          >
+            <option value="">Todos os meses</option>
+            {Array.from({ length: 12 }, (_, i) => (
+              <option key={i} value={String(i + 1).padStart(2, "0")}>
+                {new Date(2026, i, 1).toLocaleString("pt-BR", { month: "long" })}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       <div className="mb-4 max-w-md">
         <label
           htmlFor="rs-week"
@@ -136,7 +194,7 @@ export function WeeklyRealizationPanel({
           className="input-base"
         >
           {!week && <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>}
-          {weeks.data?.map((w) => (
+          {visibleWeeks.map((w) => (
             <option key={w.id} value={w.id}>
               {w.label} · {date(w.start_date)} a {date(w.end_date)}
               {w.is_active ? " · Operacional" : ""}
@@ -161,6 +219,7 @@ export function WeeklyRealizationPanel({
           worksiteId={worksiteId}
           worksiteCode={worksiteCode}
           mode={mode}
+          isAdmin={isAdmin}
         />
       ) : (
         !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
@@ -175,27 +234,30 @@ function WeeklyResults({
   worksiteId,
   worksiteCode,
   mode,
+  isAdmin,
 }: {
   week: Week;
   userId: string;
   worksiteId: string;
   worksiteCode: string;
   mode: "indicator" | "availability";
+  isAdmin: boolean;
 }) {
   const qc = useQueryClient();
+  const [version, setVersion] = useState<number | null>(null);
   const [local, setLocal] = useState(() => {
     const value =
       typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("local");
     return value === "IARI" || value === "ROTINA" ? value : "";
   });
   const data = useQuery({
-    queryKey: ["weekly-rs", userId, worksiteId, week.id, mode, local],
+    queryKey: ["weekly-rs", userId, worksiteId, week.id, mode, local, version],
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc(
-        mode === "availability" ? "get_weekly_realization" : "get_weekly_rs_analysis",
+        mode === "availability" ? "get_weekly_realization" : "get_weekly_rs_report",
         mode === "availability"
           ? { p_week_id: week.id }
-          : { p_week_id: week.id, p_local: local || null },
+          : { p_week_id: week.id, p_local: local || null, p_version: version },
       );
       if (error) throw error;
       return data as RsData;
@@ -236,28 +298,46 @@ function WeeklyResults({
       />
     );
   return (
-    <RsContent
-      key={week.id + local}
-      week={week}
-      data={data.data}
-      userId={userId}
-      worksiteId={worksiteId}
-      local={local}
-      onLocalChange={(next) => {
-        setLocal(next);
-        const url = new URL(window.location.href);
-        if (next) url.searchParams.set("local", next);
-        else url.searchParams.delete("local");
-        window.history.replaceState({}, "", url);
-      }}
-      worksiteCode={worksiteCode}
-      refreshing={data.isFetching}
-      refresh={() => {
-        void data.refetch();
-        void qc.invalidateQueries({ queryKey: ["weekly-rs-pending", userId, worksiteId, week.id] });
-      }}
-      onSaved={() => qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })}
-    />
+    <div className="space-y-4">
+      <WeeklyRsArchive
+        weekId={week.id}
+        userId={userId}
+        worksiteId={worksiteId}
+        isAdmin={isAdmin}
+        version={version}
+        onVersion={setVersion}
+        closure={data.data.closure}
+        isFrozen={data.data.isFrozen}
+        legacy={data.data.legacyClosedWithoutSnapshot}
+        deadlinePassed={data.data.deadlinePassed}
+      />
+      <RsContent
+        key={week.id + local}
+        week={week}
+        data={data.data}
+        userId={userId}
+        worksiteId={worksiteId}
+        local={local}
+        onLocalChange={(next) => {
+          setLocal(next);
+          const url = new URL(window.location.href);
+          if (next) url.searchParams.set("local", next);
+          else url.searchParams.delete("local");
+          window.history.replaceState({}, "", url);
+        }}
+        worksiteCode={worksiteCode}
+        refreshing={data.isFetching}
+        refresh={() => {
+          void data.refetch();
+          void qc.invalidateQueries({
+            queryKey: ["weekly-rs-pending", userId, worksiteId, week.id],
+          });
+        }}
+        onSaved={() =>
+          qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
+        }
+      />
+    </div>
   );
 }
 
@@ -284,18 +364,25 @@ function RsContent({
   onLocalChange: (value: string) => void;
 }) {
   const errors = useMemo(
-    () => (data.availability ? validateAvailability(data.availability.rows, week) : []),
-    [data.availability, week],
+    () =>
+      data.isFrozen
+        ? []
+        : data.availability
+          ? validateAvailability(data.availability.rows, week)
+          : [],
+    [data.availability, data.isFrozen, week],
   );
   const calculation = useMemo(
     () =>
-      calculateSpecialtyRealization(
-        data.availability?.rows ?? [],
-        data.centers ?? [],
-        !!data.source,
-        local,
-      ),
-    [data.availability, data.centers, data.source, local],
+      data.isFrozen && data.frozenCalculation
+        ? data.frozenCalculation
+        : calculateSpecialtyRealization(
+            data.availability?.rows ?? [],
+            data.centers ?? [],
+            !!data.source,
+            local,
+          ),
+    [data.availability, data.centers, data.source, local, data.isFrozen, data.frozenCalculation],
   );
   const { totals, rows, unmapped } = calculation;
   const [hideNonRs, setHideNonRs] = useState(false);
@@ -305,17 +392,24 @@ function RsContent({
     includedInRs: boolean;
   } | null>(null);
   const centerRows = selectedSpecialty
-    ? calculateCenterRealization(
-        data.availability?.rows ?? [],
-        data.centers ?? [],
-        !!data.source,
-        selectedSpecialty.specialty,
-        selectedSpecialty.includedInRs,
-        local,
-      )
+    ? data.isFrozen && data.frozenCalculation
+      ? data.frozenCalculation.centerRows.filter(
+          (r) =>
+            r.specialty === selectedSpecialty.specialty &&
+            r.includedInRs === selectedSpecialty.includedInRs,
+        )
+      : calculateCenterRealization(
+          data.availability?.rows ?? [],
+          data.centers ?? [],
+          !!data.source,
+          selectedSpecialty.specialty,
+          selectedSpecialty.includedInRs,
+          local,
+        )
     : [];
-  const result =
-    data.invalidPlannedHours === 0 && !errors.length && (!local || !data.unresolvedLocal)
+  const result = data.isFrozen
+    ? calculation.result
+    : data.invalidPlannedHours === 0 && !errors.length && (!local || !data.unresolvedLocal)
       ? calculation.result
       : null;
   const hasSource = !!data.source;
@@ -659,6 +753,7 @@ function RsContent({
           summary={data.pendingSummary}
           reasons={data.reasons}
           hasSap={hasSource}
+          closureId={data.isFrozen ? data.closure?.id : undefined}
         />
       ) : (
         <Panel title="Conferência da programação">
@@ -801,6 +896,7 @@ function AvailabilityScreen({
         week={week}
         document={data.availability}
         previous={data.previousAvailability}
+        readOnly={week.sap_closure_status === "closed"}
         onSaved={async () => {
           await onSaved();
           setRevision((v) => v + 1);

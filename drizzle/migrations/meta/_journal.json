@@ -155,6 +155,13 @@
       "when": 1792764000000,
       "tag": "0021_availability_history_details",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1792767600000,
+      "tag": "0022_weekly_rs_archive",
+      "breakpoints": true
     }
   ]
 }

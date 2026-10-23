@@ -47,6 +47,7 @@ export function WeeklyRsEvidence({
   summary,
   reasons,
   hasSap,
+  closureId,
 }: {
   weekId: string;
   userId: string;
@@ -55,6 +56,7 @@ export function WeeklyRsEvidence({
   summary: PendingSummary;
   reasons: RsReason[];
   hasSap: boolean;
+  closureId?: string;
 }) {
   const [reason, setReason] = useState("");
   const [showAllReasons, setShowAllReasons] = useState(false);
@@ -80,19 +82,23 @@ export function WeeklyRsEvidence({
       includeMonitoring,
       debounced,
       page,
+      closureId,
     ],
     enabled: hasSap,
     queryFn: async () => {
-      const { data, error } = await (supabase as any).rpc("get_weekly_rs_pending", {
-        p_week_id: weekId,
-        p_local: local || null,
-        p_offset: page * 50,
-        p_limit: 50,
-        p_justification: reason.startsWith("value:") ? reason.slice(6) : null,
-        p_only_missing_justification: reason === "missing",
-        p_include_monitoring: includeMonitoring,
-        p_query: debounced,
-      });
+      const { data, error } = await (supabase as any).rpc(
+        closureId ? "get_weekly_rs_closure_pending" : "get_weekly_rs_pending",
+        {
+          ...(closureId ? { p_closure_id: closureId } : { p_week_id: weekId }),
+          p_local: local || null,
+          p_offset: page * 50,
+          p_limit: 50,
+          p_justification: reason.startsWith("value:") ? reason.slice(6) : null,
+          p_only_missing_justification: reason === "missing",
+          p_include_monitoring: includeMonitoring,
+          p_query: debounced,
+        },
+      );
       if (error) throw error;
       return data as { total: number; rows: PendingActivity[] };
     },
@@ -111,6 +117,7 @@ export function WeeklyRsEvidence({
           Contagem por tarefa/dia elegível ao RS no local selecionado. Uma confirmação apropriada
           somente em parte da semana não confirma os demais dias. Justificativas e observações vêm
           do apontamento operacional do NEXO, não do SAP.
+          {closureId && " Nesta versão, são os registros preservados no momento do fechamento."}
         </p>
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <KpiCard

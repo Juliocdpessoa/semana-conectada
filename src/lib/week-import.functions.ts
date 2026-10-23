@@ -79,18 +79,8 @@ export const importWeek = createServerFn({ method: "POST" })
       return { ok: false as const, error: `Já existe uma semana com o código ${data.code}.` };
     }
 
-    const { count: weeksCount, error: countError } = await db
-      .from("weeks")
-      .select("id", { count: "exact", head: true })
-      .eq("worksite_id", access.worksiteId);
-    if (countError) return { ok: false as const, error: countError.message };
-    if ((weeksCount ?? 0) >= 4) {
-      return {
-        ok: false as const,
-        error:
-          "O limite de 4 semanas foi atingido. Exporte o backup e exclua uma semana inativa antes de importar outra.",
-      };
-    }
+    // Keep historical weeks: daily screens load only their recent working window.
+    // Official SAP + RS closures must never be deleted to make room for a new week.
 
     const { data: week, error: wErr } = await db
       .from("weeks")
@@ -207,6 +197,13 @@ export const deleteWeek = createServerFn({ method: "POST" })
     if (!week) return { ok: false as const, error: "Semana não encontrada." };
     if (week.is_active || week.lifecycle_status === "operational")
       return { ok: false as const, error: "A semana operacional não pode ser excluída." };
+
+    const { count: closures, error: closureError } = await db.from("weekly_rs_closures").select("id", { count: "exact", head: true }).eq("week_id", data.weekId);
+    if (closureError) return { ok: false as const, error: closureError.message };
+    if (closures) return { ok: false as const, error: "Esta semana possui fechamento SAP + RS preservado e não pode ser excluída. Consulte o histórico no Painel → Realização Semanal." };
+    const { count: sapLoads, error: sapError } = await db.from("sap_confirmation_imports").select("id", { count: "exact", head: true }).eq("week_id", data.weekId);
+    if (sapError) return { ok: false as const, error: sapError.message };
+    if (sapLoads) return { ok: false as const, error: "Esta semana possui cargas SAP preservadas. Não é necessário excluí-la para importar novas semanas." };
 
     const { error } = await db.from("weeks").delete().eq("id", data.weekId);
     if (error) return { ok: false as const, error: error.message };

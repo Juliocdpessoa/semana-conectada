@@ -256,6 +256,7 @@ function PlanejamentoPage() {
           .from("weeks")
           .select("id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at, sap_closure_status, sap_closure_deadline, sap_closed_at")
           .order("start_date", { ascending: false })
+          .limit(6)
       ).data ?? [],
   });
 
@@ -287,6 +288,9 @@ function PlanejamentoPage() {
         qc.invalidateQueries({ queryKey: ["active-week"] }),
         qc.invalidateQueries({ queryKey: ["activity-working-weeks"] }),
         qc.invalidateQueries({ queryKey: ["sap-confirmation-overview"] }),
+        qc.invalidateQueries({ queryKey: ["weekly-rs"] }),
+        qc.invalidateQueries({ queryKey: ["weekly-rs-closures"] }),
+        qc.invalidateQueries({ queryKey: ["weekly-rs-weeks"] }),
       ]);
     } finally {
       setSavingSapClosure(false);
@@ -512,7 +516,7 @@ function PlanejamentoPage() {
       </div>
 
       <div className="mt-5">
-        <Panel title="Semanas importadas" description={`${weeksList.data?.length ?? 0} registros`} padded={false}>
+        <Panel title="Semanas importadas" description={`${weeksList.data?.length ?? 0} semanas recentes · O histórico completo permanece em Painel → Realização Semanal. Não é necessário excluir semanas para importar outras.`} padded={false}>
           {weeksList.data && weeksList.data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">

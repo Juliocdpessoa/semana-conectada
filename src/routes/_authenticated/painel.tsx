@@ -90,6 +90,7 @@ function PainelPage() {
           mode={view === "disponibilidade-hh" ? "availability" : "indicator"}
           tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
           userId={session.userId}
+          isAdmin={session.roles.includes("admin")}
           worksiteId={session.worksiteId}
           worksiteCode={session.worksiteCode}
         />
