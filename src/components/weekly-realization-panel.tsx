@@ -1,6 +1,6 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { Fragment, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { RefreshCw } from "lucide-react";
+import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
@@ -14,7 +14,7 @@ import {
   WeeklyAvailabilityEditor,
   type AvailabilityDocument,
 } from "@/components/weekly-availability-editor";
-import { EmptyState, KpiCard, PageHeader, Panel, Modal } from "@/components/ui-kit";
+import { EmptyState, KpiCard, PageHeader, Panel } from "@/components/ui-kit";
 import {
   WeeklyRsEvidence,
   RsSpecialtyBars,
@@ -526,42 +526,107 @@ function RsContent({
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={`${r.specialty}:${r.includedInRs}`} className="row-zebra">
-                    <td className="p-2 font-medium">
-                      <button
-                        type="button"
-                        className="text-primary underline underline-offset-2 hover:opacity-80"
-                        onClick={() => setSelectedSpecialty(r)}
-                        aria-label={`Ver RS dos centros de ${r.specialty}`}
-                      >
-                        {r.specialty}
-                      </button>
-                      <span className="block text-[10px] font-normal text-muted-foreground">
-                        {r.centers.join(", ")}
-                      </span>
-                      {!r.includedInRs && (
-                        <span className="ml-2 text-[10px] text-muted-foreground">
-                          Somente acompanhamento · fora do total
-                        </span>
+                {rows.map((r, index) => {
+                  const expanded =
+                    selectedSpecialty?.specialty === r.specialty &&
+                    selectedSpecialty.includedInRs === r.includedInRs;
+                  return (
+                    <Fragment key={`${r.specialty}:${r.includedInRs}`}>
+                      <tr className="row-zebra">
+                        <td className="p-2 font-medium">
+                          <button
+                            type="button"
+                            className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:opacity-80"
+                            onClick={() => setSelectedSpecialty(expanded ? null : r)}
+                            aria-expanded={expanded}
+                            aria-controls={expanded ? `rs-centers-${index}` : undefined}
+                            aria-label={`${expanded ? "Recolher" : "Ver"} RS dos centros de ${r.specialty}`}
+                          >
+                            <ChevronDown
+                              aria-hidden="true"
+                              className={`h-3.5 w-3.5 transition-transform ${expanded ? "" : "-rotate-90"}`}
+                            />
+                            {r.specialty}
+                          </button>
+                          <span className="block text-[10px] font-normal text-muted-foreground">
+                            {r.centers.join(", ")}
+                          </span>
+                          {!r.includedInRs && (
+                            <span className="ml-2 text-[10px] text-muted-foreground">
+                              Somente acompanhamento · fora do total
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-2 text-right">{number(r.available)}</td>
+                        <td className="p-2 text-right">{number(r.programmed)}</td>
+                        <td className="p-2 text-right">{number(r.programmedConsidered)}</td>
+                        <td className="p-2 text-right">
+                          {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
+                        </td>
+                        <td className="p-2 text-right">{hasSource ? number(r.completed) : "—"}</td>
+                        <td className="p-2 text-right">
+                          {hasSource ? number(r.completedForRs) : "—"}
+                        </td>
+                        <td className="p-2 text-right">{hasSource ? number(r.immediate) : "—"}</td>
+                        <td className="p-2 text-right">{hasSource ? number(r.considered) : "—"}</td>
+                        <td className="p-2 text-right">{hasSource ? number(r.excess) : "—"}</td>
+                        <td className="p-2 text-right">
+                          <RsAlertBadge value={r.rs} included={r.includedInRs} />
+                        </td>
+                      </tr>
+                      {expanded && (
+                        <tr id={`rs-centers-${index}`} className="bg-primary/5">
+                          <td colSpan={11} className="px-4 py-2 text-xs text-muted-foreground">
+                            Centros de {r.specialty} · {local || "IARI + ROTINA"}. Cada centro
+                            mostra seu próprio teto semanal. O RS oficial continua consolidado por
+                            especialidade; não some nem faça média simples dos percentuais dos
+                            centros.
+                          </td>
+                        </tr>
                       )}
-                    </td>
-                    <td className="p-2 text-right">{number(r.available)}</td>
-                    <td className="p-2 text-right">{number(r.programmed)}</td>
-                    <td className="p-2 text-right">{number(r.programmedConsidered)}</td>
-                    <td className="p-2 text-right">
-                      {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
-                    </td>
-                    <td className="p-2 text-right">{hasSource ? number(r.completed) : "—"}</td>
-                    <td className="p-2 text-right">{hasSource ? number(r.completedForRs) : "—"}</td>
-                    <td className="p-2 text-right">{hasSource ? number(r.immediate) : "—"}</td>
-                    <td className="p-2 text-right">{hasSource ? number(r.considered) : "—"}</td>
-                    <td className="p-2 text-right">{hasSource ? number(r.excess) : "—"}</td>
-                    <td className="p-2 text-right">
-                      <RsAlertBadge value={r.rs} included={r.includedInRs} />
-                    </td>
-                  </tr>
-                ))}
+                      {expanded &&
+                        centerRows.map((center) => (
+                          <tr
+                            key={center.center}
+                            className="border-b border-border/50 bg-primary/5"
+                          >
+                            <td className="p-2 pl-7 font-medium">
+                              <span className="mr-2 text-muted-foreground" aria-hidden="true">
+                                ↳
+                              </span>
+                              {center.center}
+                            </td>
+                            {[center.available, center.programmed, center.programmedConsidered].map(
+                              (value, i) => (
+                                <td className="p-2 text-right" key={i}>
+                                  {number(value)}
+                                </td>
+                              ),
+                            )}
+                            <td className="p-2 text-right">
+                              {center.occupation === null
+                                ? "—"
+                                : number(center.occupation * 100) + "%"}
+                            </td>
+                            {[
+                              center.completed,
+                              center.completedForRs,
+                              center.immediate,
+                              center.considered,
+                              center.excess,
+                            ].map((value, i) => (
+                              <td className="p-2 text-right" key={i}>
+                                {hasSource ? number(value) : "—"}
+                              </td>
+                            ))}
+                            <td className="p-2 text-right">
+                              <RsAlertBadge value={center.rs} included={center.includedInRs} />
+                            </td>
+                          </tr>
+                        ))}
+                    </Fragment>
+                  );
+                })}
               </tbody>
               <tfoot className="border-t border-border font-semibold">
                 <tr>
@@ -596,67 +661,6 @@ function RsContent({
             considerado igual a zero.
           </p>
         </Panel>
-      )}
-      {selectedSpecialty && (
-        <Modal
-          size="lg"
-          title={`RS por centro · ${selectedSpecialty.specialty}`}
-          description={`${week.label} · ${local || "IARI + ROTINA"}`}
-          onClose={() => setSelectedSpecialty(null)}
-        >
-          <p className="mb-3 text-xs text-muted-foreground">
-            Detalhamento em HH. Cada centro mostra seu próprio teto de disponibilidade. O resultado
-            oficial da especialidade continua consolidado na semana; os RS dos centros não devem ser
-            somados nem ter média simples.
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full whitespace-nowrap text-xs">
-              <thead>
-                <tr>
-                  {[
-                    "Centro",
-                    "Disponível",
-                    "Programado",
-                    "TP considerado",
-                    "OM",
-                    "TCpr SAP",
-                    "TCpr (Limite)",
-                    "TCoi SAP",
-                    "Considerado",
-                    "RS",
-                  ].map((h) => (
-                    <th key={h} className="p-2 text-right first:text-left">
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {centerRows.map((r) => (
-                  <tr className="row-zebra" key={r.center}>
-                    <td className="p-2 font-medium">{r.center}</td>
-                    {[r.available, r.programmed, r.programmedConsidered].map((v, i) => (
-                      <td key={i} className="p-2 text-right">
-                        {number(v)}
-                      </td>
-                    ))}
-                    <td className="p-2 text-right">
-                      {r.occupation === null ? "—" : number(r.occupation * 100) + "%"}
-                    </td>
-                    {[r.completed, r.completedForRs, r.immediate, r.considered].map((v, i) => (
-                      <td key={i} className="p-2 text-right">
-                        {hasSource ? number(v) : "—"}
-                      </td>
-                    ))}
-                    <td className="p-2 text-right">
-                      <RsAlertBadge value={r.rs} included={r.includedInRs} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Modal>
       )}
       <Panel title="Memória de cálculo">
         <div className="space-y-2 text-xs text-muted-foreground">
