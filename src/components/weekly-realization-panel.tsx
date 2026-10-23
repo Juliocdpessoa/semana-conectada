@@ -493,7 +493,7 @@ function RsContent({
           </p>
         )}
       {data.availability && (
-        <Panel title="Realização por especialidade · teto semanal">
+        <Panel title="Realização Semanal (RS)">
           <p className="mb-3 text-xs text-muted-foreground">
             O limite é aplicado à soma de TCpr + TCoi de cada especialidade na semana inteira,
             dentro do local selecionado. O excesso de uma especialidade não compensa outra. Valores
@@ -510,7 +510,7 @@ function RsContent({
                     "Programado considerado",
                     "OM",
                     "TCpr SAP",
-                    "TCpr limitado por confirmação",
+                    "TCpr (Limite)",
                     "TCoi SAP",
                     "Considerado",
                     "Excesso",
@@ -620,7 +620,7 @@ function RsContent({
                     "TP considerado",
                     "OM",
                     "TCpr SAP",
-                    "TCpr limitado",
+                    "TCpr (Limite)",
                     "TCoi SAP",
                     "Considerado",
                     "RS",
