@@ -135,7 +135,7 @@ export function WeeklyRealizationPanel({
         }
       />
       {tabs}
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-4 grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)]">
         <label className="text-xs">
           Ano
           <select
@@ -173,33 +173,35 @@ export function WeeklyRealizationPanel({
             ))}
           </select>
         </label>
-      </div>
-      <div className="mb-4 max-w-md">
-        <label
-          htmlFor="rs-week"
-          className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground"
-        >
-          Semana · {worksiteCode}
-        </label>
-        <select
-          id="rs-week"
-          value={week?.id ?? ""}
-          onChange={(e) => {
-            setSelected(e.target.value);
-            const url = new URL(window.location.href);
-            url.searchParams.set("week", e.target.value);
-            window.history.replaceState({}, "", url);
-          }}
-          className="input-base"
-        >
-          {!week && <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>}
-          {visibleWeeks.map((w) => (
-            <option key={w.id} value={w.id}>
-              {w.label} · {date(w.start_date)} a {date(w.end_date)}
-              {w.is_active ? " · Operacional" : ""}
-            </option>
-          ))}
-        </select>
+        <div className="col-span-2 min-w-0 sm:col-span-1">
+          <label
+            htmlFor="rs-week"
+            className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground"
+          >
+            Semana · {worksiteCode}
+          </label>
+          <select
+            id="rs-week"
+            value={week?.id ?? ""}
+            onChange={(e) => {
+              setSelected(e.target.value);
+              const url = new URL(window.location.href);
+              url.searchParams.set("week", e.target.value);
+              window.history.replaceState({}, "", url);
+            }}
+            className="input-base"
+          >
+            {!week && (
+              <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>
+            )}
+            {visibleWeeks.map((w) => (
+              <option key={w.id} value={w.id}>
+                {w.label} · {date(w.start_date)} a {date(w.end_date)}
+                {w.is_active ? " · Operacional" : ""}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       {weeks.isError ? (
         <EmptyState
@@ -414,7 +416,7 @@ function RsContent({
   const hasSource = !!data.source;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-md border border-border bg-card p-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border bg-card p-3">
         <label className="w-full text-xs sm:w-60">
           Local da realização semanal
           <select
@@ -440,12 +442,17 @@ function RsContent({
           />
           Ocultar centros fora do RS
         </label>
-        <p className="max-w-2xl text-xs text-muted-foreground">
-          O recorte aplica-se ao RS, aos HH, às especialidades e às pendências abaixo. Alpinismo e
-          os centros INSPPINT, TECNIEND, TECNINSC e HIDROJATO ficam somente para acompanhamento,
-          fora do cálculo. Em Todos, o teto considera a especialidade na semana inteira dos dois
-          locais; o RS geral não é a média dos RS de IARI e ROTINA.
-        </p>
+        <details className="w-full text-xs text-muted-foreground lg:ml-auto lg:w-auto lg:max-w-xl">
+          <summary className="cursor-pointer font-medium">
+            Critérios do cálculo e do recorte
+          </summary>
+          <p className="mt-2 leading-relaxed">
+            O recorte aplica-se ao RS, aos HH e às especialidades. Alpinismo e os centros INSPPINT,
+            TECNIEND, TECNINSC e HIDROJATO ficam somente para acompanhamento, fora do cálculo. Em
+            Todos, o teto considera a especialidade na semana inteira dos dois locais; o RS geral
+            não é a média dos RS de IARI e ROTINA.
+          </p>
+        </details>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>

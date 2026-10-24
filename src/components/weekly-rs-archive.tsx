@@ -262,122 +262,126 @@ export function WeeklyRsArchive({
               : "Em apuração"
         }
       >
-        {closure && (
-          <p className="mb-3 text-xs">
-            Fechado em {new Date(closure.closed_at).toLocaleString("pt-BR")} por{" "}
-            {closure.closed_by_name} · Motivo: {closure.reason} · Regra: {closure.rule_version}
-          </p>
-        )}
-        {catalog.data?.deadline && !isFrozen && (
-          <p className="mb-3 text-xs text-muted-foreground">
-            Prazo vigente:{" "}
-            {new Date(catalog.data.deadline).toLocaleString("pt-BR", {
-              timeZone: "America/Sao_Paulo",
-            })}{" "}
-            (Brasília)
-          </p>
-        )}
-        {legacy && (
-          <p className="mb-3 text-xs text-amber-800 dark:text-amber-300">
-            Este encerramento é anterior ao histórico versionado. Os valores abaixo são uma consulta
-            recalculada, não um resultado oficial congelado. Não reconstruímos dados de cargas já
-            removidas.
-          </p>
-        )}
-        {!isFrozen && deadlinePassed && !legacy && (
-          <p className="mb-3 text-xs text-amber-800 dark:text-amber-300">
-            Prazo de apropriação encerrado. O administrador deve conferir e usar Fechar agora para
-            consolidar o resultado oficial. O prazo sozinho não cria uma versão preservada.
-          </p>
-        )}
-        {!isFrozen && !legacy && (
-          <p className="mb-3 text-xs text-muted-foreground">
-            A última carga SAP atualiza esta apuração. Ao fechar, os resultados e a memória de
-            cálculo são preservados. Pendências e justificativas também ficam no arquivo.
-          </p>
-        )}
-        {catalog.isError ? (
-          <p role="alert" className="text-xs text-destructive">
-            Falha ao carregar versões.{" "}
-            <button className="underline" onClick={() => catalog.refetch()}>
-              Tentar novamente
-            </button>
-          </p>
-        ) : (
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-xs">
-              Versão da consulta
-              <select
-                className="input-base mt-1"
-                value={version ?? ""}
-                onChange={(e) => onVersion(e.target.value ? Number(e.target.value) : null)}
-              >
-                <option value="">
-                  {catalog.data?.status === "closed"
-                    ? "Último fechamento disponível"
-                    : "Apuração atual"}
-                </option>
-                {catalog.data?.versions.map((v) => (
-                  <option key={v.id} value={v.version}>
-                    Versão {v.version} · {new Date(v.closed_at).toLocaleDateString("pt-BR")} ·{" "}
-                    {v.closed_by_name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            {isAdmin && catalog.data && (
-              <>
-                <button
-                  className="btn-outline text-xs"
-                  onClick={() => {
-                    setReason("");
-                    setAction(catalog.data.status === "closed" ? "reopen" : "close");
-                  }}
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,auto)]">
+          <div className="min-w-0 space-y-2 [&>p]:mb-0">
+            {closure && (
+              <p className="mb-3 text-xs">
+                Fechado em {new Date(closure.closed_at).toLocaleString("pt-BR")} por{" "}
+                {closure.closed_by_name} · Motivo: {closure.reason} · Regra: {closure.rule_version}
+              </p>
+            )}
+            {catalog.data?.deadline && !isFrozen && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                Prazo vigente:{" "}
+                {new Date(catalog.data.deadline).toLocaleString("pt-BR", {
+                  timeZone: "America/Sao_Paulo",
+                })}{" "}
+                (Brasília)
+              </p>
+            )}
+            {legacy && (
+              <p className="mb-3 text-xs text-amber-800 dark:text-amber-300">
+                Este encerramento é anterior ao histórico versionado. Os valores abaixo são uma
+                consulta recalculada, não um resultado oficial congelado. Não reconstruímos dados de
+                cargas já removidas.
+              </p>
+            )}
+            {!isFrozen && deadlinePassed && !legacy && (
+              <p className="mb-3 text-xs text-amber-800 dark:text-amber-300">
+                Prazo de apropriação encerrado. O administrador deve conferir e usar Fechar agora
+                para consolidar o resultado oficial. O prazo sozinho não cria uma versão preservada.
+              </p>
+            )}
+            {!isFrozen && !legacy && (
+              <p className="mb-3 text-xs text-muted-foreground">
+                A última carga SAP atualiza esta apuração. Ao fechar, os resultados e a memória de
+                cálculo são preservados. Pendências e justificativas também ficam no arquivo.
+              </p>
+            )}
+          </div>
+          {catalog.isError ? (
+            <p role="alert" className="text-xs text-destructive">
+              Falha ao carregar versões.{" "}
+              <button className="underline" onClick={() => catalog.refetch()}>
+                Tentar novamente
+              </button>
+            </p>
+          ) : (
+            <div className="flex min-w-0 flex-wrap items-end gap-2 xl:justify-end">
+              <label className="w-full min-w-0 text-xs sm:w-64">
+                Versão da consulta
+                <select
+                  className="input-base mt-1"
+                  value={version ?? ""}
+                  onChange={(e) => onVersion(e.target.value ? Number(e.target.value) : null)}
                 >
-                  {catalog.data.status === "closed" ? "Reabrir fechamento" : "Fechar agora"}
-                </button>
-                {catalog.data.status !== "closed" && (
+                  <option value="">
+                    {catalog.data?.status === "closed"
+                      ? "Último fechamento disponível"
+                      : "Apuração atual"}
+                  </option>
+                  {catalog.data?.versions.map((v) => (
+                    <option key={v.id} value={v.version}>
+                      Versão {v.version} · {new Date(v.closed_at).toLocaleDateString("pt-BR")} ·{" "}
+                      {v.closed_by_name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {isAdmin && catalog.data && (
+                <>
                   <button
                     className="btn-outline text-xs"
                     onClick={() => {
                       setReason("");
-                      const date = new Date(
-                        Math.max(Date.now(), new Date(catalog.data.deadline ?? 0).getTime()) +
-                          2 * 3600000,
-                      );
-                      setDeadline(
-                        new Date(date.getTime() - date.getTimezoneOffset() * 60000)
-                          .toISOString()
-                          .slice(0, 16),
-                      );
-                      setAction("extend");
+                      setAction(catalog.data.status === "closed" ? "reopen" : "close");
                     }}
                   >
-                    Prorrogar prazo
+                    {catalog.data.status === "closed" ? "Reabrir fechamento" : "Fechar agora"}
                   </button>
-                )}
-              </>
-            )}
-            {closure && (
-              <>
-                <button
-                  className="btn-outline text-xs"
-                  disabled={exporting}
-                  onClick={() => download("xlsx")}
-                >
-                  {exporting ? "Preparando…" : "Exportar fechamento Excel"}
-                </button>
-                <button
-                  className="btn-ghost text-xs"
-                  disabled={exporting}
-                  onClick={() => download("json")}
-                >
-                  Arquivo completo JSON
-                </button>
-              </>
-            )}
-          </div>
-        )}
+                  {catalog.data.status !== "closed" && (
+                    <button
+                      className="btn-outline text-xs"
+                      onClick={() => {
+                        setReason("");
+                        const date = new Date(
+                          Math.max(Date.now(), new Date(catalog.data.deadline ?? 0).getTime()) +
+                            2 * 3600000,
+                        );
+                        setDeadline(
+                          new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+                            .toISOString()
+                            .slice(0, 16),
+                        );
+                        setAction("extend");
+                      }}
+                    >
+                      Prorrogar prazo
+                    </button>
+                  )}
+                </>
+              )}
+              {closure && (
+                <>
+                  <button
+                    className="btn-outline text-xs"
+                    disabled={exporting}
+                    onClick={() => download("xlsx")}
+                  >
+                    {exporting ? "Preparando…" : "Exportar fechamento Excel"}
+                  </button>
+                  <button
+                    className="btn-ghost text-xs"
+                    disabled={exporting}
+                    onClick={() => download("json")}
+                  >
+                    Arquivo completo JSON
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <WeeklySapLoadHistory weekId={weekId} userId={userId} worksiteId={worksiteId} />
       </Panel>
       {action && (
