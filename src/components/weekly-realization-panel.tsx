@@ -143,11 +143,13 @@ export function WeeklyRealizationPanel({
       {tabs}
       <div
         className={
-          mode === "indicator" ? "grid items-end gap-4 xl:grid-cols-[minmax(0,1fr)_30rem]" : ""
+          mode === "indicator"
+            ? "grid items-end gap-3 2xl:grid-cols-[7rem_8rem_minmax(14rem,1.5fr)_minmax(12rem,1fr)_9rem_minmax(18rem,1.2fr)_auto]"
+            : ""
         }
       >
         <div
-          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[5rem_6rem_minmax(10rem,24rem)_10rem_9rem]" : "mb-4"}`}
+          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "2xl:contents" : "mb-4"}`}
         >
           <label className="text-xs">
             <span className="mb-1 block h-4 leading-4">Ano</span>
@@ -348,7 +350,7 @@ function WeeklyResults({
     );
   return (
     <div className="contents">
-      <div className="flex min-w-0 items-end gap-3">
+      <div className="flex min-w-0 items-end gap-3 2xl:contents">
         <div className="min-w-0 flex-1">
           <WeeklyRsArchive
             weekId={week.id}
@@ -365,7 +367,7 @@ function WeeklyResults({
         </div>
         <button
           type="button"
-          className="btn-outline h-9 shrink-0 text-xs"
+          className="btn-outline inline-flex h-9 shrink-0 items-center justify-center gap-2 whitespace-nowrap px-3 text-xs"
           disabled={data.isFetching}
           onClick={() => {
             void data.refetch();
@@ -378,7 +380,7 @@ function WeeklyResults({
           {data.isFetching ? "Atualizando…" : "Atualizar"}
         </button>
       </div>
-      <div className="min-w-0 xl:col-span-2">
+      <div className="min-w-0 2xl:col-span-7">
         <RsContent
           key={week.id + local}
           week={week}
