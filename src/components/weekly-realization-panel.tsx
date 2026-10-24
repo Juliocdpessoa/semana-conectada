@@ -111,6 +111,11 @@ export function WeeklyRealizationPanel({
   });
   const [year, setYear] = useState("");
   const [month, setMonth] = useState("");
+  const [local, setLocal] = useState(() => {
+    const value =
+      typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("local");
+    return value === "IARI" || value === "ROTINA" ? value : "";
+  });
   const availableYears = [...new Set(weeks.data?.map((w) => w.start_date.slice(0, 4)) ?? [])];
   const visibleWeeks =
     weeks.data?.filter(
@@ -135,7 +140,9 @@ export function WeeklyRealizationPanel({
         }
       />
       {tabs}
-      <div className="mb-4 grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)]">
+      <div
+        className={`mb-4 grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[8rem_10rem_minmax(0,1fr)_16rem]" : ""}`}
+      >
         <label className="text-xs">
           Ano
           <select
@@ -202,6 +209,27 @@ export function WeeklyRealizationPanel({
             ))}
           </select>
         </div>
+        {mode === "indicator" && (
+          <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
+            Local da realização semanal
+            <select
+              className="input-base mt-1"
+              value={local}
+              onChange={(e) => {
+                const next = e.target.value;
+                setLocal(next);
+                const url = new URL(window.location.href);
+                if (next) url.searchParams.set("local", next);
+                else url.searchParams.delete("local");
+                window.history.replaceState({}, "", url);
+              }}
+            >
+              <option value="">IARI + ROTINA · todos os locais</option>
+              <option value="IARI">IARI</option>
+              <option value="ROTINA">ROTINA</option>
+            </select>
+          </label>
+        )}
       </div>
       {weeks.isError ? (
         <EmptyState
@@ -221,6 +249,7 @@ export function WeeklyRealizationPanel({
           worksiteCode={worksiteCode}
           mode={mode}
           isAdmin={isAdmin}
+          local={local}
         />
       ) : (
         !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
@@ -236,6 +265,7 @@ function WeeklyResults({
   worksiteCode,
   mode,
   isAdmin,
+  local,
 }: {
   week: Week;
   userId: string;
@@ -243,14 +273,10 @@ function WeeklyResults({
   worksiteCode: string;
   mode: "indicator" | "availability";
   isAdmin: boolean;
+  local: string;
 }) {
   const qc = useQueryClient();
   const [version, setVersion] = useState<number | null>(null);
-  const [local, setLocal] = useState(() => {
-    const value =
-      typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("local");
-    return value === "IARI" || value === "ROTINA" ? value : "";
-  });
   const data = useQuery({
     queryKey: ["weekly-rs", userId, worksiteId, week.id, mode, local, version],
     queryFn: async () => {
@@ -319,13 +345,6 @@ function WeeklyResults({
         userId={userId}
         worksiteId={worksiteId}
         local={local}
-        onLocalChange={(next) => {
-          setLocal(next);
-          const url = new URL(window.location.href);
-          if (next) url.searchParams.set("local", next);
-          else url.searchParams.delete("local");
-          window.history.replaceState({}, "", url);
-        }}
         worksiteCode={worksiteCode}
         refreshing={data.isFetching}
         refresh={() => {
@@ -351,7 +370,6 @@ function RsContent({
   userId,
   worksiteId,
   local,
-  onLocalChange,
 }: {
   week: Week;
   data: RsData;
@@ -362,7 +380,6 @@ function RsContent({
   userId: string;
   worksiteId: string;
   local: string;
-  onLocalChange: (value: string) => void;
 }) {
   const errors = useMemo(
     () =>
@@ -417,18 +434,6 @@ function RsContent({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border bg-card p-3">
-        <label className="w-full text-xs sm:w-60">
-          Local da realização semanal
-          <select
-            className="input-base mt-1"
-            value={local}
-            onChange={(e) => onLocalChange(e.target.value)}
-          >
-            <option value="">IARI + ROTINA · todos os locais</option>
-            <option value="IARI">IARI</option>
-            <option value="ROTINA">ROTINA</option>
-          </select>
-        </label>
         <label className="flex cursor-pointer items-center gap-2 text-xs">
           <input
             type="checkbox"
