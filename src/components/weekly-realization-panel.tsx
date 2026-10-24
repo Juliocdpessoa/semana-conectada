@@ -144,7 +144,7 @@ export function WeeklyRealizationPanel({
       <div
         className={
           mode === "indicator"
-            ? "grid items-end gap-3 2xl:grid-cols-[7rem_8rem_minmax(14rem,1.5fr)_minmax(12rem,1fr)_9rem_minmax(18rem,1.2fr)_auto]"
+            ? "grid items-end gap-3 2xl:grid-cols-[7rem_8rem_minmax(14rem,1.5fr)_minmax(12rem,1fr)_minmax(18rem,1.2fr)_auto_9rem]"
             : ""
         }
       >
@@ -241,7 +241,7 @@ export function WeeklyRealizationPanel({
             </label>
           )}
           {mode === "indicator" && (
-            <label className="flex h-9 cursor-pointer items-center gap-2 text-xs">
+            <label className="flex h-9 cursor-pointer items-center gap-2 text-xs 2xl:col-start-7 2xl:row-start-1">
               <input
                 type="checkbox"
                 checked={hideNonRs}
