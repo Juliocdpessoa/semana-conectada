@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Panel } from "@/components/ui-kit";
+import { Modal, Panel } from "@/components/ui-kit";
+import { availabilityWeekDates, createAvailabilityCenter } from "@/lib/new-availability-center";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   filterAvailabilityDraft,
@@ -14,6 +15,7 @@ import {
   prepareAvailabilityReuse,
   validateAvailability,
   weekCode,
+  isRsMonitoringOnly,
   type AvailabilityRow,
   type AvailabilityWeek,
 } from "@/lib/weekly-availability";
@@ -145,6 +147,12 @@ export function WeeklyAvailabilityEditor({
   const [centerFilters, setCenterFilters] = useState<string[]>([]);
   const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [newCenter, setNewCenter] = useState<null | {
+    center: string;
+    local: string;
+    specialty: string;
+    days: Array<{ date: string; hours: string }>;
+  }>(null);
   const file = useRef<HTMLInputElement>(null);
   const converted = useMemo(
     () =>
@@ -357,6 +365,25 @@ export function WeeklyAvailabilityEditor({
                 Reutilizar última base · {weekCode(previous.week_code)}
               </button>
             )}
+            <button
+              type="button"
+              className="btn-outline"
+              disabled={readOnly || saving || reading || rows.length >= 5000}
+              onClick={() => {
+                try {
+                  setNewCenter({
+                    center: "",
+                    local: "",
+                    specialty: "",
+                    days: availabilityWeekDates(week).map((date) => ({ date, hours: "" })),
+                  });
+                } catch (error) {
+                  toast.error(error instanceof Error ? error.message : "Período inválido.");
+                }
+              }}
+            >
+              <Plus className="h-4 w-4" /> Novo centro de trabalho
+            </button>
             <button
               className="btn-ghost"
               disabled={readOnly || saving || rows.length >= 5000}
@@ -604,6 +631,132 @@ export function WeeklyAvailabilityEditor({
           )}
         </div>
       </div>
+      {newCenter && (
+        <Modal
+          title={`Novo centro · semana ${weekCode(week.code)}`}
+          onClose={() => setNewCenter(null)}
+          footer={
+            <button
+              type="button"
+              className="btn-primary"
+              disabled={readOnly || saving}
+              onClick={() => {
+                if (readOnly || saving) return;
+                try {
+                  const added = createAvailabilityCenter(converted, week, {
+                    ...newCenter,
+                    days: newCenter.days.map((day) => ({
+                      ...day,
+                      hours: parseServiceHours(day.hours) ?? NaN,
+                    })),
+                  });
+                  clearFilters();
+                  setRows((current) => [...current, ...draftRows(added)]);
+                  setPage(Math.floor(rows.length / count));
+                  setSource("Cadastro de centro no NEXO");
+                  setNewCenter(null);
+                  toast.success(
+                    "Centro adicionado ao rascunho. Salve a disponibilidade para aplicar ao RS e registrar no histórico.",
+                  );
+                } catch (error) {
+                  toast.error(
+                    error instanceof Error ? error.message : "Confira os dados do centro.",
+                  );
+                }
+              }}
+            >
+              Adicionar à disponibilidade
+            </button>
+          }
+        >
+          <div className="space-y-4">
+            <p className="text-xs text-muted-foreground">
+              O centro será cadastrado somente na semana selecionada. Use o mesmo código da
+              programação e do SAP para vincular as horas corretamente. A disponibilidade total já
+              deve incluir a EEP.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="text-xs">
+                Código do centro no SAP *
+                <input
+                  className="input-base mt-1"
+                  maxLength={160}
+                  value={newCenter.center}
+                  onChange={(e) => setNewCenter({ ...newCenter, center: e.target.value })}
+                />
+              </label>
+              <label className="text-xs">
+                Local *
+                <select
+                  className="input-base mt-1"
+                  value={newCenter.local}
+                  onChange={(e) => setNewCenter({ ...newCenter, local: e.target.value })}
+                >
+                  <option value="">Selecione</option>
+                  <option value="IARI">IARI</option>
+                  <option value="ROTINA">ROTINA</option>
+                </select>
+              </label>
+              <label className="text-xs sm:col-span-2">
+                Especialidade *
+                <input
+                  className="input-base mt-1"
+                  list="rs-new-center-specialties"
+                  maxLength={160}
+                  value={newCenter.specialty}
+                  onChange={(e) => setNewCenter({ ...newCenter, specialty: e.target.value })}
+                  placeholder="Selecione uma existente ou digite uma nova"
+                />
+                <datalist id="rs-new-center-specialties">
+                  {[...new Set(rows.map((row) => row.specialty.trim()).filter(Boolean))]
+                    .sort()
+                    .map((specialty) => (
+                      <option key={specialty} value={specialty} />
+                    ))}
+                </datalist>
+              </label>
+            </div>
+            <p className="text-xs font-medium">
+              {isRsMonitoringOnly(newCenter.specialty, newCenter.center)
+                ? "Somente acompanhamento: este centro/especialidade não entra no RS."
+                : "Participará do RS após salvar uma especialidade válida e a disponibilidade."}
+            </p>
+            <fieldset className="space-y-2">
+              <legend className="mb-2 text-xs font-medium">
+                HH disponível por dia * · informe zero quando não houver carga
+              </legend>
+              {newCenter.days.map((day, index) => (
+                <label key={day.date} className="flex items-center justify-between gap-3 text-xs">
+                  {new Date(day.date + "T12:00:00").toLocaleDateString("pt-BR", {
+                    weekday: "short",
+                    day: "2-digit",
+                    month: "2-digit",
+                  })}
+                  <input
+                    aria-label={`HH disponível em ${day.date}`}
+                    className="input-base w-32"
+                    inputMode="decimal"
+                    value={day.hours}
+                    onChange={(e) =>
+                      setNewCenter({
+                        ...newCenter,
+                        days: newCenter.days.map((item, i) =>
+                          i === index ? { ...item, hours: e.target.value } : item,
+                        ),
+                      })
+                    }
+                  />
+                </label>
+              ))}
+            </fieldset>
+            <p className="text-xs text-muted-foreground">
+              Adicionar prepara as linhas sem alterar o banco. Confirme em Salvar disponibilidade
+              para registrar responsável, data e versão. O código deve manter a mesma especialidade
+              nos dois locais.
+            </p>
+          </div>
+        </Modal>
+      )}
     </Panel>
   );
 }

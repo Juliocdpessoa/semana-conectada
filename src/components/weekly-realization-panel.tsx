@@ -6,9 +6,11 @@ import { AvailabilityHistoryDetails } from "@/components/availability-history-de
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
+import { hasRsDisplayLoad } from "@/lib/rs-center-display";
 import {
   calculateSpecialtyRealization,
   calculateCenterRealization,
+  availabilityKey,
   validateAvailability,
   type CenterHours,
 } from "@/lib/weekly-availability";
@@ -455,7 +457,42 @@ function RsContent({
     [data.availability, data.centers, data.source, local, data.isFrozen, data.frozenCalculation],
   );
   const { totals, rows, unmapped } = calculation;
-  const visibleRows = hideNonRs ? rows.filter((row) => row.includedInRs) : rows;
+  const allCenterRows = useMemo(
+    () =>
+      data.isFrozen && data.frozenCalculation
+        ? data.frozenCalculation.centerRows
+        : rows.flatMap((row) =>
+            calculateCenterRealization(
+              data.availability?.rows ?? [],
+              data.centers ?? [],
+              !!data.source,
+              row.specialty,
+              row.includedInRs,
+              local,
+            ),
+          ),
+    [
+      data.isFrozen,
+      data.frozenCalculation,
+      data.availability,
+      data.centers,
+      data.source,
+      rows,
+      local,
+    ],
+  );
+  const displayRows = rows.filter(hasRsDisplayLoad).map((row) => ({
+    ...row,
+    centers: allCenterRows
+      .filter(
+        (center) =>
+          availabilityKey(center.specialty) === availabilityKey(row.specialty) &&
+          center.includedInRs === row.includedInRs &&
+          hasRsDisplayLoad(center),
+      )
+      .map((center) => center.center),
+  }));
+  const visibleRows = hideNonRs ? displayRows.filter((row) => row.includedInRs) : displayRows;
   const [selectedSpecialty, setSelectedSpecialty] = useState<{
     specialty: string;
     includedInRs: boolean;
@@ -465,20 +502,12 @@ function RsContent({
       setSelectedSpecialty((selected) => (selected?.includedInRs === false ? null : selected));
   }, [hideNonRs]);
   const centerRows = selectedSpecialty
-    ? data.isFrozen && data.frozenCalculation
-      ? data.frozenCalculation.centerRows.filter(
-          (r) =>
-            r.specialty === selectedSpecialty.specialty &&
-            r.includedInRs === selectedSpecialty.includedInRs,
-        )
-      : calculateCenterRealization(
-          data.availability?.rows ?? [],
-          data.centers ?? [],
-          !!data.source,
-          selectedSpecialty.specialty,
-          selectedSpecialty.includedInRs,
-          local,
-        )
+    ? allCenterRows.filter(
+        (row) =>
+          availabilityKey(row.specialty) === availabilityKey(selectedSpecialty.specialty) &&
+          row.includedInRs === selectedSpecialty.includedInRs &&
+          hasRsDisplayLoad(row),
+      )
     : [];
   const result = data.isFrozen
     ? calculation.result
@@ -586,7 +615,7 @@ function RsContent({
         </p>
       )}
       <RsResult result={result} />
-      <RsSpecialtyBars rows={rows} hasSap={hasSource} />
+      <RsSpecialtyBars rows={displayRows} hasSap={hasSource} />
       {data.availability && (
         <Panel title="Realização Semanal (RS)">
           <p className="mb-3 text-xs text-muted-foreground">
@@ -621,6 +650,13 @@ function RsContent({
                 </tr>
               </thead>
               <tbody>
+                {!visibleRows.length && (
+                  <tr>
+                    <td colSpan={11} className="p-4 text-center text-muted-foreground">
+                      Nenhum centro com HH disponível ou programado neste recorte.
+                    </td>
+                  </tr>
+                )}
                 {visibleRows.map((r, index) => {
                   const expanded =
                     selectedSpecialty?.specialty === r.specialty &&
