@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
-import { Panel, Modal } from "@/components/ui-kit";
+import { Modal } from "@/components/ui-kit";
 import { WeeklySapLoadHistory } from "@/components/weekly-sap-load-history";
 
 export type RsClosure = {
@@ -253,17 +253,16 @@ export function WeeklyRsArchive({
   }
   return (
     <>
-      <Panel
-        title={
-          isFrozen
-            ? `Fechado · versão ${closure?.version}`
-            : legacy
-              ? "Semana encerrada sem versão preservada"
-              : "Em apuração"
-        }
-      >
-        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(20rem,auto)]">
-          <div className="min-w-0 space-y-2 [&>p]:mb-0">
+      <section aria-label="Apuração semanal" className="surface-card min-w-0 p-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <h2 className="text-[13px] font-semibold">
+            {isFrozen
+              ? `Fechado · versão ${closure?.version}`
+              : legacy
+                ? "Semana encerrada sem versão preservada"
+                : "Em apuração"}
+          </h2>
+          <div className="contents [&>p]:mb-0">
             {closure && (
               <p className="mb-3 text-xs">
                 Fechado em {new Date(closure.closed_at).toLocaleString("pt-BR")} por{" "}
@@ -292,12 +291,6 @@ export function WeeklyRsArchive({
                 para consolidar o resultado oficial. O prazo sozinho não cria uma versão preservada.
               </p>
             )}
-            {!isFrozen && !legacy && (
-              <p className="mb-3 text-xs text-muted-foreground">
-                A última carga SAP atualiza esta apuração. Ao fechar, os resultados e a memória de
-                cálculo são preservados. Pendências e justificativas também ficam no arquivo.
-              </p>
-            )}
           </div>
           {catalog.isError ? (
             <p role="alert" className="text-xs text-destructive">
@@ -307,11 +300,11 @@ export function WeeklyRsArchive({
               </button>
             </p>
           ) : (
-            <div className="flex min-w-0 flex-wrap items-end gap-2 xl:justify-end">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 lg:ml-auto">
               <label className="w-full min-w-0 text-xs sm:w-64">
-                Versão da consulta
+                <span className="sr-only">Versão da consulta</span>
                 <select
-                  className="input-base mt-1"
+                  className="input-base"
                   value={version ?? ""}
                   onChange={(e) => onVersion(e.target.value ? Number(e.target.value) : null)}
                 >
@@ -383,7 +376,7 @@ export function WeeklyRsArchive({
           )}
         </div>
         <WeeklySapLoadHistory weekId={weekId} userId={userId} worksiteId={worksiteId} />
-      </Panel>
+      </section>
       {action && (
         <Modal
           title={
