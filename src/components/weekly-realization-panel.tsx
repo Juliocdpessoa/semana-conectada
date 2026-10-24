@@ -141,119 +141,127 @@ export function WeeklyRealizationPanel({
       />
       {tabs}
       <div
-        className={`mb-4 grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[8rem_10rem_minmax(0,1fr)_16rem]" : ""}`}
+        className={
+          mode === "indicator"
+            ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
+            : ""
+        }
       >
-        <label className="text-xs">
-          Ano
-          <select
-            className="input-base mt-1"
-            value={year}
-            onChange={(e) => {
-              setYear(e.target.value);
-              setMonth("");
-              setSelected("");
-            }}
-          >
-            <option value="">Todos os anos</option>
-            {availableYears.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-xs">
-          Mês
-          <select
-            className="input-base mt-1"
-            value={month}
-            onChange={(e) => {
-              setMonth(e.target.value);
-              setSelected("");
-            }}
-          >
-            <option value="">Todos os meses</option>
-            {Array.from({ length: 12 }, (_, i) => (
-              <option key={i} value={String(i + 1).padStart(2, "0")}>
-                {new Date(2026, i, 1).toLocaleString("pt-BR", { month: "long" })}
-              </option>
-            ))}
-          </select>
-        </label>
-        <div className="col-span-2 min-w-0 sm:col-span-1">
-          <label
-            htmlFor="rs-week"
-            className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground"
-          >
-            Semana · {worksiteCode}
-          </label>
-          <select
-            id="rs-week"
-            value={week?.id ?? ""}
-            onChange={(e) => {
-              setSelected(e.target.value);
-              const url = new URL(window.location.href);
-              url.searchParams.set("week", e.target.value);
-              window.history.replaceState({}, "", url);
-            }}
-            className="input-base"
-          >
-            {!week && (
-              <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>
-            )}
-            {visibleWeeks.map((w) => (
-              <option key={w.id} value={w.id}>
-                {w.label} · {date(w.start_date)} a {date(w.end_date)}
-                {w.is_active ? " · Operacional" : ""}
-              </option>
-            ))}
-          </select>
-        </div>
-        {mode === "indicator" && (
-          <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
-            Local da realização semanal
+        <div
+          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[6rem_7rem_minmax(0,1fr)_10rem]" : "mb-4"}`}
+        >
+          <label className="text-xs">
+            Ano
             <select
               className="input-base mt-1"
-              value={local}
+              value={year}
               onChange={(e) => {
-                const next = e.target.value;
-                setLocal(next);
-                const url = new URL(window.location.href);
-                if (next) url.searchParams.set("local", next);
-                else url.searchParams.delete("local");
-                window.history.replaceState({}, "", url);
+                setYear(e.target.value);
+                setMonth("");
+                setSelected("");
               }}
             >
-              <option value="">IARI + ROTINA · todos os locais</option>
-              <option value="IARI">IARI</option>
-              <option value="ROTINA">ROTINA</option>
+              <option value="">Todos os anos</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
             </select>
           </label>
+          <label className="text-xs">
+            Mês
+            <select
+              className="input-base mt-1"
+              value={month}
+              onChange={(e) => {
+                setMonth(e.target.value);
+                setSelected("");
+              }}
+            >
+              <option value="">Todos os meses</option>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i} value={String(i + 1).padStart(2, "0")}>
+                  {new Date(2026, i, 1).toLocaleString("pt-BR", { month: "long" })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            <label
+              htmlFor="rs-week"
+              className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground"
+            >
+              Semana · {worksiteCode}
+            </label>
+            <select
+              id="rs-week"
+              value={week?.id ?? ""}
+              onChange={(e) => {
+                setSelected(e.target.value);
+                const url = new URL(window.location.href);
+                url.searchParams.set("week", e.target.value);
+                window.history.replaceState({}, "", url);
+              }}
+              className="input-base"
+            >
+              {!week && (
+                <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>
+              )}
+              {visibleWeeks.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.label} · {date(w.start_date)} a {date(w.end_date)}
+                  {w.is_active ? " · Operacional" : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+          {mode === "indicator" && (
+            <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
+              Local da realização semanal
+              <select
+                className="input-base mt-1"
+                value={local}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setLocal(next);
+                  const url = new URL(window.location.href);
+                  if (next) url.searchParams.set("local", next);
+                  else url.searchParams.delete("local");
+                  window.history.replaceState({}, "", url);
+                }}
+              >
+                <option value="">IARI + ROTINA · todos os locais</option>
+                <option value="IARI">IARI</option>
+                <option value="ROTINA">ROTINA</option>
+              </select>
+            </label>
+          )}
+        </div>
+        {weeks.isError ? (
+          <EmptyState
+            title="Não foi possível carregar as semanas"
+            action={
+              <button className="btn-ghost" onClick={() => void weeks.refetch()}>
+                Tentar novamente
+              </button>
+            }
+          />
+        ) : week ? (
+          <WeeklyResults
+            key={week.id}
+            week={week}
+            userId={userId}
+            worksiteId={worksiteId}
+            worksiteCode={worksiteCode}
+            mode={mode}
+            isAdmin={isAdmin}
+            local={local}
+          />
+        ) : (
+          !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
         )}
       </div>
-      {weeks.isError ? (
-        <EmptyState
-          title="Não foi possível carregar as semanas"
-          action={
-            <button className="btn-ghost" onClick={() => void weeks.refetch()}>
-              Tentar novamente
-            </button>
-          }
-        />
-      ) : week ? (
-        <WeeklyResults
-          key={week.id}
-          week={week}
-          userId={userId}
-          worksiteId={worksiteId}
-          worksiteCode={worksiteCode}
-          mode={mode}
-          isAdmin={isAdmin}
-          local={local}
-        />
-      ) : (
-        !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
-      )}
     </main>
   );
 }
@@ -325,7 +333,7 @@ function WeeklyResults({
       />
     );
   return (
-    <div className="space-y-4">
+    <div className="contents">
       <WeeklyRsArchive
         weekId={week.id}
         userId={userId}
@@ -338,25 +346,27 @@ function WeeklyResults({
         legacy={data.data.legacyClosedWithoutSnapshot}
         deadlinePassed={data.data.deadlinePassed}
       />
-      <RsContent
-        key={week.id + local}
-        week={week}
-        data={data.data}
-        userId={userId}
-        worksiteId={worksiteId}
-        local={local}
-        worksiteCode={worksiteCode}
-        refreshing={data.isFetching}
-        refresh={() => {
-          void data.refetch();
-          void qc.invalidateQueries({
-            queryKey: ["weekly-rs-pending", userId, worksiteId, week.id],
-          });
-        }}
-        onSaved={() =>
-          qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
-        }
-      />
+      <div className="min-w-0 xl:col-span-2">
+        <RsContent
+          key={week.id + local}
+          week={week}
+          data={data.data}
+          userId={userId}
+          worksiteId={worksiteId}
+          local={local}
+          worksiteCode={worksiteCode}
+          refreshing={data.isFetching}
+          refresh={() => {
+            void data.refetch();
+            void qc.invalidateQueries({
+              queryKey: ["weekly-rs-pending", userId, worksiteId, week.id],
+            });
+          }}
+          onSaved={() =>
+            qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
+          }
+        />
+      </div>
     </div>
   );
 }
