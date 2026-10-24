@@ -1,4 +1,4 @@
-import { Fragment, useMemo, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
@@ -111,6 +111,7 @@ export function WeeklyRealizationPanel({
   });
   const [year, setYear] = useState("");
   const [month, setMonth] = useState("");
+  const [hideNonRs, setHideNonRs] = useState(true);
   const [local, setLocal] = useState(() => {
     const value =
       typeof window === "undefined" ? "" : new URLSearchParams(window.location.search).get("local");
@@ -142,13 +143,11 @@ export function WeeklyRealizationPanel({
       {tabs}
       <div
         className={
-          mode === "indicator"
-            ? "grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]"
-            : ""
+          mode === "indicator" ? "grid items-end gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]" : ""
         }
       >
         <div
-          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[6rem_7rem_minmax(0,1fr)_10rem]" : "mb-4"}`}
+          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[5rem_6rem_minmax(10rem,1fr)_10rem_9rem]" : "mb-4"}`}
         >
           <label className="text-xs">
             Ano
@@ -237,6 +236,16 @@ export function WeeklyRealizationPanel({
               </select>
             </label>
           )}
+          {mode === "indicator" && (
+            <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={hideNonRs}
+                onChange={(event) => setHideNonRs(event.target.checked)}
+              />
+              Ocultar centros fora do RS
+            </label>
+          )}
         </div>
         {weeks.isError ? (
           <EmptyState
@@ -257,6 +266,7 @@ export function WeeklyRealizationPanel({
             mode={mode}
             isAdmin={isAdmin}
             local={local}
+            hideNonRs={hideNonRs}
           />
         ) : (
           !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
@@ -274,6 +284,7 @@ function WeeklyResults({
   mode,
   isAdmin,
   local,
+  hideNonRs,
 }: {
   week: Week;
   userId: string;
@@ -282,6 +293,7 @@ function WeeklyResults({
   mode: "indicator" | "availability";
   isAdmin: boolean;
   local: string;
+  hideNonRs: boolean;
 }) {
   const qc = useQueryClient();
   const [version, setVersion] = useState<number | null>(null);
@@ -354,6 +366,7 @@ function WeeklyResults({
           userId={userId}
           worksiteId={worksiteId}
           local={local}
+          hideNonRs={hideNonRs}
           worksiteCode={worksiteCode}
           refreshing={data.isFetching}
           refresh={() => {
@@ -380,6 +393,7 @@ function RsContent({
   userId,
   worksiteId,
   local,
+  hideNonRs,
 }: {
   week: Week;
   data: RsData;
@@ -390,6 +404,7 @@ function RsContent({
   userId: string;
   worksiteId: string;
   local: string;
+  hideNonRs: boolean;
 }) {
   const errors = useMemo(
     () =>
@@ -413,12 +428,15 @@ function RsContent({
     [data.availability, data.centers, data.source, local, data.isFrozen, data.frozenCalculation],
   );
   const { totals, rows, unmapped } = calculation;
-  const [hideNonRs, setHideNonRs] = useState(true);
   const visibleRows = hideNonRs ? rows.filter((row) => row.includedInRs) : rows;
   const [selectedSpecialty, setSelectedSpecialty] = useState<{
     specialty: string;
     includedInRs: boolean;
   } | null>(null);
+  useEffect(() => {
+    if (hideNonRs)
+      setSelectedSpecialty((selected) => (selected?.includedInRs === false ? null : selected));
+  }, [hideNonRs]);
   const centerRows = selectedSpecialty
     ? data.isFrozen && data.frozenCalculation
       ? data.frozenCalculation.centerRows.filter(
@@ -443,21 +461,6 @@ function RsContent({
   const hasSource = !!data.source;
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-md border border-border bg-card p-3">
-        <label className="flex cursor-pointer items-center gap-2 text-xs">
-          <input
-            type="checkbox"
-            checked={hideNonRs}
-            onChange={(event) => {
-              setHideNonRs(event.target.checked);
-              if (event.target.checked && selectedSpecialty?.includedInRs === false) {
-                setSelectedSpecialty(null);
-              }
-            }}
-          />
-          Ocultar centros fora do RS
-        </label>
-      </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
           {data.source
