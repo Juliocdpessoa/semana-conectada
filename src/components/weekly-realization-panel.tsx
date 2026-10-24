@@ -110,6 +110,16 @@ export function WeeklyRealizationPanel({
     staleTime: 60_000,
   });
   const [year, setYear] = useState("");
+  const yearStorageKey = `nexo:weekly-rs:year:${userId}:${worksiteId}`;
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(yearStorageKey) ?? "";
+      setYear(/^\d{4}$/.test(saved) ? saved : "");
+    } catch {
+      setYear("");
+    }
+    setMonth("");
+  }, [yearStorageKey]);
   const [month, setMonth] = useState("");
   const [hideNonRs, setHideNonRs] = useState(true);
   const [local, setLocal] = useState(() => {
@@ -158,6 +168,12 @@ export function WeeklyRealizationPanel({
               value={year}
               onChange={(e) => {
                 setYear(e.target.value);
+                try {
+                  if (e.target.value) window.localStorage.setItem(yearStorageKey, e.target.value);
+                  else window.localStorage.removeItem(yearStorageKey);
+                } catch {
+                  // The filter still works when browser storage is unavailable.
+                }
                 setMonth("");
                 setSelected("");
               }}
