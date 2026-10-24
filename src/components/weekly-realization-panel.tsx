@@ -403,7 +403,7 @@ function RsContent({
     [data.availability, data.centers, data.source, local, data.isFrozen, data.frozenCalculation],
   );
   const { totals, rows, unmapped } = calculation;
-  const [hideNonRs, setHideNonRs] = useState(false);
+  const [hideNonRs, setHideNonRs] = useState(true);
   const visibleRows = hideNonRs ? rows.filter((row) => row.includedInRs) : rows;
   const [selectedSpecialty, setSelectedSpecialty] = useState<{
     specialty: string;
@@ -447,17 +447,6 @@ function RsContent({
           />
           Ocultar centros fora do RS
         </label>
-        <details className="w-full text-xs text-muted-foreground lg:ml-auto lg:w-auto lg:max-w-xl">
-          <summary className="cursor-pointer font-medium">
-            Critérios do cálculo e do recorte
-          </summary>
-          <p className="mt-2 leading-relaxed">
-            O recorte aplica-se ao RS, aos HH e às especialidades. Alpinismo e os centros INSPPINT,
-            TECNIEND, TECNINSC e HIDROJATO ficam somente para acompanhamento, fora do cálculo. Em
-            Todos, o teto considera a especialidade na semana inteira dos dois locais; o RS geral
-            não é a média dos RS de IARI e ROTINA.
-          </p>
-        </details>
       </div>
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
