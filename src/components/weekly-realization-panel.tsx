@@ -143,11 +143,11 @@ export function WeeklyRealizationPanel({
       {tabs}
       <div
         className={
-          mode === "indicator" ? "grid items-end gap-4 xl:grid-cols-[minmax(0,1fr)_22rem]" : ""
+          mode === "indicator" ? "grid items-end gap-4 xl:grid-cols-[minmax(0,1fr)_30rem]" : ""
         }
       >
         <div
-          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[5rem_6rem_minmax(10rem,1fr)_10rem_9rem]" : "mb-4"}`}
+          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[5rem_6rem_minmax(10rem,24rem)_10rem_9rem]" : "mb-4"}`}
         >
           <label className="text-xs">
             <span className="mb-1 block h-4 leading-4">Ano</span>
@@ -348,18 +348,36 @@ function WeeklyResults({
     );
   return (
     <div className="contents">
-      <WeeklyRsArchive
-        weekId={week.id}
-        userId={userId}
-        worksiteId={worksiteId}
-        isAdmin={isAdmin}
-        version={version}
-        onVersion={setVersion}
-        closure={data.data.closure}
-        isFrozen={data.data.isFrozen}
-        legacy={data.data.legacyClosedWithoutSnapshot}
-        deadlinePassed={data.data.deadlinePassed}
-      />
+      <div className="flex min-w-0 items-end gap-3">
+        <div className="min-w-0 flex-1">
+          <WeeklyRsArchive
+            weekId={week.id}
+            userId={userId}
+            worksiteId={worksiteId}
+            isAdmin={isAdmin}
+            version={version}
+            onVersion={setVersion}
+            closure={data.data.closure}
+            isFrozen={data.data.isFrozen}
+            legacy={data.data.legacyClosedWithoutSnapshot}
+            deadlinePassed={data.data.deadlinePassed}
+          />
+        </div>
+        <button
+          type="button"
+          className="btn-outline h-9 shrink-0 text-xs"
+          disabled={data.isFetching}
+          onClick={() => {
+            void data.refetch();
+            void qc.invalidateQueries({
+              queryKey: ["weekly-rs-pending", userId, worksiteId, week.id],
+            });
+          }}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {data.isFetching ? "Atualizando…" : "Atualizar"}
+        </button>
+      </div>
       <div className="min-w-0 xl:col-span-2">
         <RsContent
           key={week.id + local}
@@ -370,13 +388,6 @@ function WeeklyResults({
           local={local}
           hideNonRs={hideNonRs}
           worksiteCode={worksiteCode}
-          refreshing={data.isFetching}
-          refresh={() => {
-            void data.refetch();
-            void qc.invalidateQueries({
-              queryKey: ["weekly-rs-pending", userId, worksiteId, week.id],
-            });
-          }}
           onSaved={() =>
             qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
           }
@@ -389,8 +400,6 @@ function WeeklyResults({
 function RsContent({
   week,
   data,
-  refreshing,
-  refresh,
   onSaved,
   userId,
   worksiteId,
@@ -400,8 +409,6 @@ function RsContent({
   week: Week;
   data: RsData;
   worksiteCode: string;
-  refreshing: boolean;
-  refresh: () => void;
   onSaved: () => Promise<unknown>;
   userId: string;
   worksiteId: string;
@@ -475,10 +482,6 @@ function RsContent({
               " linhas"
             : "Sem carga SAP detalhada para esta semana"}
         </span>
-        <button type="button" className="btn-ghost text-xs" disabled={refreshing} onClick={refresh}>
-          <RefreshCw className="h-3.5 w-3.5" />
-          {refreshing ? "Atualizando…" : "Atualizar"}
-        </button>
       </div>
       <p className="text-xs text-muted-foreground">
         {data.availability
