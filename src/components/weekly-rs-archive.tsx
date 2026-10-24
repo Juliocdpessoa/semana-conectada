@@ -255,7 +255,7 @@ export function WeeklyRsArchive({
   return (
     <>
       <div className="min-w-0">
-        <span className="mb-1 block text-xs font-medium">
+        <span className="mb-1 block h-4 truncate text-xs font-medium leading-4">
           {isFrozen
             ? `Fechado · versão ${closure?.version}`
             : legacy
@@ -264,7 +264,7 @@ export function WeeklyRsArchive({
         </span>
         <button
           type="button"
-          className="input-base flex w-full items-center justify-between gap-2 text-left text-xs"
+          className="input-base flex h-9 w-full items-center justify-between gap-2 text-left text-xs"
           onClick={() => setControlsOpen(true)}
         >
           <span className="truncate">
@@ -357,7 +357,7 @@ export function WeeklyRsArchive({
                         onClick={() => {
                           setReason("");
                           setAction(catalog.data.status === "closed" ? "reopen" : "close");
-                        setControlsOpen(false);
+                          setControlsOpen(false);
                         }}
                       >
                         {catalog.data.status === "closed" ? "Reabrir fechamento" : "Fechar agora"}
@@ -377,7 +377,7 @@ export function WeeklyRsArchive({
                                 .slice(0, 16),
                             );
                             setAction("extend");
-                          setControlsOpen(false);
+                            setControlsOpen(false);
                           }}
                         >
                           Prorrogar prazo

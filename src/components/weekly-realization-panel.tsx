@@ -150,9 +150,9 @@ export function WeeklyRealizationPanel({
           className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "xl:grid-cols-[5rem_6rem_minmax(10rem,1fr)_10rem_9rem]" : "mb-4"}`}
         >
           <label className="text-xs">
-            Ano
+            <span className="mb-1 block h-4 leading-4">Ano</span>
             <select
-              className="input-base mt-1"
+              className="input-base h-9"
               value={year}
               onChange={(e) => {
                 setYear(e.target.value);
@@ -169,9 +169,9 @@ export function WeeklyRealizationPanel({
             </select>
           </label>
           <label className="text-xs">
-            Mês
+            <span className="mb-1 block h-4 leading-4">Mês</span>
             <select
-              className="input-base mt-1"
+              className="input-base h-9"
               value={month}
               onChange={(e) => {
                 setMonth(e.target.value);
@@ -187,10 +187,7 @@ export function WeeklyRealizationPanel({
             </select>
           </label>
           <div className="col-span-2 min-w-0 sm:col-span-1">
-            <label
-              htmlFor="rs-week"
-              className="mb-1 block text-[11px] font-medium uppercase text-muted-foreground"
-            >
+            <label htmlFor="rs-week" className="mb-1 block h-4 truncate text-xs leading-4">
               Semana · {worksiteCode}
             </label>
             <select
@@ -202,7 +199,7 @@ export function WeeklyRealizationPanel({
                 url.searchParams.set("week", e.target.value);
                 window.history.replaceState({}, "", url);
               }}
-              className="input-base"
+              className="input-base h-9"
             >
               {!week && (
                 <option value="">{weeks.isLoading ? "Carregando…" : "Nenhuma semana"}</option>
@@ -217,9 +214,14 @@ export function WeeklyRealizationPanel({
           </div>
           {mode === "indicator" && (
             <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
-              Local da realização semanal
+              <span
+                className="mb-1 block h-4 truncate leading-4"
+                title="Local da realização semanal"
+              >
+                Local da realização semanal
+              </span>
               <select
-                className="input-base mt-1"
+                className="input-base h-9"
                 value={local}
                 onChange={(e) => {
                   const next = e.target.value;
@@ -237,7 +239,7 @@ export function WeeklyRealizationPanel({
             </label>
           )}
           {mode === "indicator" && (
-            <label className="flex min-h-9 cursor-pointer items-center gap-2 text-xs">
+            <label className="flex h-9 cursor-pointer items-center gap-2 text-xs">
               <input
                 type="checkbox"
                 checked={hideNonRs}
