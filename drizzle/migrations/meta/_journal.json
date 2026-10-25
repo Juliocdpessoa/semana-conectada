@@ -162,6 +162,13 @@
       "when": 1792767600000,
       "tag": "0022_weekly_rs_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1792843200000,
+      "tag": "0023_rs_exclude_hidrojat",
+      "breakpoints": true
     }
   ]
 }

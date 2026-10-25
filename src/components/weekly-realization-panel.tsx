@@ -819,9 +819,9 @@ function RsContent({
           </p>
           <p>
             O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo
-            Alpinista/Alpinistas) e os centros INSPPINT, TECNIEND, TECNINSC e HIDROJATO ficam
-            excluídos dos HH programados, disponíveis e apropriados usados no RS. Sua visualização é
-            apenas de acompanhamento.
+            Alpinista/Alpinistas) e os centros INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO
+            ficam excluídos dos HH programados, disponíveis e apropriados usados no RS. Sua
+            visualização é apenas de acompanhamento.
           </p>
           <p>
             Aplicamos RS = ((TCpr + TCoi) ÷ TP considerado) × OM × 100, após aplicar o teto semanal

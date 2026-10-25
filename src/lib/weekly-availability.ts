@@ -17,7 +17,13 @@ export type CenterHours = {
   completedForRs?: number;
   immediate: number;
 };
-export const RS_MONITORING_CENTERS = ["INSPPINT", "TECNIEND", "TECNINSC", "HIDROJATO"] as const;
+export const RS_MONITORING_CENTERS = [
+  "INSPPINT",
+  "TECNIEND",
+  "TECNINSC",
+  "HIDROJAT",
+  "HIDROJATO",
+] as const;
 export const isRsMonitoringOnly = (specialty: string, center = "") =>
   ["ALPINISTA", "ALPINISTAS", "ALPINISMO"].includes(availabilityKey(specialty)) ||
   RS_MONITORING_CENTERS.some((code) => code === availabilityKey(center));
