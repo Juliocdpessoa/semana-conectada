@@ -29,6 +29,8 @@ import {
   RS_PROGRAM_COLUMNS,
   RS_PROGRAM_SHEET,
   type RsProgramRow,
+  rsProgramImportError,
+  type RsProgramImportAction,
 } from "@/lib/rs-program-base";
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
@@ -202,6 +204,7 @@ function parseWorkbook(
   rows: Record<string, any>[];
   headerRow: string[];
   rsProgram?: RsProgramRow[];
+  rsProgramError?: string;
 }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -214,8 +217,11 @@ function parseWorkbook(
         const rsSheet = includeRs
           ? wb.SheetNames.find((name) => normalize(name) === normalize(RS_PROGRAM_SHEET))
           : undefined;
-        const rsProgram = rsSheet
-          ? parseRsProgramGrid(
+        let rsProgram: RsProgramRow[] | undefined;
+        let rsProgramError: string | undefined;
+        if (rsSheet) {
+          try {
+            rsProgram = parseRsProgramGrid(
               XLSX.utils.sheet_to_json<unknown[]>(
                 XLSX.read(reader.result, { type: "array", cellDates: false }).Sheets[rsSheet],
                 {
@@ -224,8 +230,14 @@ function parseWorkbook(
                   raw: true,
                 },
               ),
-            )
-          : undefined;
+            );
+          } catch (error) {
+            rsProgramError =
+              error instanceof Error
+                ? error.message
+                : "Não foi possível validar a aba Programação SAP.";
+          }
+        }
         const ws = wb.Sheets[sheetName];
         const arr = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: null, raw: false });
         if (!arr.length) return resolve({ sheetName, rows: [], headerRow: [] });
@@ -242,7 +254,7 @@ function parseWorkbook(
           obj.__row = i + 1;
           rows.push(obj);
         }
-        resolve({ sheetName, rows, headerRow, rsProgram });
+        resolve({ sheetName, rows, headerRow, rsProgram, rsProgramError });
       } catch (e) {
         reject(e);
       }
@@ -895,22 +907,30 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     sheetName: string;
     headerRow: string[];
     rsProgram?: RsProgramRow[];
+    rsProgramError?: string;
   } | null>(null);
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [busy, setBusy] = useState(false);
+  const [rsAction, setRsAction] = useState<RsProgramImportAction>("");
+  const [createdWeekId, setCreatedWeekId] = useState<string | null>(null);
+  const readGeneration = useRef(0);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const call = useServerFn(importWeek);
 
   async function handleFile(f: File) {
+    const generation = ++readGeneration.current;
     setFile(f);
     setError(null);
     setParsed(null);
+    setRsAction("");
     try {
+      if (f.size > 10 * 1024 * 1024) throw new Error("Use uma planilha de até 10 MB.");
       const res = await parseWorkbook(f, true);
+      if (generation !== readGeneration.current) return;
       if (!res.rows.length) {
         setError("A planilha não contém linhas de dados.");
         setParsed(null);
@@ -921,6 +941,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
       if (!code) setCode(base.slice(0, 32));
       if (!label) setLabel(base);
     } catch (e: any) {
+      if (generation !== readGeneration.current) return;
       setError(e?.message ?? "Falha ao ler a planilha.");
       setParsed(null);
     }
@@ -928,11 +949,33 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 
   async function submit() {
     if (!parsed) return;
+    const rsError = rsProgramImportError(rsAction, parsed.rsProgram, parsed.rsProgramError);
+    if (rsError) return setError(rsError);
     if (!code.trim() || !label.trim() || !startDate || !endDate)
       return setError("Preencha código, rótulo e datas.");
     setBusy(true);
     setError(null);
     try {
+      if (createdWeekId) {
+        if (rsAction === "update") {
+          const { error } = await (supabase as any).rpc("save_weekly_rs_program_base", {
+            p_week_id: createdWeekId,
+            p_rows: parsed.rsProgram,
+            p_source_file_name: file?.name ?? "Importação semanal",
+            p_sheet_name: "Programação SAP",
+            p_expected_version: 0,
+          });
+          if (error) throw error;
+          toast.success(
+            "Base oficial RS salva. A semana e suas tarefas não foram importadas novamente.",
+          );
+        } else
+          toast.warning(
+            "Semana mantida sem base oficial RS; o cálculo utilizará a programação operacional.",
+          );
+        onDone();
+        return;
+      }
       const payload = parsed.rows.map((r, idx) => {
         const order = extractField(
           r,
@@ -992,7 +1035,8 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           source_file_name: file?.name ?? null,
           sheet_name: parsed.sheetName,
           rows: payload,
-          rs_program: parsed.rsProgram,
+          rs_base_action: rsAction as "update" | "skip",
+          rs_program: rsAction === "update" ? parsed.rsProgram : undefined,
         },
       });
       if (!res.ok) {
@@ -1000,13 +1044,18 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         setBusy(false);
         return;
       }
-      if (res.officialError)
-        toast.warning(
-          `Semana criada, mas a base oficial do RS não foi salva: ${res.officialError}. Importe-a no Painel → Realização Semanal, sem repetir a programação.`,
+      if (res.officialError) {
+        setCreatedWeekId(res.weekId);
+        setError(
+          `A semana já foi criada, mas a base RS não foi salva: ${res.officialError}. Tente salvar novamente aqui; as tarefas não serão duplicadas.`,
         );
-      else
+        toast.warning(
+          "Semana criada. Falta salvar a base oficial RS; nenhuma tarefa precisa ser reimportada.",
+        );
+        return;
+      } else
         toast.success(
-          `Semana importada em preparação — ${res.count} atividades.${parsed.rsProgram ? ` Base oficial RS: ${parsed.rsProgram.length} confirmações.` : " Sem base oficial RS: cálculo pela programação operacional até a importação da base."}`,
+          `Semana importada em preparação — ${res.count} atividades.${rsAction === "update" ? ` Base oficial RS: ${parsed.rsProgram!.length} confirmações.` : " Sem base oficial RS: cálculo pela programação operacional, conforme sua escolha."}`,
         );
       onDone();
     } catch (e: any) {
@@ -1020,15 +1069,30 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     <Modal
       title="Importar planilha semanal"
       description="A nova programação ficará Em preparação e invisível para os líderes até a ativação manual."
-      onClose={onClose}
+      onClose={() => {
+        if (!busy) {
+          if (createdWeekId) onDone();
+          else onClose();
+        }
+      }}
       size="lg"
       footer={
         <>
-          <button onClick={onClose} className="btn-ghost">
-            Cancelar
+          <button
+            disabled={busy}
+            onClick={() => (createdWeekId ? onDone() : onClose())}
+            className="btn-ghost"
+          >
+            {createdWeekId ? "Fechar" : "Cancelar"}
           </button>
-          <button onClick={submit} disabled={busy || !parsed} className="btn-primary">
-            {busy ? "Importando…" : "Importar semana"}
+          <button onClick={submit} disabled={busy || !parsed || !rsAction} className="btn-primary">
+            {busy
+              ? "Salvando…"
+              : createdWeekId
+                ? rsAction === "update"
+                  ? "Salvar base RS"
+                  : "Concluir sem base RS"
+                : "Importar semana"}
           </button>
         </>
       }
@@ -1042,7 +1106,12 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
         />
         <div className="flex flex-wrap items-center gap-3">
-          <button type="button" onClick={() => inputRef.current?.click()} className="btn-ghost">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            className="btn-ghost"
+          >
             <Upload className="h-4 w-4" /> {file ? "Trocar arquivo" : "Selecionar arquivo"}
           </button>
           {file && (
@@ -1054,7 +1123,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                   · {parsed.rows.length} linhas · aba “{parsed.sheetName}”
                   {parsed.rsProgram
                     ? ` · RS: ${parsed.rsProgram.length} confirmações / ${parsed.rsProgram.reduce((sum, row) => sum + row.work, 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} HH na aba Programação SAP`
-                    : " · Sem aba Programação SAP"}
+                    : parsed.rsProgramError
+                      ? " · Aba Programação SAP com erro"
+                      : " · Sem aba Programação SAP"}
                 </span>
               )}
             </div>
@@ -1062,7 +1133,70 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 sm:grid-cols-2">
+      {parsed && (
+        <fieldset
+          className="mt-4 rounded-md border border-warning/40 bg-warning/10 p-3 text-sm"
+          disabled={busy}
+        >
+          <legend className="px-1 font-semibold">
+            Esta importação também atualiza a base oficial do RS?
+          </legend>
+          <p className="mb-3 text-xs text-muted-foreground">
+            Ao escolher Sim, usaremos o HH integral da coluna Trabalho da aba Programação SAP nesta
+            semana, independentemente das datas da planilha. Nenhuma semana anterior será alterada.
+          </p>
+          <label className="mb-2 flex cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="rs-base-action"
+              value="update"
+              checked={rsAction === "update"}
+              onChange={() => {
+                setRsAction("update");
+                setError(null);
+              }}
+            />
+            Sim, atualizar também a base oficial do RS
+          </label>
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="radio"
+              name="rs-base-action"
+              value="skip"
+              checked={rsAction === "skip"}
+              onChange={() => {
+                setRsAction("skip");
+                setError(null);
+              }}
+            />
+            Não, importar somente a programação operacional
+          </label>
+          {parsed.rsProgramError && (
+            <p role="alert" className="mt-3 text-xs text-destructive">
+              {parsed.rsProgramError} Para atualizar o RS, corrija a aba. Para importar apenas as
+              tarefas, escolha Não.
+            </p>
+          )}
+          {rsAction === "update" && !parsed.rsProgram && !parsed.rsProgramError && (
+            <p role="alert" className="mt-3 text-xs text-destructive">
+              Aba Programação SAP não encontrada. Inclua essa aba no arquivo para atualizar o RS.
+            </p>
+          )}
+          {rsAction === "skip" && (
+            <p className="mt-3 text-xs">
+              A base oficial não será gravada para a nova semana. O RS utilizará a programação
+              operacional; não será copiada a base de outra semana.
+            </p>
+          )}
+        </fieldset>
+      )}
+      {createdWeekId && (
+        <p role="status" className="mt-3 text-sm">
+          Esta semana já está importada. A próxima tentativa grava somente a base RS, sem duplicar
+          tarefas.
+        </p>
+      )}
+      <fieldset disabled={busy || !!createdWeekId} className="mt-4 grid gap-3 sm:grid-cols-2">
         <Field label="Código da semana" required>
           <input
             value={code}
@@ -1095,7 +1229,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
             className="input-base"
           />
         </Field>
-      </div>
+      </fieldset>
 
       <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-foreground">
         Esta importação não altera a semana operacional atual. Depois dos ajustes, use “Ativar como

@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { rsProgramImportError } from "@/lib/rs-program-base";
 
 function normalizeReleaseType(value: unknown): unknown {
   if (typeof value !== "string") return value;
@@ -37,34 +38,47 @@ const rowSchema = z.object({
   source_row_number: z.number().int().nullable().optional(),
 });
 
-const importSchema = z.object({
-  code: z.string().min(1).max(32),
-  label: z.string().min(1).max(120),
-  start_date: z.string(),
-  end_date: z.string(),
-  source_file_name: z.string().max(240).nullable().optional(),
-  sheet_name: z.string().max(120).nullable().optional(),
-  rows: z.array(rowSchema).min(1).max(5000),
-  rs_program: z
-    .array(
-      z.object({
-        confirmation: z.string().regex(/^\d{1,32}$/),
-        order_number: z.string().regex(/^\d{1,32}$/),
-        operation: z.string().regex(/^\d{1,32}$/),
-        suboperation: z.string().max(32),
-        center: z.string().min(1).max(160),
-        work: z.number().finite().min(0).lt(1e9),
-        source_row_number: z.number().int().min(2).max(100000),
-        source_data: z.record(
-          z.string(),
-          z.union([z.string(), z.number().finite(), z.boolean(), z.null()]),
-        ),
-      }),
-    )
-    .min(1)
-    .max(5000)
-    .optional(),
-});
+const importSchema = z
+  .object({
+    code: z.string().min(1).max(32),
+    label: z.string().min(1).max(120),
+    start_date: z.string(),
+    end_date: z.string(),
+    source_file_name: z.string().max(240).nullable().optional(),
+    sheet_name: z.string().max(120).nullable().optional(),
+    rows: z.array(rowSchema).min(1).max(5000),
+    rs_base_action: z.enum(["update", "skip"]),
+    rs_program: z
+      .array(
+        z.object({
+          confirmation: z.string().regex(/^\d{1,32}$/),
+          order_number: z.string().regex(/^\d{1,32}$/),
+          operation: z.string().regex(/^\d{1,32}$/),
+          suboperation: z.string().max(32),
+          center: z.string().min(1).max(160),
+          work: z.number().finite().min(0).lt(1e9),
+          source_row_number: z.number().int().min(2).max(100000),
+          source_data: z.record(
+            z.string(),
+            z.union([z.string(), z.number().finite(), z.boolean(), z.null()]),
+          ),
+        }),
+      )
+      .min(1)
+      .max(5000)
+      .optional(),
+  })
+  .superRefine((data, context) => {
+    const error = rsProgramImportError(data.rs_base_action, data.rs_program);
+    if (error) context.addIssue({ code: "custom", path: ["rs_program"], message: error });
+    if (data.rs_base_action === "skip" && data.rs_program !== undefined)
+      context.addIssue({
+        code: "custom",
+        path: ["rs_program"],
+        message:
+          "A base RS não pode ser enviada quando a opção escolhida é somente programação operacional.",
+      });
+  });
 
 async function loadPlanningContext(supabase: any, userId: string) {
   const [{ data: roles }, { data: profile }] = await Promise.all([
@@ -162,7 +176,7 @@ export const importWeek = createServerFn({ method: "POST" })
     }
 
     let officialError: string | undefined;
-    if (data.rs_program) {
+    if (data.rs_base_action === "update" && data.rs_program) {
       // Save through the authenticated, versioned RPC. If it fails, retain the imported
       // operational week and surface the missing basis explicitly; never ask users to reimport tasks.
       const { error } = await (supabase as any).rpc("save_weekly_rs_program_base", {

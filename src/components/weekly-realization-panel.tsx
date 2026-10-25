@@ -4,7 +4,6 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
-import { RsProgramBaseControl } from "@/components/rs-program-base-control";
 import { RsWeekSelector } from "@/components/rs-week-selector";
 import {
   consolidateMonthlyRs,
@@ -611,17 +610,6 @@ function WeeklyResults({
         </button>
       </div>
       <div className="min-w-0 2xl:col-span-7">
-        <div className="mb-3">
-          <RsProgramBaseControl
-            weekId={week.id}
-            weekLabel={week.label}
-            basis={data.data.programBasis}
-            readOnly={!!data.data.isFrozen || week.sap_closure_status === "closed"}
-            onSaved={() =>
-              qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
-            }
-          />
-        </div>
         <RsContent
           key={week.id + local}
           week={week}
@@ -778,24 +766,6 @@ function RsContent({
               : "Sem carga SAP detalhada para esta semana"}
         </span>
       </div>
-      {!data.consolidated && (
-        <p className="text-xs text-muted-foreground">
-          {data.availability
-            ? "Disponibilidade: versão " +
-              data.availability.version +
-              " · " +
-              data.availability.updated_by_name +
-              " · " +
-              new Date(data.availability.updated_at).toLocaleString("pt-BR")
-            : "Cadastre a disponibilidade desta semana na aba Disponibilidade HH para calcular o RS."}{" "}
-          <a
-            className="font-medium text-primary underline"
-            href={"?view=disponibilidade-hh&week=" + encodeURIComponent(week.id)}
-          >
-            Editar disponibilidade e ver histórico
-          </a>
-        </p>
-      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="HH programado original"

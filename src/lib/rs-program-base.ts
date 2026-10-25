@@ -137,3 +137,20 @@ export function chooseOperationalSheet(names: string[]) {
     );
   return candidates[0];
 }
+
+export type RsProgramImportAction = "" | "update" | "skip";
+export function rsProgramImportError(action: unknown, rows?: RsProgramRow[], parseError?: string) {
+  if (action !== "update" && action !== "skip")
+    return "Informe se esta importação também atualiza a base oficial do RS.";
+  if (action === "skip") return null;
+  if (parseError) return parseError;
+  if (!rows?.length)
+    return "Para atualizar a base oficial do RS, preencha a aba Programação SAP com a coluna Trabalho.";
+  const confirmations = new Set<string>();
+  for (const row of rows) {
+    const id = rsProgramId(row.confirmation);
+    if (confirmations.has(id)) return `Confirmação ${id} duplicada na base oficial do RS.`;
+    confirmations.add(id);
+  }
+  return null;
+}
