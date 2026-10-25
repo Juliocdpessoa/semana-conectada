@@ -367,7 +367,7 @@ export function WeeklyAvailabilityEditor({
             )}
             <button
               type="button"
-              className="btn-outline"
+              className="btn-ghost"
               disabled={readOnly || saving || reading || rows.length >= 5000}
               onClick={() => {
                 try {
@@ -382,30 +382,7 @@ export function WeeklyAvailabilityEditor({
                 }
               }}
             >
-              <Plus className="h-4 w-4" /> Novo centro de trabalho
-            </button>
-            <button
-              className="btn-ghost"
-              disabled={readOnly || saving || rows.length >= 5000}
-              onClick={() => {
-                clearFilters();
-                setRows((r) => [
-                  ...r,
-                  {
-                    center: "",
-                    date: week.start_date,
-                    hours: "",
-                    week: weekCode(week.code),
-                    local: "",
-                    specialty: "",
-                  },
-                ]);
-                setPage(Math.floor(rows.length / count));
-                setSource("Edição no NEXO");
-              }}
-            >
-              <Plus className="h-4 w-4" />
-              Adicionar linha
+              <Plus className="h-4 w-4" /> Adicionar centro de trabalho
             </button>
             <button
               className="btn-primary"
@@ -634,13 +611,15 @@ export function WeeklyAvailabilityEditor({
       {newCenter && (
         <Modal
           title={`Novo centro · semana ${weekCode(week.code)}`}
-          onClose={() => setNewCenter(null)}
+          onClose={() => {
+            if (!saving) setNewCenter(null);
+          }}
           footer={
             <button
               type="button"
               className="btn-primary"
               disabled={readOnly || saving}
-              onClick={() => {
+              onClick={async () => {
                 if (readOnly || saving) return;
                 try {
                   const added = createAvailabilityCenter(converted, week, {
@@ -650,22 +629,44 @@ export function WeeklyAvailabilityEditor({
                       hours: parseServiceHours(day.hours) ?? NaN,
                     })),
                   });
+                  const nextRows = [...converted, ...added];
+                  const validation = validateAvailability(nextRows, week);
+                  if (validation.length) throw new Error(validation.slice(0, 5).join("\n"));
+                  if (
+                    dirty &&
+                    !window.confirm(
+                      "Há outras alterações pendentes nesta tabela. Salvar o novo centro e todas essas alterações na mesma versão, inclusive as linhas ocultas pelos filtros?",
+                    )
+                  )
+                    return;
+                  setSaving(true);
+                  const { error } = await (supabase as any).rpc("save_weekly_rs_availability", {
+                    p_week_id: week.id,
+                    p_rows: nextRows,
+                    p_expected_version: document?.version ?? 0,
+                    p_source_file_name: "Cadastro de centro no NEXO",
+                  });
+                  if (error) throw error;
                   clearFilters();
-                  setRows((current) => [...current, ...draftRows(added)]);
+                  setRows(draftRows(nextRows));
                   setPage(Math.floor(rows.length / count));
                   setSource("Cadastro de centro no NEXO");
                   setNewCenter(null);
+                  await onSaved();
                   toast.success(
-                    "Centro adicionado ao rascunho. Salve a disponibilidade para aplicar ao RS e registrar no histórico.",
+                    "Centro salvo na disponibilidade da semana, com responsável, data e versão registrados.",
                   );
                 } catch (error) {
                   toast.error(
-                    error instanceof Error ? error.message : "Confira os dados do centro.",
+                    (error as { message?: string })?.message ??
+                      "Não foi possível salvar o centro. Confira os dados e a versão da disponibilidade.",
                   );
+                } finally {
+                  setSaving(false);
                 }
               }}
             >
-              Adicionar à disponibilidade
+              {saving ? "Salvando…" : "Adicionar e salvar centro"}
             </button>
           }
         >
@@ -750,9 +751,9 @@ export function WeeklyAvailabilityEditor({
               ))}
             </fieldset>
             <p className="text-xs text-muted-foreground">
-              Adicionar prepara as linhas sem alterar o banco. Confirme em Salvar disponibilidade
-              para registrar responsável, data e versão. O código deve manter a mesma especialidade
-              nos dois locais.
+              Ao confirmar, o centro será salvo na disponibilidade desta semana, com responsável,
+              data e versão. Ele permanecerá ao reabrir a tela. O código deve manter a mesma
+              especialidade nos dois locais. Nas semanas seguintes, use Reutilizar última base.
             </p>
           </div>
         </Modal>

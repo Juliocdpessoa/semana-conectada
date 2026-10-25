@@ -98,7 +98,12 @@ test("new-center form uses existing versioned save and closed-week guard", () =>
     new URL("../src/components/weekly-availability-editor.tsx", import.meta.url),
     "utf8",
   );
-  assert.ok(source.includes("Novo centro de trabalho"));
+  assert.ok(source.includes("Adicionar centro de trabalho"));
+  assert.ok(!source.includes("Adicionar linha"));
+  assert.ok(source.includes("Adicionar e salvar centro"));
+  assert.ok(source.includes("p_rows: nextRows"));
+  assert.ok(source.includes("const validation = validateAvailability(nextRows, week)"));
+  assert.ok(source.includes("dirty &&"));
   assert.ok(source.includes("createAvailabilityCenter(converted, week"));
   assert.ok(source.includes("if (readOnly || saving) return"));
   assert.ok(source.includes('rpc("save_weekly_rs_availability"'));
