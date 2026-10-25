@@ -394,6 +394,7 @@ export function WeeklyRsEvidence({
 export function RsSpecialtyBars({
   rows,
   hasSap,
+  period = "weekly",
 }: {
   rows: Array<{
     specialty: string;
@@ -403,13 +404,22 @@ export function RsSpecialtyBars({
     includedInRs: boolean;
   }>;
   hasSap: boolean;
+  period?: "weekly" | "monthly";
 }) {
   const included = rows.filter((r) => r.includedInRs);
   return (
-    <Panel title="Realização por especialidade">
+    <Panel
+      title={
+        period === "monthly"
+          ? "Realização mensal por especialidade"
+          : "Realização por especialidade"
+      }
+    >
       <p className="mb-3 text-xs text-muted-foreground">
-        HH considerado em relação à disponibilidade semanal do recorte. Linha pontilhada: referência
-        de 95%. Alpinismo, INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO não participam.
+        HH considerado em relação à disponibilidade{" "}
+        {period === "monthly" ? "acumulada das semanas selecionadas" : "semanal do recorte"}. Linha
+        pontilhada: referência de 95%. Alpinismo, INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO
+        não participam.
       </p>
       {!hasSap ? (
         <p className="text-sm text-muted-foreground">Aguardando carga SAP.</p>

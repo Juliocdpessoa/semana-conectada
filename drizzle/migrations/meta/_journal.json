@@ -176,6 +176,13 @@
       "when": 1792857600000,
       "tag": "0024_rs_official_program_base",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1792890000000,
+      "tag": "0025_monthly_rs_selection",
+      "breakpoints": true
     }
   ]
 }
