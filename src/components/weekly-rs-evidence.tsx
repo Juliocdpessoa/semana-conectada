@@ -404,7 +404,7 @@ export function RsSpecialtyBars({
     includedInRs: boolean;
   }>;
   hasSap: boolean;
-  period?: "weekly" | "monthly";
+  period?: "weekly" | "monthly" | "selection";
 }) {
   const included = rows.filter((r) => r.includedInRs);
   return (
@@ -417,7 +417,7 @@ export function RsSpecialtyBars({
     >
       <p className="mb-3 text-xs text-muted-foreground">
         HH considerado em relação à disponibilidade{" "}
-        {period === "monthly" ? "acumulada das semanas selecionadas" : "semanal do recorte"}. Linha
+        {period !== "weekly" ? "acumulada das semanas selecionadas" : "semanal do recorte"}. Linha
         pontilhada: referência de 95%. Alpinismo, INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO
         não participam.
       </p>

@@ -5,7 +5,12 @@ import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
 import { RsProgramBaseControl } from "@/components/rs-program-base-control";
-import { MonthlyRealizationPanel } from "@/components/monthly-realization-panel";
+import { RsWeekSelector } from "@/components/rs-week-selector";
+import {
+  consolidateMonthlyRs,
+  rsWeekOverlapsMonth,
+  type MonthlyRsWeek,
+} from "@/lib/monthly-realization";
 import type { RsProgramBasis } from "@/lib/rs-program-base";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
@@ -38,6 +43,11 @@ type Week = {
   sap_closure_status?: string;
 };
 type RsData = {
+  consolidated?: {
+    weeks: MonthlyRsWeek[];
+    complete: boolean;
+    calculation: NonNullable<RsData["frozenCalculation"]>;
+  };
   programBasis?: RsProgramBasis;
   isFrozen?: boolean;
   frozenCalculation?: ReturnType<typeof calculateSpecialtyRealization> & {
@@ -96,7 +106,7 @@ export function WeeklyRealizationPanel({
   mode?: "indicator" | "availability";
   isAdmin?: boolean;
 }) {
-  const [period, setPeriod] = useState<"weekly" | "monthly">("weekly");
+  const [selectedWeeks, setSelectedWeeks] = useState<string[] | null>(null);
   const [selected, setSelected] = useState(() =>
     typeof window !== "undefined"
       ? (new URLSearchParams(window.location.search).get("week") ?? "")
@@ -126,6 +136,7 @@ export function WeeklyRealizationPanel({
       setYear("");
     }
     setMonth("");
+    setSelectedWeeks(null);
   }, [yearStorageKey]);
   const [month, setMonth] = useState("");
   function changeYear(e: { target: { value: string } }) {
@@ -138,6 +149,7 @@ export function WeeklyRealizationPanel({
     }
     setMonth("");
     setSelected("");
+    setSelectedWeeks(null);
   }
   const [hideNonRs, setHideNonRs] = useState(true);
   const [local, setLocal] = useState(() => {
@@ -147,14 +159,22 @@ export function WeeklyRealizationPanel({
   });
   const availableYears = [...new Set(weeks.data?.map((w) => w.start_date.slice(0, 4)) ?? [])];
   const visibleWeeks =
-    weeks.data?.filter(
-      (w) =>
-        (!year || w.start_date.startsWith(year)) && (!month || w.start_date.slice(5, 7) === month),
+    weeks.data?.filter((w) =>
+      mode === "indicator"
+        ? rsWeekOverlapsMonth(w, year, month)
+        : (!year || w.start_date.startsWith(year)) &&
+          (!month || w.start_date.slice(5, 7) === month),
     ) ?? [];
   const week =
     visibleWeeks.find((w) => w.id === selected) ??
     visibleWeeks.find((w) => w.is_active) ??
     visibleWeeks[0];
+  const activeWeeks =
+    mode === "indicator" && selectedWeeks !== null
+      ? visibleWeeks.filter((w) => selectedWeeks.includes(w.id))
+      : week
+        ? [week]
+        : [];
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
@@ -169,103 +189,65 @@ export function WeeklyRealizationPanel({
         }
       />
       {tabs}
-      {mode === "indicator" && (
-        <div className="mb-4 flex gap-2" role="group" aria-label="Período da realização">
-          <button
-            type="button"
-            className={period === "weekly" ? "btn-primary" : "btn-ghost"}
-            aria-pressed={period === "weekly"}
-            onClick={() => setPeriod("weekly")}
-          >
-            Semanal
-          </button>
-          <button
-            type="button"
-            className={period === "monthly" ? "btn-primary" : "btn-ghost"}
-            aria-pressed={period === "monthly"}
-            onClick={() => setPeriod("monthly")}
-          >
-            Mensal · selecionar semanas
-          </button>
-        </div>
-      )}
-      {mode === "indicator" && period === "monthly" ? (
-        weeks.isError ? (
-          <EmptyState
-            title="Não foi possível carregar as semanas"
-            action={
-              <button className="btn-ghost" onClick={() => void weeks.refetch()}>
-                Tentar novamente
-              </button>
-            }
-          />
-        ) : weeks.isLoading ? (
-          <p role="status">Carregando semanas…</p>
-        ) : (
-          <MonthlyRealizationPanel
-            weeks={weeks.data ?? []}
-            userId={userId}
-            worksiteId={worksiteId}
-            year={year}
-            month={month}
-            onYear={(value) => changeYear({ target: { value } })}
-            onMonth={setMonth}
-            local={local}
-            onLocal={setLocal}
-            hideNonRs={hideNonRs}
-            onHide={setHideNonRs}
-            onOpenWeek={(id) => {
-              const chosen = weeks.data?.find((w) => w.id === id);
-              if (chosen) changeYear({ target: { value: chosen.start_date.slice(0, 4) } });
-              setSelected(id);
-              setPeriod("weekly");
-            }}
-          />
-        )
-      ) : (
+      <div
+        className={
+          mode === "indicator"
+            ? "grid items-end gap-3 2xl:grid-cols-[7rem_8rem_minmax(14rem,1.5fr)_minmax(12rem,1fr)_minmax(18rem,1.2fr)_auto_9rem]"
+            : ""
+        }
+      >
         <div
-          className={
-            mode === "indicator"
-              ? "grid items-end gap-3 2xl:grid-cols-[7rem_8rem_minmax(14rem,1.5fr)_minmax(12rem,1fr)_minmax(18rem,1.2fr)_auto_9rem]"
-              : ""
-          }
+          className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "2xl:contents" : "mb-4"}`}
         >
-          <div
-            className={`grid grid-cols-2 items-end gap-3 sm:grid-cols-[8rem_10rem_minmax(0,1fr)] ${mode === "indicator" ? "2xl:contents" : "mb-4"}`}
-          >
-            <label className="text-xs">
-              <span className="mb-1 block h-4 leading-4">Ano</span>
-              <select className="input-base h-9" value={year} onChange={changeYear}>
-                <option value="">Todos os anos</option>
-                {availableYears.map((y) => (
-                  <option key={y} value={y}>
-                    {y}
-                  </option>
-                ))}
-              </select>
+          <label className="text-xs">
+            <span className="mb-1 block h-4 leading-4">Ano</span>
+            <select className="input-base h-9" value={year} onChange={changeYear}>
+              <option value="">Todos os anos</option>
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs">
+            <span className="mb-1 block h-4 leading-4">Mês</span>
+            <select
+              className="input-base h-9"
+              value={month}
+              onChange={(e) => {
+                setMonth(e.target.value);
+                setSelected("");
+                setSelectedWeeks(null);
+              }}
+            >
+              <option value="">Todos os meses</option>
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i} value={String(i + 1).padStart(2, "0")}>
+                  {new Date(2026, i, 1).toLocaleString("pt-BR", { month: "long" })}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="col-span-2 min-w-0 sm:col-span-1">
+            <label htmlFor="rs-week" className="mb-1 block h-4 truncate text-xs leading-4">
+              Semana · {worksiteCode}
             </label>
-            <label className="text-xs">
-              <span className="mb-1 block h-4 leading-4">Mês</span>
-              <select
-                className="input-base h-9"
-                value={month}
-                onChange={(e) => {
-                  setMonth(e.target.value);
-                  setSelected("");
+            {mode === "indicator" ? (
+              <RsWeekSelector
+                weeks={visibleWeeks}
+                selected={activeWeeks.map((w) => w.id)}
+                loading={weeks.isLoading}
+                onChange={(ids) => {
+                  setSelectedWeeks(ids);
+                  setSelected(ids[0] ?? "");
+                  const url = new URL(window.location.href);
+                  if (ids.length === 1) url.searchParams.set("week", ids[0]);
+                  else url.searchParams.delete("week");
+                  window.history.replaceState({}, "", url);
                 }}
-              >
-                <option value="">Todos os meses</option>
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i} value={String(i + 1).padStart(2, "0")}>
-                    {new Date(2026, i, 1).toLocaleString("pt-BR", { month: "long" })}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <div className="col-span-2 min-w-0 sm:col-span-1">
-              <label htmlFor="rs-week" className="mb-1 block h-4 truncate text-xs leading-4">
-                Semana · {worksiteCode}
-              </label>
+              />
+            ) : (
               <select
                 id="rs-week"
                 value={week?.id ?? ""}
@@ -287,71 +269,244 @@ export function WeeklyRealizationPanel({
                   </option>
                 ))}
               </select>
-            </div>
-            {mode === "indicator" && (
-              <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
-                <span
-                  className="mb-1 block h-4 truncate leading-4"
-                  title="Local da realização semanal"
-                >
-                  Local da realização semanal
-                </span>
-                <select
-                  className="input-base h-9"
-                  value={local}
-                  onChange={(e) => {
-                    const next = e.target.value;
-                    setLocal(next);
-                    const url = new URL(window.location.href);
-                    if (next) url.searchParams.set("local", next);
-                    else url.searchParams.delete("local");
-                    window.history.replaceState({}, "", url);
-                  }}
-                >
-                  <option value="">IARI + ROTINA · todos os locais</option>
-                  <option value="IARI">IARI</option>
-                  <option value="ROTINA">ROTINA</option>
-                </select>
-              </label>
-            )}
-            {mode === "indicator" && (
-              <label className="flex h-9 cursor-pointer items-center gap-2 text-xs 2xl:col-start-7 2xl:row-start-1">
-                <input
-                  type="checkbox"
-                  checked={hideNonRs}
-                  onChange={(event) => setHideNonRs(event.target.checked)}
-                />
-                Ocultar centros fora do RS
-              </label>
             )}
           </div>
-          {weeks.isError ? (
-            <EmptyState
-              title="Não foi possível carregar as semanas"
-              action={
-                <button className="btn-ghost" onClick={() => void weeks.refetch()}>
-                  Tentar novamente
-                </button>
-              }
-            />
-          ) : week ? (
-            <WeeklyResults
-              key={week.id}
-              week={week}
-              userId={userId}
-              worksiteId={worksiteId}
-              worksiteCode={worksiteCode}
-              mode={mode}
-              isAdmin={isAdmin}
-              local={local}
-              hideNonRs={hideNonRs}
-            />
-          ) : (
-            !weeks.isLoading && <EmptyState title="Nenhuma semana disponível nesta obra" />
+          {mode === "indicator" && (
+            <label className="col-span-2 min-w-0 text-xs sm:col-span-3 xl:col-span-1">
+              <span
+                className="mb-1 block h-4 truncate leading-4"
+                title="Local da realização semanal"
+              >
+                Local da realização semanal
+              </span>
+              <select
+                className="input-base h-9"
+                value={local}
+                onChange={(e) => {
+                  const next = e.target.value;
+                  setLocal(next);
+                  const url = new URL(window.location.href);
+                  if (next) url.searchParams.set("local", next);
+                  else url.searchParams.delete("local");
+                  window.history.replaceState({}, "", url);
+                }}
+              >
+                <option value="">IARI + ROTINA · todos os locais</option>
+                <option value="IARI">IARI</option>
+                <option value="ROTINA">ROTINA</option>
+              </select>
+            </label>
+          )}
+          {mode === "indicator" && (
+            <label className="flex h-9 cursor-pointer items-center gap-2 text-xs 2xl:col-start-7 2xl:row-start-1">
+              <input
+                type="checkbox"
+                checked={hideNonRs}
+                onChange={(event) => setHideNonRs(event.target.checked)}
+              />
+              Ocultar centros fora do RS
+            </label>
           )}
         </div>
-      )}
+        {weeks.isError ? (
+          <EmptyState
+            title="Não foi possível carregar as semanas"
+            action={
+              <button className="btn-ghost" onClick={() => void weeks.refetch()}>
+                Tentar novamente
+              </button>
+            }
+          />
+        ) : mode === "indicator" && activeWeeks.length > 1 ? (
+          <SelectedWeeksResults
+            weeks={activeWeeks}
+            userId={userId}
+            worksiteId={worksiteId}
+            worksiteCode={worksiteCode}
+            local={local}
+            hideNonRs={hideNonRs}
+          />
+        ) : activeWeeks[0] ? (
+          <WeeklyResults
+            key={activeWeeks[0].id}
+            week={activeWeeks[0]}
+            userId={userId}
+            worksiteId={worksiteId}
+            worksiteCode={worksiteCode}
+            mode={mode}
+            isAdmin={isAdmin}
+            local={local}
+            hideNonRs={hideNonRs}
+          />
+        ) : (
+          !weeks.isLoading && (
+            <EmptyState
+              title={
+                visibleWeeks.length
+                  ? "Selecione uma ou mais semanas"
+                  : "Nenhuma semana disponível nesta obra"
+              }
+            />
+          )
+        )}
+      </div>
     </main>
+  );
+}
+
+function SelectedWeeksResults({
+  weeks,
+  userId,
+  worksiteId,
+  worksiteCode,
+  local,
+  hideNonRs,
+}: {
+  weeks: Week[];
+  userId: string;
+  worksiteId: string;
+  worksiteCode: string;
+  local: string;
+  hideNonRs: boolean;
+}) {
+  const signature = weeks
+    .map((week) => week.id)
+    .sort()
+    .join("|");
+  const [settled, setSettled] = useState(signature);
+  useEffect(() => {
+    const timer = setTimeout(() => setSettled(signature), 300);
+    return () => clearTimeout(timer);
+  }, [signature]);
+  const query = useQuery({
+    queryKey: ["selected-weeks-rs", userId, worksiteId, settled, local],
+    enabled: settled === signature,
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+    queryFn: async () => {
+      const { data, error } = await (supabase as any).rpc("get_monthly_rs_weeks", {
+        p_worksite_id: worksiteId,
+        p_week_ids: settled.split("|"),
+        p_local: local || null,
+      });
+      if (error) throw error;
+      if (!data?.weeks || data.weeks.length !== weeks.length)
+        throw new Error("Não foi possível obter todas as semanas selecionadas.");
+      const sources = data.weeks as MonthlyRsWeek[];
+      const combined = consolidateMonthlyRs(sources);
+      const decorate = (row: (typeof combined.rows)[number]) => ({
+        ...row,
+        actual: row.completed + row.immediate,
+      });
+      const calculation = {
+        ...combined,
+        rows: combined.rows.map(decorate),
+        centerRows: combined.centerRows.map((row) => ({
+          ...decorate(row),
+          center: row.center ?? "",
+        })),
+        unmapped: [],
+        invalid: [],
+        monitoring: combined.rows.filter((row) => !row.includedInRs).map(decorate),
+      };
+      return { sources, complete: combined.complete, calculation };
+    },
+  });
+  if (settled !== signature || query.isPending)
+    return (
+      <p role="status" className="2xl:col-span-7">
+        Atualizando semanas selecionadas…
+      </p>
+    );
+  if (query.isError || !query.data)
+    return (
+      <div className="2xl:col-span-7">
+        <EmptyState
+          title="Não foi possível calcular as semanas selecionadas"
+          description={query.error?.message}
+          action={
+            <button className="btn-ghost" onClick={() => void query.refetch()}>
+              Tentar novamente
+            </button>
+          }
+        />
+      </div>
+    );
+  const { sources, complete, calculation } = query.data;
+  const data: RsData = {
+    consolidated: { weeks: sources, complete, calculation },
+    availability: null,
+    previousAvailability: null,
+    source: null,
+    centers: [],
+    programmed: calculation.totals.programmed,
+    programmedTasks: 0,
+    emptyProgrammedRows: 0,
+    invalidPlannedHours: 0,
+    completed: null,
+    immediate: null,
+    unprogrammed: 0,
+    unclassified: 0,
+    missingDates: 0,
+    outsidePeriod: 0,
+    unresolvedLocal: 0,
+    reasons: [],
+    pendingSummary: {
+      programmed: 0,
+      confirmed: null,
+      pending: null,
+      executed: null,
+      withJustification: null,
+      withoutJustification: null,
+      plannedHh: null,
+      unknownPeriod: 0,
+      monitoringTasks: 0,
+    },
+  };
+  return (
+    <div className="contents">
+      <div className="flex min-w-0 items-end gap-3 2xl:contents">
+        <div className="flex h-9 min-w-0 flex-1 items-center truncate text-xs text-muted-foreground">
+          {sources.length} semanas ·{" "}
+          {sources.some((w) => !w.isFrozen) ? "Em apuração" : "Versões oficiais"}
+        </div>
+        <button
+          className="btn-outline h-9"
+          disabled={query.isFetching}
+          onClick={() => void query.refetch()}
+        >
+          <RefreshCw className="h-3.5 w-3.5" />
+          {query.isFetching ? "Atualizando…" : "Atualizar"}
+        </button>
+      </div>
+      <div className="min-w-0 2xl:col-span-7">
+        {!complete && (
+          <p
+            role="alert"
+            className="mb-3 rounded-md border border-warning/50 bg-warning/10 p-3 text-sm"
+          >
+            RS indisponível:{" "}
+            {sources
+              .filter((w) => !w.valid)
+              .map((w) => `${w.week.code}: ${w.issues.join(", ")}`)
+              .join(" · ")}
+            . As semanas sem dados não são consideradas zero.
+          </p>
+        )}
+        <RsContent
+          week={weeks[0]}
+          data={data}
+          userId={userId}
+          worksiteId={worksiteId}
+          worksiteCode={worksiteCode}
+          local={local}
+          hideNonRs={hideNonRs}
+          onSaved={async () => {
+            await query.refetch();
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -505,43 +660,56 @@ function RsContent({
 }) {
   const errors = useMemo(
     () =>
-      data.isFrozen
+      data.isFrozen || data.consolidated
         ? []
         : data.availability
           ? validateAvailability(data.availability.rows, week)
           : [],
-    [data.availability, data.isFrozen, week],
+    [data.availability, data.isFrozen, data.consolidated, week],
   );
   const calculation = useMemo(
     () =>
-      data.isFrozen && data.frozenCalculation
-        ? data.frozenCalculation
-        : calculateSpecialtyRealization(
-            data.availability?.rows ?? [],
-            data.centers ?? [],
-            !!data.source,
-            local,
-          ),
-    [data.availability, data.centers, data.source, local, data.isFrozen, data.frozenCalculation],
+      data.consolidated
+        ? data.consolidated.calculation
+        : data.isFrozen && data.frozenCalculation
+          ? data.frozenCalculation
+          : calculateSpecialtyRealization(
+              data.availability?.rows ?? [],
+              data.centers ?? [],
+              !!data.source,
+              local,
+            ),
+    [
+      data.availability,
+      data.centers,
+      data.source,
+      local,
+      data.isFrozen,
+      data.frozenCalculation,
+      data.consolidated,
+    ],
   );
   const { totals, rows, unmapped } = calculation;
   const allCenterRows = useMemo(
     () =>
-      data.isFrozen && data.frozenCalculation
-        ? data.frozenCalculation.centerRows
-        : rows.flatMap((row) =>
-            calculateCenterRealization(
-              data.availability?.rows ?? [],
-              data.centers ?? [],
-              !!data.source,
-              row.specialty,
-              row.includedInRs,
-              local,
+      data.consolidated
+        ? data.consolidated.calculation.centerRows
+        : data.isFrozen && data.frozenCalculation
+          ? data.frozenCalculation.centerRows
+          : rows.flatMap((row) =>
+              calculateCenterRealization(
+                data.availability?.rows ?? [],
+                data.centers ?? [],
+                !!data.source,
+                row.specialty,
+                row.includedInRs,
+                local,
+              ),
             ),
-          ),
     [
       data.isFrozen,
       data.frozenCalculation,
+      data.consolidated,
       data.availability,
       data.centers,
       data.source,
@@ -577,59 +745,71 @@ function RsContent({
           hasRsDisplayLoad(row),
       )
     : [];
-  const result = data.isFrozen
-    ? calculation.result
-    : data.invalidPlannedHours === 0 &&
-        !errors.length &&
-        (!(local || data.programBasis?.kind === "official") || !data.unresolvedLocal)
+  const result =
+    data.isFrozen || data.consolidated
       ? calculation.result
-      : null;
-  const hasSource = !!data.source;
+      : data.invalidPlannedHours === 0 &&
+          !errors.length &&
+          (!(local || data.programBasis?.kind === "official") || !data.unresolvedLocal)
+        ? calculation.result
+        : null;
+  const hasSource = data.consolidated ? data.consolidated.complete : !!data.source;
+  const hasAvailability = !!data.availability || !!data.consolidated;
+  const programmedConsidered = data.consolidated
+    ? (result?.programmedConsidered ?? null)
+    : Math.min(totals.programmed, totals.available);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
         <span>
-          {data.source
-            ? "SAP atualizado em " +
-              new Date(data.source.imported_at).toLocaleString("pt-BR") +
-              " · " +
-              (data.source.imported_by_name ?? "Responsável não informado") +
-              " · " +
-              data.source.row_count +
-              " linhas"
-            : "Sem carga SAP detalhada para esta semana"}
+          {data.consolidated
+            ? data.consolidated.weeks.map((w) => w.week.code).join(" | ") +
+              (data.consolidated.weeks.some((w) => !w.isFrozen)
+                ? " · Resultado em apuração"
+                : " · Versões oficiais preservadas")
+            : data.source
+              ? "SAP atualizado em " +
+                new Date(data.source.imported_at).toLocaleString("pt-BR") +
+                " · " +
+                (data.source.imported_by_name ?? "Responsável não informado") +
+                " · " +
+                data.source.row_count +
+                " linhas"
+              : "Sem carga SAP detalhada para esta semana"}
         </span>
       </div>
-      <p className="text-xs text-muted-foreground">
-        {data.availability
-          ? "Disponibilidade: versão " +
-            data.availability.version +
-            " · " +
-            data.availability.updated_by_name +
-            " · " +
-            new Date(data.availability.updated_at).toLocaleString("pt-BR")
-          : "Cadastre a disponibilidade desta semana na aba Disponibilidade HH para calcular o RS."}{" "}
-        <a
-          className="font-medium text-primary underline"
-          href={"?view=disponibilidade-hh&week=" + encodeURIComponent(week.id)}
-        >
-          Editar disponibilidade e ver histórico
-        </a>
-      </p>
+      {!data.consolidated && (
+        <p className="text-xs text-muted-foreground">
+          {data.availability
+            ? "Disponibilidade: versão " +
+              data.availability.version +
+              " · " +
+              data.availability.updated_by_name +
+              " · " +
+              new Date(data.availability.updated_at).toLocaleString("pt-BR")
+            : "Cadastre a disponibilidade desta semana na aba Disponibilidade HH para calcular o RS."}{" "}
+          <a
+            className="font-medium text-primary underline"
+            href={"?view=disponibilidade-hh&week=" + encodeURIComponent(week.id)}
+          >
+            Editar disponibilidade e ver histórico
+          </a>
+        </p>
+      )}
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="HH programado original"
-          value={data.availability ? hours(totals.programmed) : "—"}
-          hint={`Considerado: ${hours(Math.min(totals.programmed, totals.available))} · ${data.pendingSummary.programmed} tarefas`}
+          value={hasAvailability ? hours(totals.programmed) : "—"}
+          hint={`Considerado: ${hours(programmedConsidered)}${data.consolidated ? "" : ` · ${data.pendingSummary.programmed} tarefas`}`}
         />
         <KpiCard
           label="HH disponível para RS"
-          value={data.availability ? hours(totals.available) : "—"}
+          value={hasAvailability ? hours(totals.available) : "—"}
           hint="Somente elegíveis ao RS · EEP incluída"
         />
         <KpiCard
           label="HH apropriado elegível"
-          value={hours(hasSource && data.availability ? totals.completed + totals.immediate : null)}
+          value={hours(hasSource && hasAvailability ? totals.completed + totals.immediate : null)}
           hint="Elegíveis ao RS · antes do teto"
         />
         <KpiCard
@@ -642,7 +822,7 @@ function RsContent({
           }
         />
       </div>
-      {!hasSource && (
+      {!hasSource && !data.consolidated && (
         <p className="rounded-md border border-border bg-muted p-3 text-sm">
           Importe o SAP na tela de Atividades. O status EXECUTADO não substitui HH apropriado.
         </p>
@@ -685,13 +865,17 @@ function RsContent({
         </p>
       )}
       <RsResult result={result} />
-      <RsSpecialtyBars rows={displayRows} hasSap={hasSource} />
-      {data.availability && (
+      <RsSpecialtyBars
+        rows={displayRows}
+        hasSap={hasSource}
+        period={data.consolidated ? "selection" : "weekly"}
+      />
+      {hasAvailability && (
         <Panel title="Realização Semanal (RS)">
           <p className="mb-3 text-xs text-muted-foreground">
-            O limite é aplicado à soma de TCpr + TCoi de cada especialidade na semana inteira,
-            dentro do local selecionado. O excesso de uma especialidade não compensa outra. Valores
-            em HH.
+            {data.consolidated
+              ? "Soma dos valores já limitados em cada semana selecionada. O excesso de uma semana ou especialidade não compensa outra. Valores em HH."
+              : "O limite é aplicado à soma de TCpr + TCoi de cada especialidade na semana inteira, dentro do local selecionado. O excesso de uma especialidade não compensa outra. Valores em HH."}
           </p>
           <div className="overflow-x-auto">
             <table className="w-full whitespace-nowrap text-xs">
@@ -837,7 +1021,7 @@ function RsContent({
                   <td className="p-2 text-right">{number(totals.available)}</td>
                   <td className="p-2 text-right">{number(totals.programmed)}</td>
                   <td className="p-2 text-right">
-                    {number(Math.min(totals.programmed, totals.available))}
+                    {programmedConsidered === null ? "—" : number(programmedConsidered)}
                   </td>
                   <td className="p-2 text-right">
                     {result ? number(result.occupation * 100) + "%" : "—"}
@@ -872,71 +1056,98 @@ function RsContent({
             O RS requer disponibilidade total positiva, HH válidos e TP semanal maior que zero.
           </p>
         )}
-      <Panel title="Memória de cálculo">
-        <div className="space-y-2 text-xs text-muted-foreground">
-          {data.source && <p className="break-words">Fonte SAP: {data.source.source_file_name}</p>}
-          <p className="font-mono text-foreground">
-            TCpr: menor entre HH SAP e HH programado por confirmação na semana. HH considerado da
-            especialidade = menor entre (TCpr limitado + TCoi) e HH disponível semanal
+      {data.consolidated ? (
+        <Panel title="Memória de cálculo">
+          <p className="text-xs text-muted-foreground">
+            As semanas selecionadas entram integralmente. O RS usa a soma dos HH considerados de
+            cada semana dividida pela soma do HH disponível, sem média dos percentuais e sem
+            compensar excesso entre semanas.
           </p>
-          <p className="font-mono text-foreground">
-            TP considerado = menor entre HH programado original e HH disponível total; OM = TP
-            considerado ÷ HH disponível total
-          </p>
-          <p className="font-mono text-foreground">
-            RS geral = (Σ HH executado considerado por especialidade ÷ TP considerado geral) × OM
-            geral × 100
-          </p>
-          <p>
-            O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo
-            Alpinista/Alpinistas) e os centros INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO
-            ficam excluídos dos HH programados, disponíveis e apropriados usados no RS. Sua
-            visualização é apenas de acompanhamento.
-          </p>
-          <p>
-            Aplicamos RS = ((TCpr + TCoi) ÷ TP considerado) × OM × 100, após aplicar o teto semanal
-            por especialidade. OM é limitado a 100% em cada especialidade e no geral; os HH reais
-            são preservados. Não há teto diário. A tabela já inclui EEP: não somamos horas
-            adicionais nem usamos referência fixa.
-          </p>
-          {result && (
-            <p className="text-sm text-foreground">
-              RS = ({number(totals.considered)} ÷{" "}
-              {number(Math.min(totals.programmed, totals.available))}) ×{" "}
-              {number(result.occupation * 100)}% × 100 ≈ <strong>{number(result.rs)}%</strong>. O
-              cálculo usa valores sem arredondamento.
+          <details className="mt-3 text-xs">
+            <summary className="cursor-pointer">Fontes das semanas selecionadas</summary>
+            <ul className="mt-2 space-y-2">
+              {data.consolidated.weeks.map((item) => (
+                <li key={item.week.id}>
+                  {item.week.code} ·{" "}
+                  {item.isFrozen ? `Fechamento v${item.closure?.version}` : "Em apuração"} ·{" "}
+                  {item.basis?.kind === "official"
+                    ? `Base oficial v${item.basis.version}`
+                    : "Base operacional"}{" "}
+                  · {item.source?.source_file_name ?? "Sem SAP"}
+                </li>
+              ))}
+            </ul>
+          </details>
+        </Panel>
+      ) : (
+        <Panel title="Memória de cálculo">
+          <div className="space-y-2 text-xs text-muted-foreground">
+            {data.source && (
+              <p className="break-words">Fonte SAP: {data.source.source_file_name}</p>
+            )}
+            <p className="font-mono text-foreground">
+              TCpr: menor entre HH SAP e HH programado por confirmação na semana. HH considerado da
+              especialidade = menor entre (TCpr limitado + TCoi) e HH disponível semanal
             </p>
-          )}
-          <p>
-            {data.programBasis?.kind === "official"
-              ? "TCpr considera cada linha SAP uma única vez quando sua confirmação está na base oficial da semana. A coluna Trabalho entra inteira na semana selecionada, sem vínculo às datas operacionais e sem rateio pelas datas da planilha."
-              : "Sem base oficial: TCpr usa a programação operacional e exige um dia coberto pelo período real SAP. Importe a aba Programação SAP para usar o vínculo semanal por confirmação."}{" "}
-            Confirmações repetidas em vários dias não multiplicam a apropriação.
-          </p>
-          <p>
-            TCoi inclui somente apropriações externas à programação com código 2. Código 1 (
-            {hours(data.unprogrammed)}) não entra no RS. Somente linhas confirmadas com HH positivo
-            da última carga SAP detalhada são consideradas; estornos devem ser conciliados na
-            origem.
-          </p>
-          <p>
-            Centros da programação e do SAP são vinculados às especialidades pela disponibilidade,
-            sem inferência pelo nome. TP inclui todos os status programados e exclui tarefas
-            cadastradas como imediatas.
-          </p>
-          {data.emptyProgrammedRows > 0 && (
+            <p className="font-mono text-foreground">
+              TP considerado = menor entre HH programado original e HH disponível total; OM = TP
+              considerado ÷ HH disponível total
+            </p>
+            <p className="font-mono text-foreground">
+              RS geral = (Σ HH executado considerado por especialidade ÷ TP considerado geral) × OM
+              geral × 100
+            </p>
             <p>
-              {data.emptyProgrammedRows} linhas vazias foram desconsideradas somente neste
-              indicador. Nenhuma atividade foi excluída.
+              O filtro de local aplica-se a todos os componentes. Alpinismo (incluindo
+              Alpinista/Alpinistas) e os centros INSPPINT, TECNIEND, TECNINSC, HIDROJAT e HIDROJATO
+              ficam excluídos dos HH programados, disponíveis e apropriados usados no RS. Sua
+              visualização é apenas de acompanhamento.
             </p>
-          )}
-          <p>
-            Com o teto confirmado, o RS não ultrapassa 100%; a faixa acima de 100% permanece como
-            referência contratual. De 95% até menos de 98%, o fator é −0,01; de 98% até 100%,
-            inclusive, é 0,00.
-          </p>
-        </div>
-      </Panel>
+            <p>
+              Aplicamos RS = ((TCpr + TCoi) ÷ TP considerado) × OM × 100, após aplicar o teto
+              semanal por especialidade. OM é limitado a 100% em cada especialidade e no geral; os
+              HH reais são preservados. Não há teto diário. A tabela já inclui EEP: não somamos
+              horas adicionais nem usamos referência fixa.
+            </p>
+            {result && (
+              <p className="text-sm text-foreground">
+                RS = ({number(totals.considered)} ÷{" "}
+                {number(Math.min(totals.programmed, totals.available))}) ×{" "}
+                {number(result.occupation * 100)}% × 100 ≈ <strong>{number(result.rs)}%</strong>. O
+                cálculo usa valores sem arredondamento.
+              </p>
+            )}
+            <p>
+              {data.programBasis?.kind === "official"
+                ? "TCpr considera cada linha SAP uma única vez quando sua confirmação está na base oficial da semana. A coluna Trabalho entra inteira na semana selecionada, sem vínculo às datas operacionais e sem rateio pelas datas da planilha."
+                : "Sem base oficial: TCpr usa a programação operacional e exige um dia coberto pelo período real SAP. Importe a aba Programação SAP para usar o vínculo semanal por confirmação."}{" "}
+              Confirmações repetidas em vários dias não multiplicam a apropriação.
+            </p>
+            <p>
+              TCoi inclui somente apropriações externas à programação com código 2. Código 1 (
+              {hours(data.unprogrammed)}) não entra no RS. Somente linhas confirmadas com HH
+              positivo da última carga SAP detalhada são consideradas; estornos devem ser
+              conciliados na origem.
+            </p>
+            <p>
+              Centros da programação e do SAP são vinculados às especialidades pela disponibilidade,
+              sem inferência pelo nome. TP inclui todos os status programados e exclui tarefas
+              cadastradas como imediatas.
+            </p>
+            {data.emptyProgrammedRows > 0 && (
+              <p>
+                {data.emptyProgrammedRows} linhas vazias foram desconsideradas somente neste
+                indicador. Nenhuma atividade foi excluída.
+              </p>
+            )}
+            <p>
+              Com o teto confirmado, o RS não ultrapassa 100%; a faixa acima de 100% permanece como
+              referência contratual. De 95% até menos de 98%, o fator é −0,01; de 98% até 100%,
+              inclusive, é 0,00.
+            </p>
+          </div>
+        </Panel>
+      )}
       <details className="surface-card p-4">
         <summary className="cursor-pointer text-sm font-medium">
           Simulador de uma especialidade · não altera dados salvos

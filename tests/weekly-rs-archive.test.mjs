@@ -31,7 +31,7 @@ test('archive includes original programming, SAP, audit, availability and eviden
 test('client reads frozen calculation and does not recompute official versions',()=>{
   const panel=read('src/components/weekly-realization-panel.tsx');
   assert.match(panel,/data.isFrozen && data.frozenCalculation\s*\? data.frozenCalculation/);
-  assert.match(panel,/data.isFrozen\s*\? calculation.result/);
+  assert.match(panel,/data.isFrozen(?:\s*\|\|\s*data.consolidated)?\s*\? calculation.result/);
   assert.match(panel,/p_version: version/);
   assert.match(panel,/\.limit\(600\)/);
   const history=read('src/components/weekly-sap-load-history.tsx');

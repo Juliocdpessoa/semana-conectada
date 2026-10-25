@@ -121,7 +121,13 @@ test("read-only backend protects worksite, duplicate selection and frozen source
     new URL("../supabase/migrations/20261025010000_monthly_rs_selection.sql", import.meta.url),
     "utf8",
   );
-  assert.equal(sql,fs.readFileSync(new URL('../drizzle/migrations/0025_monthly_rs_selection.sql',import.meta.url),'utf8'));
+  assert.equal(
+    sql,
+    fs.readFileSync(
+      new URL("../drizzle/migrations/0025_monthly_rs_selection.sql", import.meta.url),
+      "utf8",
+    ),
+  );
   for (const term of [
     "can_access_sap(auth.uid())",
     "can_access_worksite(auth.uid(),p_worksite_id)",
@@ -134,11 +140,11 @@ test("read-only backend protects worksite, duplicate selection and frozen source
     assert.ok(sql.includes(term), term);
   assert.ok(!/INSERT INTO|UPDATE public|DELETE FROM/i.test(sql));
   const ui = fs.readFileSync(
-    new URL("../src/components/monthly-realization-panel.tsx", import.meta.url),
+    new URL("../src/components/weekly-realization-panel.tsx", import.meta.url),
     "utf8",
   );
-  assert.ok(ui.includes("enabled: ids.length > 0"));
-  assert.ok(ui.includes("p_week_ids: ids"));
-  assert.ok(ui.includes("!summary.complete"));
-  assert.ok(ui.includes("Exportar consolidado Excel"));
+  assert.ok(ui.includes("enabled: settled === signature"));
+  assert.ok(ui.includes('p_week_ids: settled.split("|")'));
+  assert.ok(ui.includes("!complete"));
+  assert.ok(ui.includes("<RsWeekSelector"));
 });
