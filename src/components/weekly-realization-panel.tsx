@@ -4,6 +4,8 @@ import { ChevronDown, RefreshCw } from "lucide-react";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
+import { RsProgramBaseControl } from "@/components/rs-program-base-control";
+import type { RsProgramBasis } from "@/lib/rs-program-base";
 import { supabase } from "@/integrations/supabase/client";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import { hasRsDisplayLoad } from "@/lib/rs-center-display";
@@ -35,6 +37,7 @@ type Week = {
   sap_closure_status?: string;
 };
 type RsData = {
+  programBasis?: RsProgramBasis;
   isFrozen?: boolean;
   frozenCalculation?: ReturnType<typeof calculateSpecialtyRealization> & {
     centerRows: ReturnType<typeof calculateCenterRealization>;
@@ -399,6 +402,17 @@ function WeeklyResults({
         </button>
       </div>
       <div className="min-w-0 2xl:col-span-7">
+        <div className="mb-3">
+          <RsProgramBaseControl
+            weekId={week.id}
+            weekLabel={week.label}
+            basis={data.data.programBasis}
+            readOnly={!!data.data.isFrozen || week.sap_closure_status === "closed"}
+            onSaved={() =>
+              qc.invalidateQueries({ queryKey: ["weekly-rs", userId, worksiteId, week.id] })
+            }
+          />
+        </div>
         <RsContent
           key={week.id + local}
           week={week}
@@ -511,7 +525,9 @@ function RsContent({
     : [];
   const result = data.isFrozen
     ? calculation.result
-    : data.invalidPlannedHours === 0 && !errors.length && (!local || !data.unresolvedLocal)
+    : data.invalidPlannedHours === 0 &&
+        !errors.length &&
+        (!(local || data.programBasis?.kind === "official") || !data.unresolvedLocal)
       ? calculation.result
       : null;
   const hasSource = !!data.source;
@@ -600,9 +616,9 @@ function RsContent({
       )}
       {data.unresolvedLocal > 0 && (
         <p role="alert" className="text-xs text-warning-foreground">
-          Há {data.unresolvedLocal} apropriações elegíveis sem local identificável na carga.{" "}
-          {local
-            ? "O RS do recorte ficará indisponível até resolver o vínculo, para não omitir HH."
+          Há {data.unresolvedLocal} registros elegíveis sem local identificável na base ou na carga.{" "}
+          {local || data.programBasis?.kind === "official"
+            ? "O RS ficará indisponível até resolver o vínculo, para não omitir HH."
             : "Confira os vínculos antes de usar os filtros por local."}
         </p>
       )}
@@ -838,9 +854,10 @@ function RsContent({
             </p>
           )}
           <p>
-            TCpr considera cada linha SAP uma única vez: confirmação presente na programação em dia
-            coberto pelo período real SAP. Confirmações repetidas em vários dias não multiplicam a
-            apropriação.
+            {data.programBasis?.kind === "official"
+              ? "TCpr considera cada linha SAP uma única vez quando sua confirmação está na base oficial da semana. A coluna Trabalho entra inteira na semana selecionada, sem vínculo às datas operacionais e sem rateio pelas datas da planilha."
+              : "Sem base oficial: TCpr usa a programação operacional e exige um dia coberto pelo período real SAP. Importe a aba Programação SAP para usar o vínculo semanal por confirmação."}{" "}
+            Confirmações repetidas em vários dias não multiplicam a apropriação.
           </p>
           <p>
             TCoi inclui somente apropriações externas à programação com código 2. Código 1 (

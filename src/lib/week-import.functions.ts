@@ -10,7 +10,11 @@ function normalizeReleaseType(value: unknown): unknown {
     .replace(/\s+/g, " ")
     .trim()
     .toLocaleUpperCase("pt-BR");
-  if (normalized === "OFICINA" || normalized === "OFICINAS" || normalized.includes("SERVICO DE OFICINA")) {
+  if (
+    normalized === "OFICINA" ||
+    normalized === "OFICINAS" ||
+    normalized.includes("SERVICO DE OFICINA")
+  ) {
     return "OFICINAS";
   }
   return normalized || null;
@@ -25,7 +29,10 @@ const rowSchema = z.object({
   specialty: z.string().max(160).nullable().optional(),
   scheduled_date: z.string().nullable().optional(),
   pbs: z.string().max(255).nullable().optional(),
-  release_type: z.preprocess(normalizeReleaseType, z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable().optional()),
+  release_type: z.preprocess(
+    normalizeReleaseType,
+    z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable().optional(),
+  ),
   planning_data: z.record(z.string(), z.any()),
   source_row_number: z.number().int().nullable().optional(),
 });
@@ -38,12 +45,35 @@ const importSchema = z.object({
   source_file_name: z.string().max(240).nullable().optional(),
   sheet_name: z.string().max(120).nullable().optional(),
   rows: z.array(rowSchema).min(1).max(5000),
+  rs_program: z
+    .array(
+      z.object({
+        confirmation: z.string().regex(/^\d{1,32}$/),
+        order_number: z.string().regex(/^\d{1,32}$/),
+        operation: z.string().regex(/^\d{1,32}$/),
+        suboperation: z.string().max(32),
+        center: z.string().min(1).max(160),
+        work: z.number().finite().min(0).lt(1e9),
+        source_row_number: z.number().int().min(2).max(100000),
+        source_data: z.record(
+          z.string(),
+          z.union([z.string(), z.number().finite(), z.boolean(), z.null()]),
+        ),
+      }),
+    )
+    .min(1)
+    .max(5000)
+    .optional(),
 });
 
 async function loadPlanningContext(supabase: any, userId: string) {
   const [{ data: roles }, { data: profile }] = await Promise.all([
     supabase.from("user_roles").select("role").eq("user_id", userId),
-    supabase.from("profiles").select("worksite_id, email, approval_status").eq("id", userId).maybeSingle(),
+    supabase
+      .from("profiles")
+      .select("worksite_id, email, approval_status")
+      .eq("id", userId)
+      .maybeSingle(),
   ]);
   return {
     allowed:
@@ -131,7 +161,20 @@ export const importWeek = createServerFn({ method: "POST" })
       }
     }
 
-    return { ok: true as const, weekId: week.id, count: payload.length };
+    let officialError: string | undefined;
+    if (data.rs_program) {
+      // Save through the authenticated, versioned RPC. If it fails, retain the imported
+      // operational week and surface the missing basis explicitly; never ask users to reimport tasks.
+      const { error } = await (supabase as any).rpc("save_weekly_rs_program_base", {
+        p_week_id: week.id,
+        p_rows: data.rs_program,
+        p_source_file_name: data.source_file_name ?? "Importação semanal",
+        p_sheet_name: "Programação SAP",
+        p_expected_version: 0,
+      });
+      if (error) officialError = error.message;
+    }
+    return { ok: true as const, weekId: week.id, count: payload.length, officialError };
   });
 
 export const activateWeek = createServerFn({ method: "POST" })
@@ -151,9 +194,22 @@ export const activateWeek = createServerFn({ method: "POST" })
   });
 
 const sapClosureActionSchema = z.discriminatedUnion("action", [
-  z.object({ weekId: z.string().uuid(), action: z.literal("close"), reason: z.string().trim().min(3).max(500) }),
-  z.object({ weekId: z.string().uuid(), action: z.literal("reopen"), reason: z.string().trim().min(3).max(500) }),
-  z.object({ weekId: z.string().uuid(), action: z.literal("extend"), deadline: z.string().datetime(), reason: z.string().trim().min(3).max(500) }),
+  z.object({
+    weekId: z.string().uuid(),
+    action: z.literal("close"),
+    reason: z.string().trim().min(3).max(500),
+  }),
+  z.object({
+    weekId: z.string().uuid(),
+    action: z.literal("reopen"),
+    reason: z.string().trim().min(3).max(500),
+  }),
+  z.object({
+    weekId: z.string().uuid(),
+    action: z.literal("extend"),
+    deadline: z.string().datetime(),
+    reason: z.string().trim().min(3).max(500),
+  }),
 ]);
 
 export const manageSapClosure = createServerFn({ method: "POST" })
@@ -165,12 +221,21 @@ export const manageSapClosure = createServerFn({ method: "POST" })
     const { data: roles } = await supabase.from("user_roles").select("role").eq("user_id", userId);
     const isAdmin = roles?.some((role: any) => role.role === "admin") ?? false;
     if (!access.allowed || !access.worksiteId || !isAdmin) {
-      return { ok: false as const, error: "Somente o administrador da obra pode controlar o fechamento SAP." };
+      return {
+        ok: false as const,
+        error: "Somente o administrador da obra pode controlar o fechamento SAP.",
+      };
     }
-    const functionName = data.action === "close" ? "close_sap_week" : data.action === "reopen" ? "reopen_sap_week" : "extend_sap_week_deadline";
-    const parameters = data.action === "extend"
-      ? { p_week_id: data.weekId, p_deadline: data.deadline, p_reason: data.reason }
-      : { p_week_id: data.weekId, p_reason: data.reason };
+    const functionName =
+      data.action === "close"
+        ? "close_sap_week"
+        : data.action === "reopen"
+          ? "reopen_sap_week"
+          : "extend_sap_week_deadline";
+    const parameters =
+      data.action === "extend"
+        ? { p_week_id: data.weekId, p_deadline: data.deadline, p_reason: data.reason }
+        : { p_week_id: data.weekId, p_reason: data.reason };
     const { error } = await (supabase as any).rpc(functionName, parameters);
     if (error) return { ok: false as const, error: error.message };
     return { ok: true as const };
@@ -198,12 +263,40 @@ export const deleteWeek = createServerFn({ method: "POST" })
     if (week.is_active || week.lifecycle_status === "operational")
       return { ok: false as const, error: "A semana operacional não pode ser excluída." };
 
-    const { count: closures, error: closureError } = await db.from("weekly_rs_closures").select("id", { count: "exact", head: true }).eq("week_id", data.weekId);
+    const { count: closures, error: closureError } = await db
+      .from("weekly_rs_closures")
+      .select("id", { count: "exact", head: true })
+      .eq("week_id", data.weekId);
     if (closureError) return { ok: false as const, error: closureError.message };
-    if (closures) return { ok: false as const, error: "Esta semana possui fechamento SAP + RS preservado e não pode ser excluída. Consulte o histórico no Painel → Realização Semanal." };
-    const { count: sapLoads, error: sapError } = await db.from("sap_confirmation_imports").select("id", { count: "exact", head: true }).eq("week_id", data.weekId);
+    if (closures)
+      return {
+        ok: false as const,
+        error:
+          "Esta semana possui fechamento SAP + RS preservado e não pode ser excluída. Consulte o histórico no Painel → Realização Semanal.",
+      };
+    const { count: sapLoads, error: sapError } = await db
+      .from("sap_confirmation_imports")
+      .select("id", { count: "exact", head: true })
+      .eq("week_id", data.weekId);
     if (sapError) return { ok: false as const, error: sapError.message };
-    if (sapLoads) return { ok: false as const, error: "Esta semana possui cargas SAP preservadas. Não é necessário excluí-la para importar novas semanas." };
+    if (sapLoads)
+      return {
+        ok: false as const,
+        error:
+          "Esta semana possui cargas SAP preservadas. Não é necessário excluí-la para importar novas semanas.",
+      };
+
+    const { count: programBases, error: programError } = await db
+      .from("weekly_rs_program_bases")
+      .select("week_id", { count: "exact", head: true })
+      .eq("week_id", data.weekId);
+    if (programError) return { ok: false as const, error: programError.message };
+    if (programBases)
+      return {
+        ok: false as const,
+        error:
+          "Esta semana possui base oficial RS e histórico preservados. Substitua a base no Painel → Realização Semanal; não é necessário excluir a semana.",
+      };
 
     const { error } = await db.from("weeks").delete().eq("id", data.weekId);
     if (error) return { ok: false as const, error: error.message };

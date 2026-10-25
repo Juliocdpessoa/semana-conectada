@@ -4,16 +4,38 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { createImmediateActivity, bulkCreateImmediateActivities } from "@/lib/activities.functions";
-import { importWeek, activateWeek, deleteWeek, manageSapClosure } from "@/lib/week-import.functions";
+import {
+  importWeek,
+  activateWeek,
+  deleteWeek,
+  manageSapClosure,
+} from "@/lib/week-import.functions";
 import { toast } from "sonner";
-import { Zap, Upload, Download, CheckCircle2, AlertTriangle, FileSpreadsheet, FileDown, Trash2 } from "lucide-react";
+import {
+  Zap,
+  Upload,
+  Download,
+  CheckCircle2,
+  AlertTriangle,
+  FileSpreadsheet,
+  FileDown,
+  Trash2,
+} from "lucide-react";
 import type { SessionInfo } from "./route";
 import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
+import {
+  chooseOperationalSheet,
+  parseRsProgramGrid,
+  RS_PROGRAM_COLUMNS,
+  RS_PROGRAM_SHEET,
+  type RsProgramRow,
+} from "@/lib/rs-program-base";
 
 export const Route = createFileRoute("/_authenticated/planejamento")({
   beforeLoad: ({ context }) => {
     const s = (context as { session: SessionInfo }).session;
-    if (!s.roles.some((role) => role === "planning" || role === "admin")) throw redirect({ to: "/atividades" });
+    if (!s.roles.some((role) => role === "planning" || role === "admin"))
+      throw redirect({ to: "/atividades" });
   },
   component: PlanejamentoPage,
 });
@@ -130,13 +152,35 @@ async function downloadWeeklyTemplate() {
 
   const dadosRows = [["Status", "Justificativa"]];
   const total = Math.max(TEMPLATE_STATUSES.length, TEMPLATE_JUSTIFICATIONS.length);
-  for (let i = 0; i < total; i++) dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
+  for (let i = 0; i < total; i++)
+    dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
   const dados = XLSX.utils.aoa_to_sheet(dadosRows);
   dados["!cols"] = [{ wch: 22 }, { wch: 74 }];
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, acompanhamento, "Acompanhamento");
   XLSX.utils.book_append_sheet(wb, dados, "Dados");
+  const programacaoSap = XLSX.utils.aoa_to_sheet([[...RS_PROGRAM_COLUMNS]]);
+  programacaoSap["!cols"] = RS_PROGRAM_COLUMNS.map((name) => ({
+    wch: name === "TxtDesc.Oper." ? 48 : Math.max(14, name.length + 2),
+  }));
+  XLSX.utils.book_append_sheet(wb, programacaoSap, RS_PROGRAM_SHEET);
+  XLSX.utils.sheet_add_aoa(
+    dados,
+    [
+      ["Aba", "Preenchimento"],
+      ["Acompanhamento", "Programação operacional dividida por dia."],
+      [
+        RS_PROGRAM_SHEET,
+        "Base original SAP: uma linha por confirmação. Trabalho contém o HH completo da semana selecionada, sem rateio pelas datas.",
+      ],
+      [
+        "Importante",
+        "Substitua os dados da semana anterior. Não copie exemplos ou totais junto das linhas.",
+      ],
+    ],
+    { origin: "D1" },
+  );
   XLSX.writeFile(wb, "Modelo programação.xlsx");
   toast.success("Modelo semanal baixado.");
 }
@@ -150,7 +194,15 @@ function normalize(s: string) {
     .trim();
 }
 
-function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<string, any>[]; headerRow: string[] }> {
+function parseWorkbook(
+  file: File,
+  includeRs = false,
+): Promise<{
+  sheetName: string;
+  rows: Record<string, any>[];
+  headerRow: string[];
+  rsProgram?: RsProgramRow[];
+}> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onerror = () => reject(reader.error);
@@ -158,7 +210,22 @@ function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<st
       try {
         const XLSX = await import("xlsx");
         const wb = XLSX.read(reader.result, { type: "array", cellDates: true });
-        const sheetName = wb.SheetNames[0];
+        const sheetName = chooseOperationalSheet(wb.SheetNames);
+        const rsSheet = includeRs
+          ? wb.SheetNames.find((name) => normalize(name) === normalize(RS_PROGRAM_SHEET))
+          : undefined;
+        const rsProgram = rsSheet
+          ? parseRsProgramGrid(
+              XLSX.utils.sheet_to_json<unknown[]>(
+                XLSX.read(reader.result, { type: "array", cellDates: false }).Sheets[rsSheet],
+                {
+                  header: 1,
+                  defval: null,
+                  raw: true,
+                },
+              ),
+            )
+          : undefined;
         const ws = wb.Sheets[sheetName];
         const arr = XLSX.utils.sheet_to_json<any[]>(ws, { header: 1, defval: null, raw: false });
         if (!arr.length) return resolve({ sheetName, rows: [], headerRow: [] });
@@ -175,7 +242,7 @@ function parseWorkbook(file: File): Promise<{ sheetName: string; rows: Record<st
           obj.__row = i + 1;
           rows.push(obj);
         }
-        resolve({ sheetName, rows, headerRow });
+        resolve({ sheetName, rows, headerRow, rsProgram });
       } catch (e) {
         reject(e);
       }
@@ -204,7 +271,11 @@ function normalizeReleaseType(value: string | null): "PT" | "PTT" | "ATRE" | "OF
     .trim()
     .toLocaleUpperCase("pt-BR");
   if (normalized === "PT" || normalized === "PTT" || normalized === "ATRE") return normalized;
-  if (normalized === "OFICINA" || normalized === "OFICINAS" || normalized.includes("SERVICO DE OFICINA")) {
+  if (
+    normalized === "OFICINA" ||
+    normalized === "OFICINAS" ||
+    normalized.includes("SERVICO DE OFICINA")
+  ) {
     return "OFICINAS";
   }
   return normalized as "PT" | "PTT" | "ATRE" | "OFICINAS";
@@ -254,7 +325,9 @@ function PlanejamentoPage() {
       (
         await (supabase as any)
           .from("weeks")
-          .select("id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at, sap_closure_status, sap_closure_deadline, sap_closed_at")
+          .select(
+            "id, code, label, start_date, end_date, is_active, lifecycle_status, activated_at, closed_at, sap_closure_status, sap_closure_deadline, sap_closed_at",
+          )
           .order("start_date", { ascending: false })
           .limit(6)
       ).data ?? [],
@@ -268,20 +341,41 @@ function PlanejamentoPage() {
     setSapActionWeek(week);
     setSapAction(action);
     setSapReason("");
-    const currentDeadline = week.sap_closure_deadline ? new Date(week.sap_closure_deadline) : new Date(`${week.end_date}T12:00:00`);
-    setSapDeadline(new Date(currentDeadline.getTime() - currentDeadline.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
+    const currentDeadline = week.sap_closure_deadline
+      ? new Date(week.sap_closure_deadline)
+      : new Date(`${week.end_date}T12:00:00`);
+    setSapDeadline(
+      new Date(currentDeadline.getTime() - currentDeadline.getTimezoneOffset() * 60000)
+        .toISOString()
+        .slice(0, 16),
+    );
   }
 
   async function submitSapAction() {
-    if (!sapActionWeek || sapReason.trim().length < 3) return toast.error("Informe o motivo da alteração.");
+    if (!sapActionWeek || sapReason.trim().length < 3)
+      return toast.error("Informe o motivo da alteração.");
     if (sapAction === "extend" && !sapDeadline) return toast.error("Informe o novo prazo.");
     setSavingSapClosure(true);
     try {
-      const result = await manageSapClosureFn({ data: sapAction === "extend"
-        ? { weekId: sapActionWeek.id, action: "extend" as const, deadline: new Date(sapDeadline).toISOString(), reason: sapReason.trim() }
-        : { weekId: sapActionWeek.id, action: sapAction, reason: sapReason.trim() } });
+      const result = await manageSapClosureFn({
+        data:
+          sapAction === "extend"
+            ? {
+                weekId: sapActionWeek.id,
+                action: "extend" as const,
+                deadline: new Date(sapDeadline).toISOString(),
+                reason: sapReason.trim(),
+              }
+            : { weekId: sapActionWeek.id, action: sapAction, reason: sapReason.trim() },
+      });
       if (!result.ok) return toast.error(result.error);
-      toast.success(sapAction === "close" ? "Fechamento SAP encerrado." : sapAction === "reopen" ? "Fechamento SAP reaberto." : "Prazo do fechamento SAP prorrogado.");
+      toast.success(
+        sapAction === "close"
+          ? "Fechamento SAP encerrado."
+          : sapAction === "reopen"
+            ? "Fechamento SAP reaberto."
+            : "Prazo do fechamento SAP prorrogado.",
+      );
       setSapActionWeek(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["weeks-list"] }),
@@ -397,8 +491,10 @@ function PlanejamentoPage() {
         const row: Record<string, any> = {};
         for (const header of WEEKLY_TEMPLATE_COLUMNS) {
           if (header === "PBS") row[header] = activity.pbs ?? planning[header] ?? "";
-          else if (header === "Tipo de Liberação") row[header] = activity.release_type ?? planning[header] ?? "";
-          else if (header === "Data início") row[header] = formatDateOnly(activity.scheduled_date ?? planning[header]);
+          else if (header === "Tipo de Liberação")
+            row[header] = activity.release_type ?? planning[header] ?? "";
+          else if (header === "Data início")
+            row[header] = formatDateOnly(activity.scheduled_date ?? planning[header]);
           else if (header === "Status") row[header] = activity.status ?? "Sem apontamento";
           else if (header === "Justificativa") row[header] = activity.justification ?? "";
           else if (header === "Observações") row[header] = activity.observation ?? "";
@@ -406,7 +502,9 @@ function PlanejamentoPage() {
           else row[header] = planning[header] ?? "";
         }
 
-        const operationalArea = String(planning["Área op"] ?? planning["Área Op"] ?? planning["Area Op"] ?? "")
+        const operationalArea = String(
+          planning["Área op"] ?? planning["Área Op"] ?? planning["Area Op"] ?? "",
+        )
           .trim()
           .toLocaleUpperCase("pt-BR");
         row["Ger"] = gerByArea[operationalArea] ?? "Não mapeado";
@@ -464,9 +562,15 @@ function PlanejamentoPage() {
         >
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Código</div>
-              <div className="mt-1 font-mono text-sm text-foreground">{activeWeek.data?.code ?? "—"}</div>
-              <div className="mt-3 text-lg font-semibold text-foreground">{activeWeek.data?.label ?? "—"}</div>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Código
+              </div>
+              <div className="mt-1 font-mono text-sm text-foreground">
+                {activeWeek.data?.code ?? "—"}
+              </div>
+              <div className="mt-3 text-lg font-semibold text-foreground">
+                {activeWeek.data?.label ?? "—"}
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <button onClick={downloadWeeklyTemplate} className="btn-ghost">
@@ -516,7 +620,11 @@ function PlanejamentoPage() {
       </div>
 
       <div className="mt-5">
-        <Panel title="Semanas importadas" description={`${weeksList.data?.length ?? 0} semanas recentes · O histórico completo permanece em Painel → Realização Semanal. Não é necessário excluir semanas para importar outras.`} padded={false}>
+        <Panel
+          title="Semanas importadas"
+          description={`${weeksList.data?.length ?? 0} semanas recentes · O histórico completo permanece em Painel → Realização Semanal. Não é necessário excluir semanas para importar outras.`}
+          padded={false}
+        >
           {weeksList.data && weeksList.data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
@@ -550,8 +658,14 @@ function PlanejamentoPage() {
                           <span className="text-[11px] text-muted-foreground">Encerrada</span>
                         )}
                         <div className="mt-1 text-[10px] text-muted-foreground">
-                          SAP: {w.sap_closure_status === "closed" || (w.sap_closure_deadline && new Date(w.sap_closure_deadline) < new Date()) ? "Fechado" : "Aberto"}
-                          {w.sap_closure_deadline ? ` até ${new Date(w.sap_closure_deadline).toLocaleString("pt-BR")}` : ""}
+                          SAP:{" "}
+                          {w.sap_closure_status === "closed" ||
+                          (w.sap_closure_deadline && new Date(w.sap_closure_deadline) < new Date())
+                            ? "Fechado"
+                            : "Aberto"}
+                          {w.sap_closure_deadline
+                            ? ` até ${new Date(w.sap_closure_deadline).toLocaleString("pt-BR")}`
+                            : ""}
                         </div>
                       </td>
                       <td className="px-3 py-2 text-right">
@@ -567,12 +681,31 @@ function PlanejamentoPage() {
                           </button>
                           {isAdmin && (
                             <>
-                              {w.sap_closure_status !== "closed" && (!w.sap_closure_deadline || new Date(w.sap_closure_deadline) >= new Date()) && (
-                                <button onClick={() => openSapAction(w, "close")} className="btn-ghost py-1 text-[11px]">Fechar SAP agora</button>
-                              )}
-                              <button onClick={() => openSapAction(w, "extend")} className="btn-ghost py-1 text-[11px]">Prorrogar prazo</button>
-                              {(w.sap_closure_status === "closed" || (w.sap_closure_deadline && new Date(w.sap_closure_deadline) < new Date())) && (
-                                <button onClick={() => openSapAction(w, "reopen")} className="btn-ghost py-1 text-[11px]">Reabrir fechamento</button>
+                              {w.sap_closure_status !== "closed" &&
+                                (!w.sap_closure_deadline ||
+                                  new Date(w.sap_closure_deadline) >= new Date()) && (
+                                  <button
+                                    onClick={() => openSapAction(w, "close")}
+                                    className="btn-ghost py-1 text-[11px]"
+                                  >
+                                    Fechar SAP agora
+                                  </button>
+                                )}
+                              <button
+                                onClick={() => openSapAction(w, "extend")}
+                                className="btn-ghost py-1 text-[11px]"
+                              >
+                                Prorrogar prazo
+                              </button>
+                              {(w.sap_closure_status === "closed" ||
+                                (w.sap_closure_deadline &&
+                                  new Date(w.sap_closure_deadline) < new Date())) && (
+                                <button
+                                  onClick={() => openSapAction(w, "reopen")}
+                                  className="btn-ghost py-1 text-[11px]"
+                                >
+                                  Reabrir fechamento
+                                </button>
                               )}
                             </>
                           )}
@@ -588,7 +721,9 @@ function PlanejamentoPage() {
                                     return;
                                   const res = await activateFn({ data: { weekId: w.id } });
                                   if (!res.ok) return toast.error(res.error);
-                                  toast.success("Nova semana operacional ativada. A anterior foi encerrada.");
+                                  toast.success(
+                                    "Nova semana operacional ativada. A anterior foi encerrada.",
+                                  );
                                   qc.invalidateQueries({ queryKey: ["active-week"] });
                                   qc.invalidateQueries({ queryKey: ["weeks-list"] });
                                   qc.invalidateQueries({ queryKey: ["activities"] });
@@ -638,15 +773,53 @@ function PlanejamentoPage() {
 
       {sapActionWeek && (
         <Modal
-          title={sapAction === "close" ? "Fechar conferência SAP agora" : sapAction === "reopen" ? "Reabrir conferência SAP" : "Prorrogar prazo da conferência SAP"}
+          title={
+            sapAction === "close"
+              ? "Fechar conferência SAP agora"
+              : sapAction === "reopen"
+                ? "Reabrir conferência SAP"
+                : "Prorrogar prazo da conferência SAP"
+          }
           description={`${sapActionWeek.label} · ${sapActionWeek.code}`}
           onClose={() => !savingSapClosure && setSapActionWeek(null)}
-          footer={<><button className="btn-ghost" disabled={savingSapClosure} onClick={() => setSapActionWeek(null)}>Cancelar</button><button className="btn-primary" disabled={savingSapClosure} onClick={submitSapAction}>{savingSapClosure ? "Salvando…" : "Confirmar"}</button></>}
+          footer={
+            <>
+              <button
+                className="btn-ghost"
+                disabled={savingSapClosure}
+                onClick={() => setSapActionWeek(null)}
+              >
+                Cancelar
+              </button>
+              <button className="btn-primary" disabled={savingSapClosure} onClick={submitSapAction}>
+                {savingSapClosure ? "Salvando…" : "Confirmar"}
+              </button>
+            </>
+          }
         >
           <div className="grid gap-3">
-            {sapAction === "extend" && <Field label="Novo prazo" required><input type="datetime-local" className="input-base" value={sapDeadline} onChange={(event) => setSapDeadline(event.target.value)} /></Field>}
-            <Field label="Motivo" required><textarea rows={3} className="input-base" value={sapReason} onChange={(event) => setSapReason(event.target.value)} placeholder="Explique o motivo desta alteração" /></Field>
-            <p className="text-[11px] text-muted-foreground">A ação ficará registrada com responsável, data, horário e motivo.</p>
+            {sapAction === "extend" && (
+              <Field label="Novo prazo" required>
+                <input
+                  type="datetime-local"
+                  className="input-base"
+                  value={sapDeadline}
+                  onChange={(event) => setSapDeadline(event.target.value)}
+                />
+              </Field>
+            )}
+            <Field label="Motivo" required>
+              <textarea
+                rows={3}
+                className="input-base"
+                value={sapReason}
+                onChange={(event) => setSapReason(event.target.value)}
+                placeholder="Explique o motivo desta alteração"
+              />
+            </Field>
+            <p className="text-[11px] text-muted-foreground">
+              A ação ficará registrada com responsável, data, horário e motivo.
+            </p>
           </div>
         </Modal>
       )}
@@ -703,7 +876,8 @@ async function downloadImmediateTemplate() {
 
   const dadosRows = [["Status", "Justificativa"]];
   const total = Math.max(TEMPLATE_STATUSES.length, TEMPLATE_JUSTIFICATIONS.length);
-  for (let i = 0; i < total; i++) dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
+  for (let i = 0; i < total; i++)
+    dadosRows.push([TEMPLATE_STATUSES[i] ?? "", TEMPLATE_JUSTIFICATIONS[i] ?? ""]);
   const dados = XLSX.utils.aoa_to_sheet(dadosRows);
   dados["!cols"] = [{ wch: 22 }, { wch: 74 }];
 
@@ -716,9 +890,12 @@ async function downloadImmediateTemplate() {
 
 function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string; headerRow: string[] } | null>(
-    null,
-  );
+  const [parsed, setParsed] = useState<{
+    rows: Record<string, any>[];
+    sheetName: string;
+    headerRow: string[];
+    rsProgram?: RsProgramRow[];
+  } | null>(null);
   const [code, setCode] = useState("");
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
@@ -731,8 +908,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   async function handleFile(f: File) {
     setFile(f);
     setError(null);
+    setParsed(null);
     try {
-      const res = await parseWorkbook(f);
+      const res = await parseWorkbook(f, true);
       if (!res.rows.length) {
         setError("A planilha não contém linhas de dados.");
         setParsed(null);
@@ -750,18 +928,33 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
 
   async function submit() {
     if (!parsed) return;
-    if (!code.trim() || !label.trim() || !startDate || !endDate) return setError("Preencha código, rótulo e datas.");
+    if (!code.trim() || !label.trim() || !startDate || !endDate)
+      return setError("Preencha código, rótulo e datas.");
     setBusy(true);
     setError(null);
     try {
       const payload = parsed.rows.map((r, idx) => {
-        const order = extractField(r, "Ordem", "Ordem de serviço", "OS", "Nº ordem", "Numero da ordem");
+        const order = extractField(
+          r,
+          "Ordem",
+          "Ordem de serviço",
+          "OS",
+          "Nº ordem",
+          "Numero da ordem",
+        );
         const note = extractField(r, "Nota", "Nº nota", "Numero da nota");
         const operation = extractField(r, "Op", "Operação", "Operacao");
         const suboperation = extractField(r, "Subop", "Sub operação", "Sub operacao");
-        const desc = extractField(r, "TxtDesc.Oper.", "Descrição", "Descricao", "Serviço", "Servico") ?? "";
+        const desc =
+          extractField(r, "TxtDesc.Oper.", "Descrição", "Descricao", "Serviço", "Servico") ?? "";
         const area = extractField(r, "Gerência", "Gerencia");
-        const spec = extractField(r, "CenTrab", "Centro de trabalho", "Especialidade", "Disciplina");
+        const spec = extractField(
+          r,
+          "CenTrab",
+          "Centro de trabalho",
+          "Especialidade",
+          "Disciplina",
+        );
         const dateRaw = extractField(
           r,
           "Data início",
@@ -771,7 +964,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           "Data prevista",
           "Data planejada",
         );
-        const sourceParts = [order, operation, suboperation, note].map((value) => value?.trim()).filter(Boolean);
+        const sourceParts = [order, operation, suboperation, note]
+          .map((value) => value?.trim())
+          .filter(Boolean);
         return {
           source_key: `${sourceParts.length ? sourceParts.join("|") : "SEM-CHAVE"}|ROW-${r.__row ?? idx + 2}`,
           order_number: order,
@@ -781,7 +976,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           specialty: spec,
           scheduled_date: toISODate(dateRaw),
           pbs: extractField(r, "PBS"),
-          release_type: normalizeReleaseType(extractField(r, "Tipo de Liberação", "Tipo de Liberacao")),
+          release_type: normalizeReleaseType(
+            extractField(r, "Tipo de Liberação", "Tipo de Liberacao"),
+          ),
           planning_data: r,
           source_row_number: r.__row ?? null,
         };
@@ -795,6 +992,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           source_file_name: file?.name ?? null,
           sheet_name: parsed.sheetName,
           rows: payload,
+          rs_program: parsed.rsProgram,
         },
       });
       if (!res.ok) {
@@ -802,7 +1000,14 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         setBusy(false);
         return;
       }
-      toast.success(`Semana importada em preparação — ${res.count} atividades.`);
+      if (res.officialError)
+        toast.warning(
+          `Semana criada, mas a base oficial do RS não foi salva: ${res.officialError}. Importe-a no Painel → Realização Semanal, sem repetir a programação.`,
+        );
+      else
+        toast.success(
+          `Semana importada em preparação — ${res.count} atividades.${parsed.rsProgram ? ` Base oficial RS: ${parsed.rsProgram.length} confirmações.` : " Sem base oficial RS: cálculo pela programação operacional até a importação da base."}`,
+        );
       onDone();
     } catch (e: any) {
       setError(e?.message ?? "Erro ao importar.");
@@ -847,6 +1052,9 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                 <span>
                   {" "}
                   · {parsed.rows.length} linhas · aba “{parsed.sheetName}”
+                  {parsed.rsProgram
+                    ? ` · RS: ${parsed.rsProgram.length} confirmações / ${parsed.rsProgram.reduce((sum, row) => sum + row.work, 0).toLocaleString("pt-BR", { maximumFractionDigits: 2 })} HH na aba Programação SAP`
+                    : " · Sem aba Programação SAP"}
                 </span>
               )}
             </div>
@@ -872,15 +1080,26 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           />
         </Field>
         <Field label="Início" required>
-          <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className="input-base" />
+          <input
+            type="date"
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className="input-base"
+          />
         </Field>
         <Field label="Fim" required>
-          <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className="input-base" />
+          <input
+            type="date"
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className="input-base"
+          />
         </Field>
       </div>
 
       <div className="mt-3 rounded-md border border-warning/40 bg-warning/10 p-3 text-[12px] text-foreground">
-        Esta importação não altera a semana operacional atual. Depois dos ajustes, use “Ativar como operacional”.
+        Esta importação não altera a semana operacional atual. Depois dos ajustes, use “Ativar como
+        operacional”.
       </div>
 
       {error && (
@@ -892,7 +1111,15 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
   );
 }
 
-function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose: () => void; onSaved: () => void }) {
+function ImmediateModal({
+  weekId,
+  onClose,
+  onSaved,
+}: {
+  weekId: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
   const [values, setValues] = useState<Record<ImmCol, string>>(() => {
     const obj = {} as Record<ImmCol, string>;
     for (const c of IMMEDIATE_COLUMNS) obj[c] = "";
@@ -962,12 +1189,23 @@ function ImmediateModal({ weekId, onClose, onSaved }: { weekId: string; onClose:
       <div className="grid gap-3 sm:grid-cols-2">
         {IMMEDIATE_COLUMNS.map((c) => {
           const required = c === "Ordem" || c === "TxtDesc.Oper.";
-          const type = dateCols.has(c) ? "date" : timeCols.has(c) ? "time" : numCols.has(c) ? "number" : "text";
+          const type = dateCols.has(c)
+            ? "date"
+            : timeCols.has(c)
+              ? "time"
+              : numCols.has(c)
+                ? "number"
+                : "text";
           const label = c + (c === "TxtDesc.Oper." ? " (Descrição)" : "");
           return (
             <div key={c} className={wideCols.has(c) ? "sm:col-span-2" : ""}>
               <Field label={label} required={required}>
-                <input type={type} value={values[c]} onChange={(e) => set(c, e.target.value)} className="input-base" />
+                <input
+                  type={type}
+                  value={values[c]}
+                  onChange={(e) => set(c, e.target.value)}
+                  className="input-base"
+                />
               </Field>
             </div>
           );
@@ -987,7 +1225,9 @@ function ImmediateImportModal({
   onDone: (count: number) => void;
 }) {
   const [file, setFile] = useState<File | null>(null);
-  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string } | null>(null);
+  const [parsed, setParsed] = useState<{ rows: Record<string, any>[]; sheetName: string } | null>(
+    null,
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -1098,7 +1338,9 @@ function ImmediateImportModal({
             </div>
           )}
         </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">Colunas esperadas: {IMMEDIATE_COLUMNS.join(", ")}.</p>
+        <p className="mt-3 text-[11px] text-muted-foreground">
+          Colunas esperadas: {IMMEDIATE_COLUMNS.join(", ")}.
+        </p>
       </div>
       {error && (
         <div className="mt-3 flex items-start gap-2 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-[12px] text-destructive">

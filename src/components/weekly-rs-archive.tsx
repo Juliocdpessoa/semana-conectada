@@ -23,6 +23,8 @@ const kinds = [
   "availability",
   "activity_history",
   "availability_history",
+  "program_basis",
+  "program_basis_history",
 ] as const;
 const sheets = [
   "Atividades",
@@ -31,6 +33,8 @@ const sheets = [
   "Disponibilidade",
   "Histórico atividades",
   "Histórico disponibilidade",
+  "Base programada RS",
+  "Histórico base RS",
 ];
 export function WeeklyRsArchive({
   weekId,
@@ -233,11 +237,32 @@ export function WeeklyRsArchive({
                     }),
                   ];
                 }
-                if (kind !== "availability" && kind !== "availability_history")
+                if (
+                  kind !== "availability" &&
+                  kind !== "availability_history" &&
+                  kind !== "program_basis" &&
+                  kind !== "program_basis_history"
+                )
                   return [flat(record)];
                 const { rows, ...metadata } = record;
                 return Array.isArray(rows)
-                  ? rows.map((row) => flat({ ...metadata, ...row }))
+                  ? rows.map((row) => {
+                      const { source_data, ...fields } = row as Record<string, unknown>;
+                      return flat({
+                        ...metadata,
+                        ...fields,
+                        ...(source_data &&
+                        typeof source_data === "object" &&
+                        !Array.isArray(source_data)
+                          ? Object.fromEntries(
+                              Object.entries(source_data).map(([key, value]) => [
+                                "SAP original · " + key,
+                                value,
+                              ]),
+                            )
+                          : {}),
+                      });
+                    })
                   : [flat(record)];
               }),
             ),

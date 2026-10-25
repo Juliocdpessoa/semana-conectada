@@ -169,6 +169,13 @@
       "when": 1792843200000,
       "tag": "0023_rs_exclude_hidrojat",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1792857600000,
+      "tag": "0024_rs_official_program_base",
+      "breakpoints": true
     }
   ]
 }
