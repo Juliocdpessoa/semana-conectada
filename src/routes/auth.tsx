@@ -4,7 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import { ShieldCheck, ClipboardCheck, BarChart3, Timer, CalendarClock, Users, Eye, EyeOff } from "lucide-react";
+import {
+  ShieldCheck,
+  ClipboardCheck,
+  BarChart3,
+  Timer,
+  CalendarClock,
+  Users,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
@@ -146,7 +155,7 @@ function AuthPage() {
             },
             {
               icon: BarChart3,
-              title: "Painel gerencial",
+              title: "Gestão Operacional",
               desc: "Aderência, curva de avanço em HH e pendências",
             },
             {
@@ -211,7 +220,7 @@ function AuthPage() {
             {[
               "Programação semanal",
               "Apontamento",
-              "Painel",
+              "Gestão Operacional",
               "Hora extra",
               "Mudança de escala",
             ].map((t) => (
@@ -385,4 +394,3 @@ function AuthPage() {
     </div>
   );
 }
-

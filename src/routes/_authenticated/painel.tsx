@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   AlertTriangle,
@@ -53,6 +53,14 @@ import {
 export const Route = createFileRoute("/_authenticated/painel")({
   component: PainelPage,
 });
+const OperationalImports = lazy(() => import("@/components/operational-imports"));
+type PanelView =
+  | "geral"
+  | "nao-executadas"
+  | "nao-justificadas"
+  | "realizacao-semanal"
+  | "disponibilidade-hh"
+  | "importacoes";
 function PainelPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canAccessRs = session.roles.some((role) => role === "planning" || role === "admin");
@@ -61,18 +69,15 @@ function PainelPage() {
   const initialView =
     requestedView === "nao-executadas" ||
     requestedView === "nao-justificadas" ||
-    ((requestedView === "realizacao-semanal" || requestedView === "disponibilidade-hh") &&
+    ((requestedView === "realizacao-semanal" ||
+      requestedView === "disponibilidade-hh" ||
+      requestedView === "importacoes") &&
       canAccessRs)
       ? requestedView
       : "geral";
-  const [view, setView] = useState<
-    "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh"
-  >(initialView);
+  const [view, setView] = useState<PanelView>(initialView);
 
-  function changeView(
-    next:
-      "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh",
-  ) {
+  function changeView(next: PanelView) {
     setView(next);
     if (typeof window !== "undefined") {
       const url = new URL(window.location.href);
@@ -84,7 +89,22 @@ function PainelPage() {
 
   return (
     <>
-      {(view === "realizacao-semanal" || view === "disponibilidade-hh") && canAccessRs ? (
+      {view === "importacoes" && canAccessRs ? (
+        <Suspense
+          fallback={
+            <main className="px-4 py-6 sm:px-6">
+              <PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />
+              <p role="status">Carregando importações…</p>
+            </main>
+          }
+        >
+          <OperationalImports
+            key={session.worksiteId}
+            session={session}
+            tabs={<PanelTabs view={view} onChange={changeView} canAccessRs={canAccessRs} />}
+          />
+        </Suspense>
+      ) : (view === "realizacao-semanal" || view === "disponibilidade-hh") && canAccessRs ? (
         <WeeklyRealizationPanel
           key={session.worksiteId + view}
           mode={view === "disponibilidade-hh" ? "availability" : "indicator"}
@@ -113,12 +133,8 @@ function PanelTabs({
   onChange,
   canAccessRs,
 }: {
-  view:
-    "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh";
-  onChange: (
-    view:
-      "geral" | "nao-executadas" | "nao-justificadas" | "realizacao-semanal" | "disponibilidade-hh",
-  ) => void;
+  view: PanelView;
+  onChange: (view: PanelView) => void;
   canAccessRs: boolean;
 }) {
   return (
@@ -149,6 +165,11 @@ function PanelTabs({
           onClick={() => onChange("disponibilidade-hh")}
         >
           Disponibilidade HH
+        </PanelTabBtn>
+      )}
+      {canAccessRs && (
+        <PanelTabBtn active={view === "importacoes"} onClick={() => onChange("importacoes")}>
+          Importações
         </PanelTabBtn>
       )}
     </div>
@@ -320,10 +341,11 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
   if (!activeWeek.data) {
     return (
       <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
-        <PageHeader title="Painel gerencial" description="Indicadores da semana ativa." />
+        <PageHeader title="Gestão Operacional" description="Indicadores da semana ativa." />
+        {tabs}
         <EmptyState
           title="Nenhuma semana ativa"
-          description="Importe ou ative uma semana no menu Planejamento."
+          description="Importe ou ative uma semana na aba Importações da Gestão Operacional."
         />
       </main>
     );
@@ -332,7 +354,7 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
   return (
     <main className="mx-auto w-full max-w-none px-4 py-6 sm:px-6">
       <PageHeader
-        eyebrow="Painel gerencial"
+        eyebrow="Gestão Operacional"
         title={activeWeek.data.label}
         description={`${activeWeek.data.start_date} a ${activeWeek.data.end_date} · ${kpis.total} atividades`}
         actions={

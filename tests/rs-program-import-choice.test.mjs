@@ -72,7 +72,7 @@ test("no/back always blocks import, even when SAP rows are present", () => {
   );
 });
 test("weekly import resets the decision for each file and retries only basis after partial success", () => {
-  const ui = read("src/routes/_authenticated/planejamento.tsx");
+  const ui = read("src/components/operational-imports.tsx");
   for (const text of [
     "Você incluiu a base oficial do RS atualizada nesta planilha?",
     'setRsAction("")',

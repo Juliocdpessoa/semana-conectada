@@ -15,7 +15,6 @@ import {
   LogOut,
   ClipboardList,
   Settings,
-  Zap,
   BarChart3,
   Menu,
   X,
@@ -27,7 +26,14 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 
 export type AppRole =
-  "admin" | "manager" | "planning" | "leader" | "measurement_control" | "logistics" | "operation" | "viewer";
+  | "admin"
+  | "manager"
+  | "planning"
+  | "leader"
+  | "measurement_control"
+  | "logistics"
+  | "operation"
+  | "viewer";
 
 export type SessionInfo = {
   userId: string;
@@ -65,7 +71,9 @@ async function loadSession(): Promise<SessionInfo | null> {
     if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
   }
   if (profile?.error || roles?.error || !profile?.data) {
-    throw new Error("Não foi possível carregar seu perfil. Verifique a conexão e atualize a página.");
+    throw new Error(
+      "Não foi possível carregar seu perfil. Verifique a conexão e atualize a página.",
+    );
   }
   const worksiteId = String(profile.data?.worksite_id ?? "");
   const { data: worksite } = worksiteId
@@ -76,9 +84,12 @@ async function loadSession(): Promise<SessionInfo | null> {
         .maybeSingle()
     : { data: null };
   const { data: activeMembership } = worksiteId
-    ? await (supabase as any).from("worksite_memberships")
-        .select("is_worksite_admin").eq("user_id", data.user.id)
-        .eq("worksite_id", worksiteId).maybeSingle()
+    ? await (supabase as any)
+        .from("worksite_memberships")
+        .select("is_worksite_admin")
+        .eq("user_id", data.user.id)
+        .eq("worksite_id", worksiteId)
+        .maybeSingle()
     : { data: null };
   const rolesRows = (roles?.data ?? []) as { role: string }[];
   const priority: SessionInfo["role"][] = [
@@ -142,13 +153,12 @@ function AuthedLayout() {
 
   const s = session as SessionInfo;
   const roleSet = new Set(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []);
-  const isPlanning = roleSet.has("planning") || roleSet.has("admin");
   const isAdmin = roleSet.has("admin") || s.isWorksiteAdmin;
   const isManager = roleSet.has("manager") || isAdmin;
   const isMeasurementControl = roleSet.has("measurement_control");
   const isLogistics = roleSet.has("logistics");
-  const hasGeneralAccess = ["admin", "manager", "planning", "leader", "operation", "viewer"].some((role) =>
-    roleSet.has(role as AppRole),
+  const hasGeneralAccess = ["admin", "manager", "planning", "leader", "operation", "viewer"].some(
+    (role) => roleSet.has(role as AppRole),
   );
   const overtimeOnly = (isMeasurementControl || isLogistics) && !hasGeneralAccess;
   const canOvertime =
@@ -193,8 +203,7 @@ function AuthedLayout() {
 
   const nav = [
     { to: "/atividades", label: "Atividades", icon: ClipboardList, show: !overtimeOnly },
-    { to: "/painel", label: "Painel", icon: BarChart3, show: !overtimeOnly },
-    { to: "/planejamento", label: "Planejamento", icon: Zap, show: isPlanning },
+    { to: "/painel", label: "Gestão Operacional", icon: BarChart3, show: !overtimeOnly },
     { to: "/hora-extra", label: "Hora Extra", icon: Timer, show: canOvertime },
     {
       // Nome, endereço e ícone representam o módulo atual; a rota antiga apenas redireciona.
@@ -273,9 +282,7 @@ function AuthedLayout() {
                 {(s.roles.length > 0 ? s.roles : s.role ? [s.role] : []).map(roleLabel).join(" + ")}
               </div>
               {s.worksiteCode && (
-                <div className="text-[9px] leading-tight text-white/65">
-                  {s.worksiteCode}
-                </div>
+                <div className="text-[9px] leading-tight text-white/65">{s.worksiteCode}</div>
               )}
             </div>
             <button
@@ -306,11 +313,7 @@ function AuthedLayout() {
               <div className="text-white/70">
                 {s.email} · {roleLabel(s.role)}
               </div>
-              {s.worksiteCode && (
-                <div className="mt-0.5 text-white/70">
-                  Obra: {s.worksiteCode}
-                </div>
-              )}
+              {s.worksiteCode && <div className="mt-0.5 text-white/70">Obra: {s.worksiteCode}</div>}
             </div>
             <div className="flex flex-col gap-0.5">
               {nav.map((n) => (
@@ -402,4 +405,3 @@ function roleLabel(role: SessionInfo["role"]) {
       return "Sem perfil";
   }
 }
-

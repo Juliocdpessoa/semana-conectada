@@ -27,7 +27,9 @@ function LandingPage() {
         setChecking(false);
       }
     });
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [navigate]);
 
   if (checking) {
@@ -48,7 +50,9 @@ function LandingPage() {
             </div>
             <div className="hidden sm:block leading-tight">
               <div className="text-[13px] font-semibold text-foreground">NEXO</div>
-              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Gestão integrada da manutenção</div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+                Gestão integrada da manutenção
+              </div>
             </div>
           </div>
           <Link to="/auth" className="btn-primary">
@@ -66,9 +70,9 @@ function LandingPage() {
             Acompanhamento diário de atividades semanais de manutenção
           </h1>
           <p className="mt-3 max-w-2xl text-[15px] leading-relaxed text-muted-foreground">
-            Cada colaborador é responsável por informar semanalmente o andamento
-            das suas atividades — atualizando status, justificativa e observações.
-            Toda alteração é registrada automaticamente com autor, data e versão.
+            Cada colaborador é responsável por informar semanalmente o andamento das suas atividades
+            — atualizando status, justificativa e observações. Toda alteração é registrada
+            automaticamente com autor, data e versão.
           </p>
           <div className="mt-5">
             <Link to="/auth" className="btn-primary">
@@ -79,9 +83,21 @@ function LandingPage() {
 
         <section className="mt-14 grid gap-3 sm:grid-cols-3">
           {[
-            { icon: ClipboardList, title: "Busca operacional", text: "Localize por ordem, nota, descrição, área, data, status ou responsável." },
-            { icon: BarChart3, title: "Painel gerencial", text: "Aderência, execução por dia, área, especialidade e ranking de responsáveis." },
-            { icon: ShieldCheck, title: "Auditoria completa", text: "Cada alteração registra autor, data e valores antes/depois com controle de versão." },
+            {
+              icon: ClipboardList,
+              title: "Busca operacional",
+              text: "Localize por ordem, nota, descrição, área, data, status ou responsável.",
+            },
+            {
+              icon: BarChart3,
+              title: "Gestão Operacional",
+              text: "Indicadores, realização semanal, disponibilidade de HH e importações.",
+            },
+            {
+              icon: ShieldCheck,
+              title: "Auditoria completa",
+              text: "Cada alteração registra autor, data e valores antes/depois com controle de versão.",
+            },
           ].map((f) => (
             <div key={f.title} className="surface-card p-5">
               <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/10 text-primary">

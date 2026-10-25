@@ -177,7 +177,7 @@ export function WeeklyRealizationPanel({
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
-        eyebrow="Painel"
+        eyebrow="Gestão Operacional"
         title={
           mode === "availability" ? "Disponibilidade semanal de HH" : "Realização Semanal (RS)"
         }

@@ -279,7 +279,7 @@ export const deleteWeek = createServerFn({ method: "POST" })
       return {
         ok: false as const,
         error:
-          "Esta semana possui fechamento SAP + RS preservado e não pode ser excluída. Consulte o histórico no Painel → Realização Semanal.",
+          "Esta semana possui fechamento SAP + RS preservado e não pode ser excluída. Consulte o histórico em Gestão Operacional → Realização Semanal.",
       };
     const { count: sapLoads, error: sapError } = await db
       .from("sap_confirmation_imports")
@@ -302,7 +302,7 @@ export const deleteWeek = createServerFn({ method: "POST" })
       return {
         ok: false as const,
         error:
-          "Esta semana possui base oficial RS e histórico preservados. Substitua a base no Painel → Realização Semanal; não é necessário excluir a semana.",
+          "Esta semana possui base oficial RS e histórico preservados. Não é necessário excluir semanas para importar novas programações. Consulte Gestão Operacional → Realização Semanal.",
       };
 
     const { error } = await db.from("weeks").delete().eq("id", data.weekId);

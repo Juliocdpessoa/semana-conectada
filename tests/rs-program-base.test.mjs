@@ -88,7 +88,7 @@ test("migration parity, access, source history, confirmation cap and archive rul
     assert.ok(sql.includes(term), term);
   assert.ok(!/UPDATE public.activities|DELETE FROM public.activities/i.test(sql));
   const template = fs.readFileSync(
-    new URL("../src/routes/_authenticated/planejamento.tsx", import.meta.url),
+    new URL("../src/components/operational-imports.tsx", import.meta.url),
     "utf8",
   );
   assert.ok(template.includes("aoa_to_sheet([[...RS_PROGRAM_COLUMNS]])"));
