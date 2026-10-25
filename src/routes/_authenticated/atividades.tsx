@@ -461,6 +461,7 @@ function formatActivityHours(value: number) {
 function normalizeSapCode(input: unknown) {
   return String(input ?? "")
     .trim()
+    .replace(/[,.]0+$/, "")
     .replace(/^0+/, "");
 }
 
@@ -1244,7 +1245,8 @@ function AtividadesPage() {
       });
       let candidates = withinExecutionPeriod.length > 0 ? withinExecutionPeriod : group;
       const confirmationMatches = candidates.filter(
-        (activity) => activityConfirmation(activity) === String(sapRow.confirmation ?? "").trim(),
+        (activity) =>
+          normalizeSapCode(activityConfirmation(activity)) === normalizeSapCode(sapRow.confirmation),
       );
       if (confirmationMatches.length > 0) candidates = confirmationMatches;
       candidates.sort(
