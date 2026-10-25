@@ -47,7 +47,7 @@ const importSchema = z
     source_file_name: z.string().max(240).nullable().optional(),
     sheet_name: z.string().max(120).nullable().optional(),
     rows: z.array(rowSchema).min(1).max(5000),
-    rs_base_action: z.enum(["update", "skip"]),
+    rs_base_action: z.literal("update"),
     rs_program: z
       .array(
         z.object({
@@ -71,13 +71,6 @@ const importSchema = z
   .superRefine((data, context) => {
     const error = rsProgramImportError(data.rs_base_action, data.rs_program);
     if (error) context.addIssue({ code: "custom", path: ["rs_program"], message: error });
-    if (data.rs_base_action === "skip" && data.rs_program !== undefined)
-      context.addIssue({
-        code: "custom",
-        path: ["rs_program"],
-        message:
-          "A base RS não pode ser enviada quando a opção escolhida é somente programação operacional.",
-      });
   });
 
 async function loadPlanningContext(supabase: any, userId: string) {

@@ -138,11 +138,10 @@ export function chooseOperationalSheet(names: string[]) {
   return candidates[0];
 }
 
-export type RsProgramImportAction = "" | "update" | "skip";
+export type RsProgramImportAction = "" | "update" | "back";
 export function rsProgramImportError(action: unknown, rows?: RsProgramRow[], parseError?: string) {
-  if (action !== "update" && action !== "skip")
-    return "Informe se esta importação também atualiza a base oficial do RS.";
-  if (action === "skip") return null;
+  if (action !== "update")
+    return "A base oficial do RS é obrigatória. Confirme que ela está atualizada ou volte para corrigir a planilha.";
   if (parseError) return parseError;
   if (!rows?.length)
     return "Para atualizar a base oficial do RS, preencha a aba Programação SAP com a coluna Trabalho.";

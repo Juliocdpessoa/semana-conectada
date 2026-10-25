@@ -41,7 +41,7 @@ test("a new weekly import requires an explicit RS decision, in client and server
     schema.safeParse({ ...payload, rs_base_action: "update", rs_program: rows }).success,
     true,
   );
-  assert.equal(schema.safeParse({ ...payload, rs_base_action: "skip" }).success, true);
+  assert.equal(schema.safeParse({ ...payload, rs_base_action: "skip" }).success, false);
 });
 test("yes requires a valid SAP basis; missing/empty/duplicate confirmation is refused", () => {
   assert.ok(rsProgramImportError("update", undefined));
@@ -58,9 +58,14 @@ test("yes requires a valid SAP basis; missing/empty/duplicate confirmation is re
     false,
   );
 });
-test("no imports only operational tasks; basis rows cannot accidentally accompany skip", () => {
-  assert.equal(rsProgramImportError("skip", undefined, "Invalid SAP tab"), null);
-  assert.equal(schema.safeParse({ ...payload, rs_base_action: "skip" }).success, true);
+test("no/back always blocks import, even when SAP rows are present", () => {
+  assert.ok(rsProgramImportError("back", rows));
+  assert.ok(rsProgramImportError("skip", undefined, "Invalid SAP tab"));
+  assert.equal(schema.safeParse({ ...payload, rs_base_action: "skip" }).success, false);
+  assert.equal(
+    schema.safeParse({ ...payload, rs_base_action: "back", rs_program: rows }).success,
+    false,
+  );
   assert.equal(
     schema.safeParse({ ...payload, rs_base_action: "skip", rs_program: rows }).success,
     false,
@@ -69,16 +74,19 @@ test("no imports only operational tasks; basis rows cannot accidentally accompan
 test("weekly import resets the decision for each file and retries only basis after partial success", () => {
   const ui = read("src/routes/_authenticated/planejamento.tsx");
   for (const text of [
-    "Esta importação também atualiza a base oficial do RS?",
+    "Você incluiu a base oficial do RS atualizada nesta planilha?",
     'setRsAction("")',
     "rsProgramError",
     "generation !== readGeneration.current",
     "p_week_id: createdWeekId",
-    "rs_base_action: rsAction",
-    'rsAction === "update" ? parsed.rsProgram : undefined',
+    'rs_base_action: "update"',
+    "rs_program: parsed.rsProgram",
+    "Voltar para atualizar a planilha",
     "setCreatedWeekId(res.weekId)",
   ])
     assert.ok(ui.includes(text), text);
+  assert.ok(!ui.includes("Concluir sem base RS"));
+  assert.ok(!ui.includes("Não, importar somente a programação operacional"));
   const branch = ui.slice(
     ui.indexOf("if (createdWeekId) {"),
     ui.indexOf("const payload = parsed.rows.map"),

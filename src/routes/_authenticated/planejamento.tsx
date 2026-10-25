@@ -957,22 +957,17 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
     setError(null);
     try {
       if (createdWeekId) {
-        if (rsAction === "update") {
-          const { error } = await (supabase as any).rpc("save_weekly_rs_program_base", {
-            p_week_id: createdWeekId,
-            p_rows: parsed.rsProgram,
-            p_source_file_name: file?.name ?? "Importação semanal",
-            p_sheet_name: "Programação SAP",
-            p_expected_version: 0,
-          });
-          if (error) throw error;
-          toast.success(
-            "Base oficial RS salva. A semana e suas tarefas não foram importadas novamente.",
-          );
-        } else
-          toast.warning(
-            "Semana mantida sem base oficial RS; o cálculo utilizará a programação operacional.",
-          );
+        const { error } = await (supabase as any).rpc("save_weekly_rs_program_base", {
+          p_week_id: createdWeekId,
+          p_rows: parsed.rsProgram,
+          p_source_file_name: file?.name ?? "Importação semanal",
+          p_sheet_name: "Programação SAP",
+          p_expected_version: 0,
+        });
+        if (error) throw error;
+        toast.success(
+          "Base oficial RS salva. A semana e suas tarefas não foram importadas novamente.",
+        );
         onDone();
         return;
       }
@@ -1035,8 +1030,8 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           source_file_name: file?.name ?? null,
           sheet_name: parsed.sheetName,
           rows: payload,
-          rs_base_action: rsAction as "update" | "skip",
-          rs_program: rsAction === "update" ? parsed.rsProgram : undefined,
+          rs_base_action: "update",
+          rs_program: parsed.rsProgram,
         },
       });
       if (!res.ok) {
@@ -1055,7 +1050,7 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         return;
       } else
         toast.success(
-          `Semana importada em preparação — ${res.count} atividades.${rsAction === "update" ? ` Base oficial RS: ${parsed.rsProgram!.length} confirmações.` : " Sem base oficial RS: cálculo pela programação operacional, conforme sua escolha."}`,
+          `Semana importada em preparação — ${res.count} atividades. Base oficial RS: ${parsed.rsProgram!.length} confirmações.`,
         );
       onDone();
     } catch (e: any) {
@@ -1085,15 +1080,35 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           >
             {createdWeekId ? "Fechar" : "Cancelar"}
           </button>
-          <button onClick={submit} disabled={busy || !parsed || !rsAction} className="btn-primary">
-            {busy
-              ? "Salvando…"
-              : createdWeekId
-                ? rsAction === "update"
-                  ? "Salvar base RS"
-                  : "Concluir sem base RS"
-                : "Importar semana"}
-          </button>
+          {rsAction === "back" ? (
+            <button
+              type="button"
+              disabled={busy}
+              className="btn-outline"
+              onClick={() => {
+                setParsed(null);
+                setFile(null);
+                setRsAction("");
+                setError(null);
+                if (inputRef.current) inputRef.current.value = "";
+              }}
+            >
+              Voltar para atualizar a planilha
+            </button>
+          ) : (
+            <button
+              onClick={submit}
+              disabled={
+                busy ||
+                !parsed ||
+                rsAction !== "update" ||
+                !!rsProgramImportError(rsAction, parsed?.rsProgram, parsed?.rsProgramError)
+              }
+              className="btn-primary"
+            >
+              {busy ? "Salvando…" : createdWeekId ? "Salvar base RS" : "Importar semana"}
+            </button>
+          )}
         </>
       }
     >
@@ -1139,11 +1154,12 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
           disabled={busy}
         >
           <legend className="px-1 font-semibold">
-            Esta importação também atualiza a base oficial do RS?
+            Você incluiu a base oficial do RS atualizada nesta planilha?
           </legend>
           <p className="mb-3 text-xs text-muted-foreground">
-            Ao escolher Sim, usaremos o HH integral da coluna Trabalho da aba Programação SAP nesta
-            semana, independentemente das datas da planilha. Nenhuma semana anterior será alterada.
+            A base oficial do RS é obrigatória para importar a semana. Preencha a aba Programação
+            SAP com o HH integral da coluna Trabalho, independentemente das datas da planilha.
+            Nenhuma semana anterior será alterada.
           </p>
           <label className="mb-2 flex cursor-pointer items-center gap-2">
             <input
@@ -1156,25 +1172,25 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
                 setError(null);
               }}
             />
-            Sim, atualizar também a base oficial do RS
+            Sim, incluí a base oficial do RS atualizada
           </label>
           <label className="flex cursor-pointer items-center gap-2">
             <input
               type="radio"
               name="rs-base-action"
-              value="skip"
-              checked={rsAction === "skip"}
+              value="back"
+              checked={rsAction === "back"}
               onChange={() => {
-                setRsAction("skip");
+                setRsAction("back");
                 setError(null);
               }}
             />
-            Não, importar somente a programação operacional
+            Não, preciso voltar e atualizar a planilha
           </label>
           {parsed.rsProgramError && (
             <p role="alert" className="mt-3 text-xs text-destructive">
-              {parsed.rsProgramError} Para atualizar o RS, corrija a aba. Para importar apenas as
-              tarefas, escolha Não.
+              {parsed.rsProgramError} Corrija a aba Programação SAP antes de continuar. Não é
+              possível importar a semana sem a base oficial válida.
             </p>
           )}
           {rsAction === "update" && !parsed.rsProgram && !parsed.rsProgramError && (
@@ -1182,10 +1198,10 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
               Aba Programação SAP não encontrada. Inclua essa aba no arquivo para atualizar o RS.
             </p>
           )}
-          {rsAction === "skip" && (
+          {rsAction === "back" && (
             <p className="mt-3 text-xs">
-              A base oficial não será gravada para a nova semana. O RS utilizará a programação
-              operacional; não será copiada a base de outra semana.
+              A importação está bloqueada. Use “Voltar para atualizar a planilha”, corrija o arquivo
+              e selecione a versão atualizada.
             </p>
           )}
         </fieldset>
