@@ -183,6 +183,13 @@
       "when": 1792890000000,
       "tag": "0025_monthly_rs_selection",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1792893600000,
+      "tag": "0026_automatic_local_backup",
+      "breakpoints": true
     }
   ]
 }

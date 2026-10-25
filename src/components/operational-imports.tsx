@@ -22,6 +22,7 @@ import {
 } from "lucide-react";
 import type { SessionInfo } from "@/routes/_authenticated/route";
 import { PageHeader, Panel, EmptyState, Modal, Field } from "@/components/ui-kit";
+import { NexoBackupStatus } from "@/components/nexo-backup-status";
 import {
   chooseOperationalSheet,
   parseRsProgramGrid,
@@ -558,6 +559,7 @@ function OperationalImportsContent({ session, tabs }: { session: SessionInfo; ta
       />
 
       {tabs}
+      <NexoBackupStatus worksiteId={session.worksiteId} />
       <div className="grid gap-4 lg:grid-cols-3">
         <Panel
           title="Semana operacional"
