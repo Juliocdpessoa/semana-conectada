@@ -49,7 +49,7 @@ test("outside detail and overview share the same calculation and access restrict
 test("daily HH allocation compares normalized confirmations without changing dates or raw values", () => {
   assert.match(
     source,
-    /normalizeSapCode\(activityConfirmation\(activity\)\) === normalizeSapCode\(sapRow\.confirmation\)/,
+    /normalizeSapCode\(activityConfirmation\(activity\)\)\s*===\s*normalizeSapCode\(sapRow\.confirmation\)/,
   );
   assert.match(source, /withinExecutionPeriod/);
   assert.doesNotMatch(sql, /UPDATE public\.|DELETE FROM public\.|INSERT INTO public\./);

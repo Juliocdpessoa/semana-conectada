@@ -868,12 +868,13 @@ function AtividadesPage() {
     (role) => role === "planning" || role === "admin",
   );
   const isPlanning = session.roles.includes("planning") || session.roles.includes("admin");
-  const canAccessSap = isPlanning;
-  const canExportActivities = canAccessSap || effectiveRoles.includes("operation");
+  const canViewPlanningActivityData = isPlanning || effectiveRoles.includes("operation");
+  const canViewSap = canViewPlanningActivityData;
+  const canImportSap = isPlanning;
+  const canExportActivities = canViewSap || effectiveRoles.includes("operation");
   const canFilterReleaseType = canEditPlanningFields || effectiveRoles.includes("operation");
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
-  const canLoadDateEditSettings =
-    canEditPlanningFields || session.roles.includes("admin") || isDateEditAdmin;
+  const canLoadDateEditSettings = canViewPlanningActivityData || isDateEditAdmin;
   const qc = useQueryClient();
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
@@ -985,7 +986,7 @@ function AtividadesPage() {
           "id,code,label,start_date,end_date,is_active,lifecycle_status,sap_closure_status,sap_closure_deadline",
         )
         .order("start_date", { ascending: false });
-      request = canAccessSap
+      request = canViewSap
         ? request.limit(6)
         : request.in("lifecycle_status", ["operational", "preparation"]);
       const { data, error } = await request;
@@ -1129,7 +1130,7 @@ function AtividadesPage() {
 
   const sapOverview = useQuery({
     queryKey: ["sap-confirmation-overview", activeWeek.data?.id],
-    enabled: Boolean(activeWeek.data?.id) && canAccessSap,
+    enabled: Boolean(activeWeek.data?.id) && canViewSap,
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_sap_confirmation_overview", {
         p_week_id: activeWeek.data!.id,
@@ -1142,7 +1143,7 @@ function AtividadesPage() {
 
   const sapOutsideSchedule = useQuery({
     queryKey: ["sap-outside-schedule", activeWeek.data?.id, sapOverview.data?.importedRows],
-    enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapOverview.data?.hasImport),
+    enabled: Boolean(activeWeek.data?.id) && canViewSap && Boolean(sapOverview.data?.hasImport),
     queryFn: async () => {
       const { data, error } = await (supabase as any).rpc("get_sap_outside_schedule", {
         p_week_id: activeWeek.data!.id,
@@ -1155,7 +1156,7 @@ function AtividadesPage() {
 
   const sapLatestImport = useQuery({
     queryKey: ["sap-confirmation-latest-import", activeWeek.data?.id],
-    enabled: Boolean(activeWeek.data?.id) && canAccessSap,
+    enabled: Boolean(activeWeek.data?.id) && canViewSap,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("sap_confirmation_imports")
@@ -1173,7 +1174,7 @@ function AtividadesPage() {
 
   const sapLatestRows = useQuery({
     queryKey: ["sap-confirmation-latest-rows", sapLatestImport.data?.id],
-    enabled: Boolean(sapLatestImport.data?.id) && canAccessSap,
+    enabled: Boolean(sapLatestImport.data?.id) && canViewSap,
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from("sap_confirmation_rows")
@@ -1190,7 +1191,7 @@ function AtividadesPage() {
 
   const sapAllocationActivities = useQuery({
     queryKey: ["sap-allocation-activities-v3", activeWeek.data?.id],
-    enabled: Boolean(activeWeek.data?.id) && canAccessSap && Boolean(sapLatestImport.data?.id),
+    enabled: Boolean(activeWeek.data?.id) && canViewSap && Boolean(sapLatestImport.data?.id),
     queryFn: async () => {
       const pageSize = 500;
       const loadPage = async (pageIndex: number) => {
@@ -1246,7 +1247,8 @@ function AtividadesPage() {
       let candidates = withinExecutionPeriod.length > 0 ? withinExecutionPeriod : group;
       const confirmationMatches = candidates.filter(
         (activity) =>
-          normalizeSapCode(activityConfirmation(activity)) === normalizeSapCode(sapRow.confirmation),
+          normalizeSapCode(activityConfirmation(activity)) ===
+          normalizeSapCode(sapRow.confirmation),
       );
       if (confirmationMatches.length > 0) candidates = confirmationMatches;
       candidates.sort(
@@ -1294,7 +1296,7 @@ function AtividadesPage() {
   // Keep the established daily HH allocation as the source of effective statuses.
   const serverActivityFilters = {
     ...activityFilters,
-    ...(canAccessSap ? { sapStatuses: sapStatusFilters, sapStatusById: effectiveSapStatuses } : {}),
+    ...(canViewSap ? { sapStatuses: sapStatusFilters, sapStatusById: effectiveSapStatuses } : {}),
   };
   const activities = useQuery({
     queryKey: [
@@ -1428,7 +1430,7 @@ function AtividadesPage() {
   }
 
   function toggleSapStatus(status: SapConfirmationStatus) {
-    if (!canAccessSap) return;
+    if (!canViewSap) return;
     setSapStatusFilters((current) =>
       current.includes(status) ? current.filter((item) => item !== status) : [...current, status],
     );
@@ -1449,7 +1451,7 @@ function AtividadesPage() {
 
   function refreshActivitiesAndSapStatus() {
     void qc.invalidateQueries({ queryKey: ["activities"] });
-    if (!activeWeek.data?.id || !canAccessSap) return;
+    if (!activeWeek.data?.id || !canViewSap) return;
     void qc.invalidateQueries({
       queryKey: ["sap-confirmation-overview", activeWeek.data.id],
     });
@@ -1467,7 +1469,7 @@ function AtividadesPage() {
     gerFilters.length > 0 ? "1" : "",
     dateFilters.length > 0 ? "1" : "",
     originFilters.length > 0 ? "1" : "",
-    canAccessSap && sapStatusFilters.length > 0 ? "1" : "",
+    canViewSap && sapStatusFilters.length > 0 ? "1" : "",
   ].filter(Boolean).length;
 
   function clearFilters() {
@@ -1724,7 +1726,7 @@ function AtividadesPage() {
     try {
       const fetched = (await fetchActivitiesPage(0, 5000)).rows;
       const filtered =
-        canAccessSap && sapStatusFilters.length > 0
+        canViewSap && sapStatusFilters.length > 0
           ? fetched.filter((row) => {
               const status = sapStatusForActivity(row);
               return Boolean(status && sapStatusFilters.includes(status));
@@ -1737,7 +1739,7 @@ function AtividadesPage() {
         "Ger",
         "Nº PT",
         "Cor da PT",
-        ...(canAccessSap ? ["Status SAP", "HH programado", "HH apropriado SAP"] : []),
+        ...(canViewSap ? ["Status SAP", "HH programado", "HH apropriado SAP"] : []),
       ];
       const exportHeaders = [
         ...ACTIVITY_EXPORT_COLUMNS,
@@ -1806,7 +1808,7 @@ function AtividadesPage() {
           row["Nº PT"] = planningValue(activity, "pt_number");
           const color = effectivePtColor(activity);
           row["Cor da PT"] = color ? PT_COLOR_LABELS[color] : "";
-          if (canAccessSap) {
+          if (canViewSap) {
             row["Status SAP"] = sapStatusForActivity(activity) ?? "Sem carga SAP";
             row["HH programado"] = activityHours(activity.planning_data);
             row["HH apropriado SAP"] = appropriatedSapHours(activity) ?? "";
@@ -1850,6 +1852,7 @@ function AtividadesPage() {
   }
 
   async function prepareSapImport(file: File) {
+    if (!canImportSap) return;
     try {
       setIsSapImporting(true);
       setSapImportPreview(await parseSapWorkbook(file));
@@ -1863,7 +1866,7 @@ function AtividadesPage() {
   }
 
   async function confirmSapImport() {
-    if (!activeWeek.data || !sapImportPreview || isSapImporting) return;
+    if (!canImportSap || !activeWeek.data || !sapImportPreview || isSapImporting) return;
     setIsSapImporting(true);
     try {
       const { data, error } = await (supabase as any).rpc("import_sap_confirmations", {
@@ -2323,33 +2326,37 @@ function AtividadesPage() {
                 ))}
               </select>
             )}
-            {canAccessSap && (
+            {canViewSap && (
               <>
-                <button
-                  onClick={() => sapImportInputRef.current?.click()}
-                  disabled={
-                    isSapImporting ||
-                    !activeWeek.data ||
-                    activeWeek.data.sap_closure_status === "closed" ||
-                    (activeWeek.data.sap_closure_deadline &&
-                      new Date(activeWeek.data.sap_closure_deadline) < new Date())
-                  }
-                  className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
-                  title={`Importar a extração SAP para ${activeWeek.data?.label ?? "a semana selecionada"}`}
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  {isSapImporting ? "Lendo SAP…" : "Importar SAP"}
-                </button>
-                <input
-                  ref={sapImportInputRef}
-                  type="file"
-                  accept=".xlsx,.xls,.csv"
-                  className="hidden"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) void prepareSapImport(file);
-                  }}
-                />
+                {canImportSap && (
+                  <>
+                    <button
+                      onClick={() => sapImportInputRef.current?.click()}
+                      disabled={
+                        isSapImporting ||
+                        !activeWeek.data ||
+                        activeWeek.data.sap_closure_status === "closed" ||
+                        (activeWeek.data.sap_closure_deadline &&
+                          new Date(activeWeek.data.sap_closure_deadline) < new Date())
+                      }
+                      className="btn-ghost h-10 min-h-10 justify-center px-3 py-0 text-xs"
+                      title={`Importar a extração SAP para ${activeWeek.data?.label ?? "a semana selecionada"}`}
+                    >
+                      <Upload className="h-3.5 w-3.5" />
+                      {isSapImporting ? "Lendo SAP…" : "Importar SAP"}
+                    </button>
+                    <input
+                      ref={sapImportInputRef}
+                      type="file"
+                      accept=".xlsx,.xls,.csv"
+                      className="hidden"
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        if (file) void prepareSapImport(file);
+                      }}
+                    />
+                  </>
+                )}
                 <button
                   onClick={exportPrintableSchedule}
                   disabled={isPrinting || planningSavePending || kpis.total === 0}
@@ -2585,7 +2592,7 @@ function AtividadesPage() {
         aria-label="Indicadores SAP"
         className="mb-5 rounded-md border border-border bg-card p-3"
       >
-        {canAccessSap && sapOverview.data?.hasImport && (
+        {canViewSap && sapOverview.data?.hasImport && (
           <div className="mb-3 flex items-center justify-between gap-3">
             <div className="min-w-0 flex-1 overflow-x-auto">
               <div className="flex min-w-max items-baseline gap-1 whitespace-nowrap text-[11px] text-muted-foreground">
@@ -2621,10 +2628,10 @@ function AtividadesPage() {
         <div
           className={cn(
             "grid grid-cols-2 gap-2 sm:grid-cols-4",
-            canAccessSap && sapOverview.data?.hasImport ? "xl:grid-cols-9" : "xl:grid-cols-7",
+            canViewSap && sapOverview.data?.hasImport ? "xl:grid-cols-9" : "xl:grid-cols-7",
           )}
         >
-          {canAccessSap && sapOverview.data?.hasImport && (
+          {canViewSap && sapOverview.data?.hasImport && (
             <>
               {SAP_STATUS_OPTIONS.map((status) => (
                 <button
@@ -2737,7 +2744,7 @@ function AtividadesPage() {
             }
           />
         )}
-        {canAccessSap && sapOverview.data?.hasImport && (
+        {canViewSap && sapOverview.data?.hasImport && (
           <FilterMultiSelect
             options={SAP_STATUS_OPTIONS}
             selected={sapStatusFilters}
@@ -2947,7 +2954,7 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Ordem / Nota</th>
                     <th className="px-2 py-2 text-left font-semibold">Oper / Sub</th>
                     <th className="px-2 py-2 text-left font-semibold">Atividade</th>
-                    {canEditPlanningFields && (
+                    {canViewPlanningActivityData && (
                       <th className="px-2 py-2 text-left font-semibold">Localização</th>
                     )}
                     <th className="px-2 py-2 text-left font-semibold">Área / Especialidade</th>
@@ -2956,7 +2963,7 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
-                    {canAccessSap && (
+                    {canViewSap && (
                       <>
                         <th className="px-2 py-2 text-left font-semibold">Status SAP</th>
                         <th className="px-2 py-2 text-right font-semibold">HH programado</th>
@@ -3008,7 +3015,7 @@ function AtividadesPage() {
                           <div className="text-foreground">{r.description}</div>
                         </div>
                       </td>
-                      {canEditPlanningFields && (
+                      {canViewPlanningActivityData && (
                         <td className="px-2 py-2 align-top text-[11px]">
                           {fmtPlan(r.planning_data, "Localização") ?? "—"}
                         </td>
@@ -3082,7 +3089,7 @@ function AtividadesPage() {
                           </div>
                         )}
                       </td>
-                      {canAccessSap && (
+                      {canViewSap && (
                         <>
                           <td className="px-2 py-2 align-top">
                             <SapStatusPill status={sapStatusForActivity(r)} />
@@ -3177,7 +3184,7 @@ function AtividadesPage() {
                       {r.area}
                       {r.specialty ? ` · ${r.specialty}` : ""} · {formatDate(r.scheduled_date)}
                     </div>
-                    {canEditPlanningFields && (
+                    {canViewPlanningActivityData && (
                       <div className="mt-1 text-[10px] text-muted-foreground">
                         Localização: {fmtPlan(r.planning_data, "Localização") ?? "—"}
                       </div>
@@ -3208,7 +3215,7 @@ function AtividadesPage() {
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <div className="flex flex-wrap items-center gap-1.5">
                     <StatusPill status={r.status} />
-                    {canAccessSap && <SapStatusPill status={sapStatusForActivity(r)} />}
+                    {canViewSap && <SapStatusPill status={sapStatusForActivity(r)} />}
                   </div>
                   {canUpdateActivities && (
                     <button onClick={() => setEditing(r)} className="btn-primary py-1.5 text-xs">
@@ -3220,7 +3227,7 @@ function AtividadesPage() {
                     </button>
                   )}
                 </div>
-                {canAccessSap && (
+                {canViewSap && (
                   <div className="mt-2 grid grid-cols-2 gap-2 rounded-md border border-border/70 bg-muted/40 px-2 py-1.5 text-[10px]">
                     <div>
                       <span className="text-muted-foreground">HH programado</span>
@@ -3284,7 +3291,7 @@ function AtividadesPage() {
         </>
       )}
 
-      {canAccessSap && sapUnprogrammedOpen && (
+      {canViewSap && sapUnprogrammedOpen && (
         <Modal
           title={
             sapUnprogrammedOpen === "IMEDIATA"
@@ -3344,7 +3351,7 @@ function AtividadesPage() {
         </Modal>
       )}
 
-      {canAccessSap && sapImportPreview && activeWeek.data && (
+      {canImportSap && sapImportPreview && activeWeek.data && (
         <Modal
           title="Conferir importação SAP"
           description={`A carga ficará vinculada à obra atual e à ${activeWeek.data.label}.`}

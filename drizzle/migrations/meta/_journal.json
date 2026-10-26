@@ -197,6 +197,13 @@
       "when": 1792929600000,
       "tag": "0027_fix_sap_programming_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1793016000000,
+      "tag": "0028_operation_activity_read_view",
+      "breakpoints": true
     }
   ]
 }
