@@ -204,6 +204,13 @@
       "when": 1793016000000,
       "tag": "0028_operation_activity_read_view",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1793026800000,
+      "tag": "0029_rs_center_pending_tasks",
+      "breakpoints": true
     }
   ]
 }

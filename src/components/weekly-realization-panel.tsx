@@ -5,6 +5,7 @@ import { RsAlertBadge } from "@/components/rs-alert-badge";
 import { AvailabilityHistoryDetails } from "@/components/availability-history-details";
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
 import { RsWeekSelector } from "@/components/rs-week-selector";
+import { RsCenterPendingTasks } from "@/components/rs-center-pending-tasks";
 import {
   consolidateMonthlyRs,
   rsWeekOverlapsMonth,
@@ -721,6 +722,21 @@ function RsContent({
     specialty: string;
     includedInRs: boolean;
   } | null>(null);
+  const [selectedCenter, setSelectedCenter] = useState<string | null>(null);
+  const pendingSources = data.consolidated
+    ? data.consolidated.weeks.map((item) => ({
+        week_id: item.week.id,
+        closure_id: item.isFrozen ? (item.closure?.id ?? null) : null,
+      }))
+    : [{ week_id: week.id, closure_id: data.isFrozen ? (data.closure?.id ?? null) : null }];
+  const pendingRevision = JSON.stringify([
+    pendingSources,
+    local,
+    data.consolidated?.weeks.map((item) => item.source?.imported_at) ?? data.source?.imported_at,
+  ]);
+  useEffect(() => {
+    setSelectedCenter(null);
+  }, [pendingRevision, selectedSpecialty?.specialty, selectedSpecialty?.includedInRs]);
   useEffect(() => {
     if (hideNonRs)
       setSelectedSpecialty((selected) => (selected?.includedInRs === false ? null : selected));
@@ -940,44 +956,85 @@ function RsContent({
                         </tr>
                       )}
                       {expanded &&
-                        centerRows.map((center) => (
-                          <tr
-                            key={center.center}
-                            className="border-b border-border/50 bg-primary/5"
-                          >
-                            <td className="p-2 pl-7 font-medium">
-                              <span className="mr-2 text-muted-foreground" aria-hidden="true">
-                                ↳
-                              </span>
-                              {center.center}
-                            </td>
-                            {[center.available, center.programmed, center.programmedConsidered].map(
-                              (value, i) => (
+                        centerRows.map((center, centerIndex) => (
+                          <Fragment key={center.center}>
+                            <tr className="border-b border-border/50 bg-primary/5">
+                              <td className="p-2 pl-7 font-medium">
+                                <span className="mr-2 text-muted-foreground" aria-hidden="true">
+                                  ↳
+                                </span>
+                                <button
+                                  type="button"
+                                  className="inline-flex items-center gap-1 text-primary underline underline-offset-2 hover:opacity-80"
+                                  aria-expanded={selectedCenter === center.center}
+                                  aria-controls={
+                                    selectedCenter === center.center
+                                      ? `rs-pending-${index}-${centerIndex}`
+                                      : undefined
+                                  }
+                                  aria-label={`Ver tarefas sem apropriação SAP de ${center.center}`}
+                                  onClick={() =>
+                                    setSelectedCenter((old) =>
+                                      old === center.center ? null : center.center,
+                                    )
+                                  }
+                                >
+                                  <ChevronDown
+                                    aria-hidden="true"
+                                    className={`h-3.5 w-3.5 transition-transform ${selectedCenter === center.center ? "" : "-rotate-90"}`}
+                                  />
+                                  {center.center}
+                                </button>
+                              </td>
+                              {[
+                                center.available,
+                                center.programmed,
+                                center.programmedConsidered,
+                              ].map((value, i) => (
                                 <td className="p-2 text-right" key={i}>
                                   {number(value)}
                                 </td>
-                              ),
-                            )}
-                            <td className="p-2 text-right">
-                              {center.occupation === null
-                                ? "—"
-                                : number(center.occupation * 100) + "%"}
-                            </td>
-                            {[
-                              center.completed,
-                              center.completedForRs,
-                              center.immediate,
-                              center.considered,
-                              center.excess,
-                            ].map((value, i) => (
-                              <td className="p-2 text-right" key={i}>
-                                {hasSource ? number(value) : "—"}
+                              ))}
+                              <td className="p-2 text-right">
+                                {center.occupation === null
+                                  ? "—"
+                                  : number(center.occupation * 100) + "%"}
                               </td>
-                            ))}
-                            <td className="p-2 text-right">
-                              <RsAlertBadge value={center.rs} included={center.includedInRs} />
-                            </td>
-                          </tr>
+                              {[
+                                center.completed,
+                                center.completedForRs,
+                                center.immediate,
+                                center.considered,
+                                center.excess,
+                              ].map((value, i) => (
+                                <td className="p-2 text-right" key={i}>
+                                  {hasSource ? number(value) : "—"}
+                                </td>
+                              ))}
+                              <td className="p-2 text-right">
+                                <RsAlertBadge value={center.rs} included={center.includedInRs} />
+                              </td>
+                            </tr>
+                            {selectedCenter === center.center && (
+                              <tr
+                                id={`rs-pending-${index}-${centerIndex}`}
+                                className="bg-primary/5"
+                              >
+                                <td colSpan={11} className="px-5 py-4">
+                                  <RsCenterPendingTasks
+                                    key={center.center + pendingRevision}
+                                    center={center.center}
+                                    sources={pendingSources}
+                                    local={local}
+                                    userId={userId}
+                                    worksiteId={worksiteId}
+                                    revision={pendingRevision}
+                                    onClose={() => setSelectedCenter(null)}
+                                  />
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
                         ))}
                     </Fragment>
                   );
