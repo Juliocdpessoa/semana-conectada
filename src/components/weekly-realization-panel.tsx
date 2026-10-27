@@ -176,6 +176,16 @@ export function WeeklyRealizationPanel({
       : week
         ? [week]
         : [];
+  const evolutionPanel =
+    mode === "indicator" && !weeks.isError ? (
+      <RsWeeklyEvolution
+        weeks={visibleWeeks}
+        local={local}
+        userId={userId}
+        worksiteId={worksiteId}
+        selectedIds={activeWeeks.map((item) => item.id)}
+      />
+    ) : null;
   return (
     <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
       <PageHeader
@@ -320,6 +330,7 @@ export function WeeklyRealizationPanel({
           />
         ) : mode === "indicator" && activeWeeks.length > 1 ? (
           <SelectedWeeksResults
+            afterResults={evolutionPanel}
             weeks={activeWeeks}
             userId={userId}
             worksiteId={worksiteId}
@@ -329,6 +340,7 @@ export function WeeklyRealizationPanel({
           />
         ) : activeWeeks[0] ? (
           <WeeklyResults
+            afterResults={evolutionPanel}
             key={activeWeeks[0].id}
             week={activeWeeks[0]}
             userId={userId}
@@ -351,20 +363,12 @@ export function WeeklyRealizationPanel({
           )
         )}
       </div>
-      {mode === "indicator" && !weeks.isError && (
-        <RsWeeklyEvolution
-          weeks={visibleWeeks}
-          local={local}
-          userId={userId}
-          worksiteId={worksiteId}
-          selectedIds={activeWeeks.map((item) => item.id)}
-        />
-      )}
     </main>
   );
 }
 
 function SelectedWeeksResults({
+  afterResults,
   weeks,
   userId,
   worksiteId,
@@ -372,6 +376,7 @@ function SelectedWeeksResults({
   local,
   hideNonRs,
 }: {
+  afterResults?: ReactNode;
   weeks: Week[];
   userId: string;
   worksiteId: string;
@@ -504,6 +509,7 @@ function SelectedWeeksResults({
           </p>
         )}
         <RsContent
+          afterResults={afterResults}
           week={weeks[0]}
           data={data}
           userId={userId}
@@ -521,6 +527,7 @@ function SelectedWeeksResults({
 }
 
 function WeeklyResults({
+  afterResults,
   week,
   userId,
   worksiteId,
@@ -530,6 +537,7 @@ function WeeklyResults({
   local,
   hideNonRs,
 }: {
+  afterResults?: ReactNode;
   week: Week;
   userId: string;
   worksiteId: string;
@@ -622,6 +630,7 @@ function WeeklyResults({
       </div>
       <div className="min-w-0 2xl:col-span-7">
         <RsContent
+          afterResults={afterResults}
           key={week.id + local}
           week={week}
           data={data.data}
@@ -640,6 +649,7 @@ function WeeklyResults({
 }
 
 function RsContent({
+  afterResults,
   week,
   data,
   onSaved,
@@ -648,6 +658,7 @@ function RsContent({
   local,
   hideNonRs,
 }: {
+  afterResults?: ReactNode;
   week: Week;
   data: RsData;
   worksiteCode: string;
@@ -1093,6 +1104,7 @@ function RsContent({
             O RS requer disponibilidade total positiva, HH válidos e TP semanal maior que zero.
           </p>
         )}
+      {afterResults}
       {data.consolidated ? (
         <Panel title="Memória de cálculo">
           <p className="text-xs text-muted-foreground">
