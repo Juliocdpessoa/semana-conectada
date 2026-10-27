@@ -1,4 +1,6 @@
 import type { MonthlyRsWeek } from "./monthly-realization.ts";
+import { availabilityKey } from "./weekly-availability.ts";
+import { calculateWeeklyRealization } from "./weekly-realization.ts";
 
 export type EvolutionWeek = MonthlyRsWeek["week"];
 export const EVOLUTION_PAGE_SIZE = 12;
@@ -24,11 +26,55 @@ export function evolutionWindow(weeks: EvolutionWeek[], page = 0) {
   };
 }
 
-export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[]) {
+export function evolutionCenters(reports: MonthlyRsWeek[]) {
+  return [
+    ...new Set(
+      reports.flatMap((report) =>
+        (report.calculation?.centerRows ?? [])
+          .filter(
+            (row) =>
+              row.includedInRs && (row.available > 0 || row.programmed > 0) && row.center?.trim(),
+          )
+          .map((row) => availabilityKey(row.center!)),
+      ),
+    ),
+  ].sort((a, b) => a.localeCompare(b, "pt-BR"));
+}
+
+export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[], center = "") {
   const byId = new Map(reports.map((report) => [report.week.id, report]));
   return weeks.map((week) => {
     const report = byId.get(week.id);
-    const result = report?.calculation?.result;
+    const centerRows = center
+      ? (report?.calculation?.centerRows ?? []).filter(
+          (row) =>
+            row.includedInRs && availabilityKey(row.center ?? "") === availabilityKey(center),
+        )
+      : [];
+    const available = centerRows.reduce((sum, row) => sum + row.available, 0);
+    // Reuse the center result, including frozen values and genuine zero.
+    // If several specialties share a center, combine capped HH, never average percentages.
+    const centerRs =
+      centerRows.length &&
+      available > 0 &&
+      centerRows.every((row) => row.rs !== null && Number.isFinite(row.rs))
+        ? centerRows.length === 1
+          ? centerRows[0].rs!
+          : (centerRows.reduce((sum, row) => sum + row.considered, 0) / available) * 100
+        : null;
+    const centerBand =
+      centerRs === null
+        ? null
+        : calculateWeeklyRealization({
+            programmed: 100,
+            reference: 100,
+            completed: centerRs,
+            immediate: 0,
+            eep: 0,
+          });
+    const result = center
+      ? centerBand && { ...centerBand, rs: centerRs! }
+      : report?.calculation?.result;
     const rs =
       report?.valid && result && Number.isFinite(result.rs) && result.rs >= 0 ? result.rs : null;
     return {
@@ -37,7 +83,11 @@ export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[]
       rs,
       factor: rs === null ? null : result!.factor,
       frozen: report?.isFrozen ?? false,
-      issues: report?.issues?.length ? report.issues : rs === null ? ["Sem apuração válida"] : [],
+      issues: report?.issues?.length
+        ? report.issues
+        : rs === null
+          ? [center ? "Centro sem base válida de RS nesta semana" : "Sem apuração válida"]
+          : [],
     };
   });
 }

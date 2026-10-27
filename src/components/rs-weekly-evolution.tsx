@@ -19,6 +19,7 @@ import { supabase } from "@/integrations/supabase/client";
 import type { MonthlyRsWeek } from "@/lib/monthly-realization";
 import {
   evolutionColor,
+  evolutionCenters,
   evolutionPoints,
   evolutionWindow,
   type EvolutionWeek,
@@ -42,6 +43,8 @@ export function RsWeeklyEvolution({
   selectedIds: string[];
 }) {
   const [page, setPage] = useState(0);
+  const [center, setCenter] = useState("");
+  useEffect(() => setCenter(""), [userId, worksiteId]);
   const [visible, setVisible] = useState(false);
   const anchor = useRef<HTMLDivElement>(null);
   const scope = weeks
@@ -91,20 +94,39 @@ export function RsWeeklyEvolution({
       return data.weeks as MonthlyRsWeek[];
     },
   });
-  const points = evolutionPoints(window.weeks, query.data ?? []);
+  const centers = evolutionCenters(query.data ?? []);
+  const points = evolutionPoints(window.weeks, query.data ?? [], center);
   const measured = points.filter((point) => point.rs !== null);
   return (
     <div ref={anchor} className="mt-5">
       <Panel
         title="Evolução semanal do RS"
-        description={`Ano e mês dos filtros · ${local || "IARI + ROTINA"} · até 12 semanas por página`}
+        description={`Ano e mês dos filtros · ${local || "IARI + ROTINA"} · ${center || "Todos os centros do RS"} · até 12 semanas por página`}
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
             Resultado de cada semana, preservando os fechamentos oficiais. Semanas em apuração podem
             mudar.
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-xs">
+              <span className="mb-1 block">Centro de trabalho</span>
+              <select
+                className="input-base h-8 min-w-[12rem]"
+                value={center}
+                onChange={(event) => setCenter(event.target.value)}
+              >
+                <option value="">Todos os centros do RS</option>
+                {center && !centers.includes(center) && (
+                  <option value={center}>{center} · sem base neste recorte</option>
+                )}
+                {centers.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
             <button
               className="btn-outline h-8"
               disabled={window.page >= window.pages - 1}

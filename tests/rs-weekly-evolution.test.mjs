@@ -5,6 +5,7 @@ import {
   evolutionPoints,
   evolutionColor,
   evolutionLabel,
+  evolutionCenters,
 } from "../src/lib/rs-weekly-evolution.ts";
 const week = (id) => ({
   id,
@@ -68,4 +69,62 @@ test("colors use the existing contractual factor without recapping RS", () => {
 test("axis labels retain week and year without long programming suffix", () => {
   assert.equal(evolutionLabel(week("43")), "S43 · 26");
   assert.equal(evolutionLabel({ ...week("a"), code: "Especial" }), "Especial");
+});
+test("center filter uses capped credit and available hours, not the general result", () => {
+  const report = {
+    week: week("43"),
+    valid: true,
+    isFrozen: true,
+    calculation: {
+      result: { rs: 12, factor: -0.02 },
+      centerRows: [
+        {
+          center: "CALD",
+          includedInRs: true,
+          programmed: 100,
+          programmedConsidered: 100,
+          considered: 98,
+          available: 100,
+          rs: 98,
+        },
+        {
+          center: "SOLD",
+          includedInRs: true,
+          programmed: 200,
+          programmedConsidered: 200,
+          considered: 100,
+          available: 200,
+          rs: 50,
+        },
+        { center: "HIDROJAT", includedInRs: false, programmed: 100, available: 100, rs: 99 },
+        { center: "ZERO", includedInRs: true, programmed: 0, available: 0, rs: null },
+      ],
+    },
+  };
+  assert.deepEqual(evolutionCenters([report, report]), ["CALD", "SOLD"]);
+  const [point] = evolutionPoints([week("43")], [report], "cald");
+  assert.equal(point.rs, 98);
+  assert.equal(point.factor, 0);
+  assert.equal(point.frozen, true);
+  assert.equal(evolutionPoints([week("43")], [report])[0].rs, 12);
+  assert.equal(evolutionPoints([week("43")], [report], "MISSING")[0].rs, null);
+  assert.equal(evolutionPoints([week("43")], [report], "HIDROJAT")[0].rs, null);
+  const zero = {
+    ...report,
+    calculation: {
+      ...report.calculation,
+      centerRows: [
+        {
+          center: "CALD",
+          includedInRs: true,
+          programmed: 0,
+          programmedConsidered: 0,
+          considered: 0,
+          available: 100,
+          rs: 0,
+        },
+      ],
+    },
+  };
+  assert.equal(evolutionPoints([week("43")], [zero], "CALD")[0].rs, 0);
 });

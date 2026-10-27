@@ -4,6 +4,7 @@ Painel ao fim de Gestão Operacional → Realização Semanal. Não altera cálc
 
 - Usa `get_monthly_rs_weeks(p_worksite_id, p_week_ids, p_local)`, a mesma fonte governada da seleção de semanas, e mostra `calculation.result.rs` e seu fator sem recalcular ou fazer média.
 - Ano/mês e local da tela recortam o histórico. A seleção de semanas acima destaca as barras, sem remover o contexto das demais semanas do período.
+- O seletor Centro de trabalho recorta apenas este painel; Todos mantém o RS geral. Usa os centros integrantes do RS com disponibilidade ou programação nas semanas carregadas. Mantém a seleção ao navegar; centro sem base em uma semana fica sem barra, nunca zero artificial. Não executa consulta adicional ao trocar o centro.
 - Histórico paginado em até 12 semanas, ordem cronológica, mais recentes inicialmente. Carrega ao entrar na área visível, cache de cinco minutos, sem polling e sem refetch ao focar a janela. Botão próprio permite atualização manual.
 - Fechamento oficial usa resultado congelado da RPC. Em apuração usa o resultado vigente e barra tracejada. Ausência/invalidez mantém `null`, nunca vira zero. O zero real continua sendo zero.
 - Cores seguem o fator já calculado: vermelho −0,02, âmbar −0,01, verde 0, azul +0,01. Eixo começa em zero e permite valores acima de 100%; referências de 95% e 98%.
