@@ -6,6 +6,7 @@ import { AvailabilityHistoryDetails } from "@/components/availability-history-de
 import { WeeklyRsArchive, type RsClosure } from "@/components/weekly-rs-archive";
 import { RsWeekSelector } from "@/components/rs-week-selector";
 import { RsCenterPendingTasks } from "@/components/rs-center-pending-tasks";
+import { RsWeeklyEvolution } from "@/components/rs-weekly-evolution";
 import {
   consolidateMonthlyRs,
   rsWeekOverlapsMonth,
@@ -350,6 +351,15 @@ export function WeeklyRealizationPanel({
           )
         )}
       </div>
+      {mode === "indicator" && !weeks.isError && (
+        <RsWeeklyEvolution
+          weeks={visibleWeeks}
+          local={local}
+          userId={userId}
+          worksiteId={worksiteId}
+          selectedIds={activeWeeks.map((item) => item.id)}
+        />
+      )}
     </main>
   );
 }
