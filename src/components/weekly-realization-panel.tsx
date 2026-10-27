@@ -924,7 +924,7 @@ function RsContent({
                     selectedSpecialty.includedInRs === r.includedInRs;
                   return (
                     <Fragment key={`${r.specialty}:${r.includedInRs}`}>
-                      <tr className="row-zebra">
+                      <tr className="row-zebra rs-hover-row">
                         <td className="p-2 font-medium">
                           <button
                             type="button"
@@ -979,7 +979,7 @@ function RsContent({
                       {expanded &&
                         centerRows.map((center, centerIndex) => (
                           <Fragment key={center.center}>
-                            <tr className="border-b border-border/50 bg-primary/5">
+                            <tr className="rs-hover-row border-b border-border/50 bg-primary/5">
                               <td className="p-2 pl-7 font-medium">
                                 <span className="mr-2 text-muted-foreground" aria-hidden="true">
                                   ↳
@@ -1062,7 +1062,7 @@ function RsContent({
                 })}
               </tbody>
               <tfoot className="border-t border-border font-semibold">
-                <tr>
+                <tr className="rs-hover-row">
                   <td className="p-2">
                     Total elegível ao RS{unmapped.length ? " · vínculo incompleto" : ""}
                   </td>

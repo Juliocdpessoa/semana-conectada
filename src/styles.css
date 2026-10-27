@@ -386,3 +386,11 @@
 .row-zebra:nth-child(even) {
   background: var(--color-surface-muted);
 }
+
+/* RS: highlight only the row under inspection, without recoloring status badges. */
+.rs-hover-row:is(:hover, :focus-within) > td {
+  background: color-mix(in oklab, var(--primary) 14%, var(--surface));
+}
+.rs-hover-row:is(:hover, :focus-within) > td:first-child {
+  box-shadow: inset 3px 0 0 var(--primary);
+}

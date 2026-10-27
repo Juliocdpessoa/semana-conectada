@@ -139,7 +139,7 @@ export function RsCenterPendingTasks({
                   {query.data.rows.map((row) => (
                     <tr
                       key={`${row.week_id}:${row.id}`}
-                      className="row-zebra border-t border-border/50 align-top"
+                      className="rs-hover-row row-zebra border-t border-border/50 align-top"
                     >
                       <td className="p-2">
                         <div>{row.week_code}</div>
