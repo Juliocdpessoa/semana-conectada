@@ -4,6 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   pendingOperationalLabel,
   pendingJustification,
+  pendingHours,
+  pendingPageHours,
   type RsPendingSource,
 } from "@/lib/rs-center-pending";
 type Row = {
@@ -15,13 +17,27 @@ type Row = {
   suboperation: string | null;
   description: string;
   scheduled_date: string | null;
+  planned_hh: number | string | null;
   status: string;
   justification: string | null;
   observation: string | null;
   justification_by: string | null;
   justification_at: string | null;
 };
-type Result = { total: number; rows: Row[]; missingSapWeeks: string[]; unknownPeriod: number };
+type Result = {
+  total: number;
+  rows: Row[];
+  missingSapWeeks: string[];
+  unknownPeriod: number;
+  totalPlannedHh: number | string | null;
+  missingPlannedHh: number;
+};
+const hours = (value: unknown) => {
+  const parsed = pendingHours(value);
+  return parsed === null
+    ? "—"
+    : parsed.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 const date = (value: string | null) => (value ? value.split("-").reverse().join("/") : "Sem data");
 export function RsCenterPendingTasks({
   center,
@@ -77,7 +93,8 @@ export function RsCenterPendingTasks({
           </h3>
           <p className="mt-1 text-muted-foreground">
             Somente tarefas sem apropriação na carga SAP do recorte. Justificativas e observações
-            vêm dos encarregados, não do SAP.
+            vêm dos encarregados, não do SAP. HH programado corresponde à tarefa/dia da programação
+            operacional; não é o HH da base oficial semanal do RS.
           </p>
         </div>
         <button type="button" onClick={onClose} className="btn-ghost text-xs">
@@ -106,6 +123,12 @@ export function RsCenterPendingTasks({
               Registros antigos com período SAP indefinido ficaram fora desta lista.
             </p>
           )}
+          {query.data.missingPlannedHh > 0 && (
+            <p role="status" className="text-warning-foreground">
+              {query.data.missingPlannedHh} tarefa(s) sem HH válido. O total fica indisponível para
+              não apresentar uma soma incompleta.
+            </p>
+          )}
           {!allMissing && (
             <p aria-live="polite" className="text-muted-foreground">
               {query.data.total} tarefa(s) sem apropriação · {local || "IARI + ROTINA"}
@@ -126,6 +149,7 @@ export function RsCenterPendingTasks({
                       "Semana / Data",
                       "Ordem / Operação",
                       "Atividade",
+                      "HH programado",
                       "Status operacional",
                       "Justificativa do encarregado",
                     ].map((v) => (
@@ -153,6 +177,7 @@ export function RsCenterPendingTasks({
                         </div>
                       </td>
                       <td className="min-w-48 p-2">{row.description}</td>
+                      <td className="p-2 text-right tabular-nums">{hours(row.planned_hh)}</td>
                       <td className="min-w-36 p-2">{pendingOperationalLabel(row.status)}</td>
                       <td className="min-w-64 p-2">
                         <p className="whitespace-pre-wrap">
@@ -175,6 +200,35 @@ export function RsCenterPendingTasks({
                     </tr>
                   ))}
                 </tbody>
+                <tfoot className="border-t-2 border-border bg-muted font-semibold">
+                  {query.data.total > 50 && (
+                    <tr className="rs-hover-row">
+                      <th scope="row" colSpan={3} className="p-2">
+                        Subtotal desta página · HH
+                      </th>
+                      <td className="p-2 text-right tabular-nums">
+                        {hours(pendingPageHours(query.data.rows))}
+                      </td>
+                      <td colSpan={2} className="p-2 font-normal text-muted-foreground">
+                        Somente as tarefas exibidas
+                      </td>
+                    </tr>
+                  )}
+                  <tr className="rs-hover-row">
+                    <th scope="row" colSpan={3} className="p-2">
+                      Total das tarefas sem apropriação · HH
+                    </th>
+                    <td className="p-2 text-right tabular-nums">
+                      {hours(query.data.totalPlannedHh)}
+                    </td>
+                    <td colSpan={2} className="p-2 font-normal text-muted-foreground">
+                      {query.data.total} tarefa(s) · todas as páginas
+                      {query.data.missingSapWeeks.length
+                        ? " · recorte parcial: há semanas sem SAP"
+                        : ""}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
