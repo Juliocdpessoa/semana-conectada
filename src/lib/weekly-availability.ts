@@ -109,6 +109,8 @@ export function validateAvailability(rows: AvailabilityRow[], week: Availability
       errors.push(`${label}: HH disponível inválido. Zero é permitido; vazio não é zero.`);
     const center = availabilityKey(row.center),
       specialty = availabilityKey(row.specialty);
+    if (center === "SERVIARI" && availabilityKey(row.local) !== "IARI")
+      errors.push(`${label}: o centro SERVIARI pertence sempre a IARI.`);
     const key = JSON.stringify([center, row.date, availabilityKey(row.local)]);
     if (keys.has(key)) errors.push(`${label}: centro, data e local duplicados.`);
     keys.add(key);

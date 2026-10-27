@@ -218,6 +218,13 @@
       "when": 1793113200000,
       "tag": "0030_rs_pending_hours",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1793124000000,
+      "tag": "0031_rs_serviari_iari",
+      "breakpoints": true
     }
   ]
 }
