@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { z } from "zod";
+import { ARCHIVE_PAGE_SIZE, archiveBatchChunks } from "./operational-archive-download";
 
 const uuid = z.string().uuid();
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
@@ -55,9 +56,9 @@ export const prepareOperationalArchive = createServerFn({ method: "POST" })
     }
   });
 
-export const loadOperationalArchiveRows = createServerFn({ method: "POST" })
+export const loadOperationalArchivePage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .validator((data: unknown) => z.object({ archiveId: uuid }).parse(data))
+  .validator((data: unknown) => z.object({ archiveId: uuid, offset: z.number().int().min(0).max(10_000_000).default(0) }).parse(data))
   .handler(async ({ data, context }) => {
     try {
       const access = await archiveAccess(context.supabase, context.userId);
@@ -65,37 +66,36 @@ export const loadOperationalArchiveRows = createServerFn({ method: "POST" })
       const db = supabaseAdmin as any;
       const { data: archive, error: archiveError } = await db
         .from("operational_archives")
-        .select("id,cutoff_date,status,overtime_count,scale_change_count")
+        .select("id,cutoff_date,status,overtime_count,scale_change_count,prepared_at")
         .eq("id", data.archiveId)
         .eq("worksite_id", access.worksiteId)
         .maybeSingle();
       if (archiveError) throw new Error(archiveError.message);
       if (!archive) throw new Error("Arquivo histórico não encontrado.");
-      const rows: any[] = [];
-      for (let from = 0; ; from += 1000) {
-        const { data: page, error } = await db
-          .from("operational_archive_rows")
-          .select("source_type,record_date,payload")
-          .eq("archive_id", data.archiveId)
-          .eq("worksite_id", access.worksiteId)
-          .order("record_date", { ascending: true })
-          .range(from, from + 999);
-        if (error) throw new Error(error.message);
-        rows.push(...(page ?? []));
-        if (!page?.length || page.length < 1000) break;
-      }
+      const { data: page, error: pageError } = await db
+        .from("operational_archive_rows")
+        .select("id,source_type,record_date,payload")
+        .eq("archive_id", data.archiveId)
+        .eq("worksite_id", access.worksiteId)
+        .order("record_date", { ascending: true })
+        .order("id", { ascending: true })
+        .range(data.offset, data.offset + ARCHIVE_PAGE_SIZE - 1);
+      if (pageError) throw new Error(pageError.message);
+      const rows: any[] = page ?? [];
       const batchIds = Array.from(
         new Set(rows.map((row) => row.payload?.batch_id).filter(Boolean)),
       ) as string[];
-      const [{ data: worksite, error: worksiteError }, batchesResult] = await Promise.all([
-        db.from("worksites").select("id,code,name,is_active,created_at,updated_at").eq("id", access.worksiteId).maybeSingle(),
-        batchIds.length
-          ? db.from("scheduled_transport_batches").select("*").in("id", batchIds)
-          : Promise.resolve({ data: [], error: null }),
-      ]);
+      const { data: worksite, error: worksiteError } = await db
+        .from("worksites").select("id,code,name,is_active,created_at,updated_at")
+        .eq("id", access.worksiteId).maybeSingle();
       if (worksiteError) throw new Error(worksiteError.message);
-      if (batchesResult.error) throw new Error(batchesResult.error.message);
-      const batchesById = new Map<string, any>((batchesResult.data ?? []).map((batch: any) => [String(batch.id), batch]));
+      const batchesById = new Map<string, any>();
+      for (const chunk of archiveBatchChunks(batchIds)) {
+        const { data: batches, error } = await db.from("scheduled_transport_batches")
+          .select("*").eq("worksite_id", access.worksiteId).in("id", chunk);
+        if (error) throw new Error(error.message);
+        for (const batch of batches ?? []) batchesById.set(batch.id, batch);
+      }
       const enrichedRows = rows.map((row) => {
         const batch = row.payload?.batch_id ? batchesById.get(row.payload.batch_id) : null;
         return {
@@ -123,7 +123,10 @@ export const loadOperationalArchiveRows = createServerFn({ method: "POST" })
           },
         };
       });
-      return { ok: true as const, archive, rows: enrichedRows };
+      const next = data.offset + rows.length;
+      const total = archive.overtime_count + archive.scale_change_count;
+      return { ok: true as const, archive, rows: enrichedRows,
+        nextOffset: next < total ? next : null };
     } catch (error) {
       return { ok: false as const, error: error instanceof Error ? error.message : "Falha ao montar o arquivo." };
     }

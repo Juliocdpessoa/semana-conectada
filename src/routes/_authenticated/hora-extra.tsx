@@ -67,9 +67,10 @@ import type { DisplayOvertimeRow, EmployeeRow, OvertimeRow } from "@/lib/overtim
 import {
   finalizeOperationalArchive,
   listOperationalArchives,
-  loadOperationalArchiveRows,
+  loadOperationalArchivePage,
   prepareOperationalArchive,
 } from "@/lib/operational-archive.functions";
+import { collectArchiveDownload } from "@/lib/operational-archive-download";
 
 export const Route = createFileRoute("/_authenticated/hora-extra")({
   beforeLoad: ({ context }) => {
@@ -612,11 +613,12 @@ function OperationalArchives() {
   const qc = useQueryClient();
   const listArchives = useServerFn(listOperationalArchives);
   const prepareArchive = useServerFn(prepareOperationalArchive);
-  const loadArchiveRows = useServerFn(loadOperationalArchiveRows);
+  const loadArchiveRows = useServerFn(loadOperationalArchivePage);
   const finalizeArchive = useServerFn(finalizeOperationalArchive);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [preparing, setPreparing] = useState(false);
   const [downloaded, setDownloaded] = useState<Set<string>>(new Set());
+  const [downloadProgress, setDownloadProgress] = useState("");
   const cutoffDate = useMemo(() => operationalWindowStart(), []);
   const archives = useQuery({
     queryKey: ["operational-archives"],
@@ -654,12 +656,16 @@ function OperationalArchives() {
   async function handleDownload(archive: OperationalArchiveRow) {
     setBusyId(archive.id);
     try {
-      const result = await loadArchiveRows({ data: { archiveId: archive.id } });
-      if (!result.ok) return toast.error(result.error);
-      const overtime = (result.rows ?? [])
+      setDownloaded((current) => { const next = new Set(current); next.delete(archive.id); return next; });
+      const rows = await collectArchiveDownload(archive, async (offset) => {
+        const result = await loadArchiveRows({ data: { archiveId: archive.id, offset } });
+        if (!result.ok) throw new Error(result.error);
+        return result;
+      }, (loaded, total) => setDownloadProgress(`Baixando ${loaded.toLocaleString("pt-BR")} de ${total.toLocaleString("pt-BR")} registros…`));
+      const overtime = rows
         .filter((row: any) => row.source_type === "overtime")
         .map((row: any) => mapArchivePayload(row.payload ?? {}));
-      const scaleChanges = (result.rows ?? [])
+      const scaleChanges = rows
         .filter((row: any) => row.source_type === "scale_change")
         .map((row: any) => mapArchivePayload(row.payload ?? {}));
       const XLSX = await import("xlsx");
@@ -677,6 +683,7 @@ function OperationalArchives() {
       toast.error(error instanceof Error ? error.message : "Não foi possível baixar o arquivo.");
     } finally {
       setBusyId(null);
+      setDownloadProgress("");
     }
   }
 
@@ -726,11 +733,12 @@ function OperationalArchives() {
               Registros desde {formatDate(cutoffDate)} e todas as programações futuras permanecem nas telas.
             </p>
           </div>
-          <button className="btn-primary" disabled={preparing} onClick={handlePrepare}>
+          <button className="btn-primary" disabled={preparing || busyId !== null} onClick={handlePrepare}>
             <Archive className="h-4 w-4" /> {preparing ? "Preparando…" : "Preparar arquivo"}
           </button>
         </div>
 
+        {downloadProgress && <p role="status" aria-live="polite" className="text-xs text-muted-foreground">{downloadProgress}</p>}
         {archives.isLoading ? (
           <p className="py-6 text-center text-[12px] text-muted-foreground">Carregando arquivos…</p>
         ) : archives.isError ? (
@@ -766,11 +774,11 @@ function OperationalArchives() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex justify-end gap-2">
-                        <button className="btn-secondary" disabled={busyId === archive.id} onClick={() => handleDownload(archive)}>
+                        <button className="btn-primary" disabled={busyId !== null || preparing} onClick={() => handleDownload(archive)}>
                           <Download className="h-3.5 w-3.5" /> Baixar Excel
                         </button>
                         {archive.status === "prepared" && (
-                          <button className="btn-primary" disabled={busyId === archive.id || !downloaded.has(archive.id)} onClick={() => handleFinalize(archive)}>
+                          <button className="btn-primary" disabled={busyId !== null || preparing || !downloaded.has(archive.id)} onClick={() => handleFinalize(archive)}>
                             Finalizar
                           </button>
                         )}
