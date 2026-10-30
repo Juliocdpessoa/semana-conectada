@@ -889,6 +889,7 @@ export const upsertEmployees = createServerFn({ method: "POST" })
       message_contact: employee.message_contact || null,
       transport_line: employee.transport_line || null,
       is_active: true,
+      deleted_at: null,
       updated_by_user_id: userId,
       updated_by_name: info.fullName,
     }));
@@ -957,6 +958,7 @@ export const updateEmployee = createServerFn({ method: "POST" })
       })
       .eq("id", data.id)
       .eq("worksite_id", info.worksiteId)
+      .is("deleted_at", null)
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
@@ -993,6 +995,7 @@ export const setEmployeeActive = createServerFn({ method: "POST" })
       })
       .eq("id", data.id)
       .eq("worksite_id", info.worksiteId)
+      .is("deleted_at", null)
       .select("id")
       .maybeSingle();
     if (error) return { ok: false as const, error: error.message };
@@ -1020,21 +1023,18 @@ export const deleteEmployee = createServerFn({ method: "POST" })
     if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
     const { data: deleted, error } = await db
       .from("employees")
-      .delete()
+      .update({
+        is_active: false,
+        deleted_at: new Date().toISOString(),
+        updated_by_user_id: userId,
+        updated_by_name: info.fullName,
+      })
       .eq("id", data.id)
       .eq("worksite_id", info.worksiteId)
+      .is("deleted_at", null)
       .select("id")
       .maybeSingle();
-    if (error) {
-      if (error.code === "23503") {
-        return {
-          ok: false as const,
-          error:
-            "Este colaborador possui registros vinculados e não pode ser excluído. Use Inativar para preservar o histórico.",
-        };
-      }
-      return { ok: false as const, error: error.message };
-    }
+    if (error) return { ok: false as const, error: error.message };
     if (!deleted) return { ok: false as const, error: "Colaborador não encontrado." };
     return { ok: true as const };
   });

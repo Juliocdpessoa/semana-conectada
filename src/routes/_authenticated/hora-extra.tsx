@@ -117,6 +117,7 @@ async function loadEmployees(activeOnly: boolean) {
     let request = (supabase as any)
       .from("employees")
       .select(EMPLOYEE_SELECT)
+      .is("deleted_at", null)
       .order("full_name")
       .range(from, from + pageSize - 1);
     if (activeOnly) request = request.eq("is_active", true);
@@ -2454,7 +2455,7 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
     try {
       const res = await removeEmployee({ data: { id: deleting.id } });
       if (!res.ok) return toast.error(res.error);
-      toast.success("Colaborador excluído.");
+      toast.success("Colaborador excluído do cadastro. Histórico preservado.");
       setDeleting(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["employees"] }),
@@ -2752,14 +2753,15 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
                 onClick={confirmDelete}
                 className="rounded bg-destructive px-3 py-2 text-[12px] font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-60"
               >
-                {changingId === deleting.id ? "Excluindo…" : "Excluir definitivamente"}
+                {changingId === deleting.id ? "Excluindo…" : "Excluir do cadastro"}
               </button>
             </>
           }
         >
           <p className="text-[12px] text-muted-foreground">
-            Esta ação remove o cadastro do colaborador e não pode ser desfeita. Cadastros vinculados
-            a registros históricos devem ser inativados em vez de excluídos.
+            O colaborador sairá desta lista e não poderá ser incluído em novas solicitações.
+            O histórico de hora extra, mudança de escala, aprovações e relatórios será preservado.
+            Uma nova importação da mesma chapa poderá reativar o cadastro, mantendo os vínculos.
           </p>
         </Modal>
       )}

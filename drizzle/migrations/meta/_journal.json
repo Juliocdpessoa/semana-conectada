@@ -225,6 +225,13 @@
       "when": 1793124000000,
       "tag": "0031_rs_serviari_iari",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1793372400000,
+      "tag": "0032_employee_logical_delete",
+      "breakpoints": true
     }
   ]
 }
