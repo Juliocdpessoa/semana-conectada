@@ -504,9 +504,9 @@ const ACTIVITY_EXPORT_COLUMNS = [
   "Justificativa",
   "Observações",
 ] as const;
-type PlanningField = "pbs" | "pt_number" | "release_type" | "scheduled_date";
+type PlanningField = "pbs" | "pt_number" | "release_type" | "libra" | "scheduled_date";
 type PlanningDraft = Record<PlanningField | "pt_color", string>;
-const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "scheduled_date"];
+const PLANNING_FIELDS: PlanningField[] = ["pbs", "pt_number", "release_type", "libra", "scheduled_date"];
 
 const GER_BY_OPERATIONAL_AREA: Record<string, string> = {
   "50": "TE",
@@ -1492,6 +1492,7 @@ function AtividadesPage() {
   function planningValue(row: ActivityRow, field: PlanningField | "pt_color"): string {
     const draft = planningDrafts[row.id];
     if (draft && Object.prototype.hasOwnProperty.call(draft, field)) return draft[field] ?? "";
+    if (field === "libra") return String(row.planning_data?.LIBRA ?? "");
     const value = row[field];
     return value == null ? "" : String(value);
   }
@@ -1518,6 +1519,7 @@ function AtividadesPage() {
 
   function normalizeGridValue(field: PlanningField, value: string): string {
     const clean = value.trim();
+    if (field === "libra" && clean.length > 120) throw new Error("LIBRA deve ter até 120 caracteres.");
     if (field === "release_type") {
       const normalized = clean.toLocaleUpperCase("pt-BR");
       if (normalized && !RELEASE_TYPES.includes(normalized as (typeof RELEASE_TYPES)[number])) {
@@ -1540,6 +1542,7 @@ function AtividadesPage() {
     const current = {
       pbs: planningValue(row, "pbs"),
       pt_number: planningValue(row, "pt_number"),
+      libra: planningValue(row, "libra"),
       pt_color: row.pt_color ?? "",
       release_type: planningValue(row, "release_type"),
       scheduled_date: planningValue(row, "scheduled_date"),
@@ -1550,6 +1553,7 @@ function AtividadesPage() {
       expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.version),
       pbs: current.pbs || null,
       ptNumber: current.pt_number || null,
+      libra: current.libra || null,
       ptColor: (current.pt_color || null) as PtColor | null,
       releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
       scheduledDate: current.scheduled_date || null,
@@ -3027,16 +3031,11 @@ function AtividadesPage() {
                         <div className="text-muted-foreground">{r.specialty}</div>
                       </td>
                       {(
-                        ["pbs", "pt_number", "release_type", "scheduled_date"] as PlanningField[]
+                        ["pbs", "pt_number", "release_type", "libra", "scheduled_date"] as PlanningField[]
                       ).map((field) => {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
                           <Fragment key={field}>
-                            {field === "scheduled_date" && (
-                              <td className="px-2 py-2 align-top text-[11px]">
-                                {fmtPlan(r.planning_data, "LIBRA") ?? "—"}
-                              </td>
-                            )}
                             <td key={field} className="px-1 py-1.5 align-top text-[11px]">
                               <div
                                 className={cn(
@@ -3655,7 +3654,7 @@ function PlanningFieldsModal({
   const [grid, setGrid] = useState(() =>
     rows
       .map((row) =>
-        [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", row.scheduled_date ?? ""].join(
+        [row.pbs ?? "", row.pt_number ?? "", row.release_type ?? "", String(row.planning_data?.LIBRA ?? ""), row.scheduled_date ?? ""].join(
           "\t",
         ),
       )
@@ -3671,9 +3670,9 @@ function PlanningFieldsModal({
         );
       const parsed = lines.map((line, index) => {
         const cells = line.split("\t");
-        if (cells.length > 4) throw new Error(`A linha ${index + 1} possui mais de 4 colunas.`);
-        while (cells.length < 4) cells.push("");
-        const [pbs, ptNumber, releaseType, scheduledDate] = cells.map((cell) => cell.trim());
+        if (cells.length > 5) throw new Error(`A linha ${index + 1} possui mais de 5 colunas.`);
+        while (cells.length < 5) cells.push("");
+        const [pbs, ptNumber, releaseType, libra, scheduledDate] = cells.map((cell) => cell.trim());
         if (releaseType && !RELEASE_TYPES.includes(releaseType as (typeof RELEASE_TYPES)[number])) {
           throw new Error(
             `Tipo de liberação inválido na linha ${index + 1}. Use PT, PTT, ATRE ou Oficina.`,
@@ -3684,6 +3683,9 @@ function PlanningFieldsModal({
         }
         return {
           id: rows[index].id,
+          expectedVersion: rows[index].version,
+          ptColor: (releaseType === "ATRE" || releaseType === "OFICINAS") ? null : rows[index].pt_color,
+          libra: libra || null,
           pbs: pbs || null,
           ptNumber: ptNumber || null,
           releaseType: (releaseType || null) as (typeof RELEASE_TYPES)[number] | null,
@@ -3725,10 +3727,11 @@ function PlanningFieldsModal({
       }
     >
       <div className="space-y-3">
-        <div className="grid grid-cols-4 gap-1 rounded-md bg-muted px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
+        <div className="grid grid-cols-5 gap-1 rounded-md bg-muted px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground">
           <span>PBS</span>
           <span>Nº PT</span>
           <span>Tipo de Liberação</span>
+          <span>LIBRA</span>
           <span>Data</span>
         </div>
         <textarea
@@ -3737,7 +3740,7 @@ function PlanningFieldsModal({
           rows={Math.min(16, Math.max(5, rows.length))}
           spellCheck={false}
           className="input-base min-h-40 w-full resize-y whitespace-pre font-mono text-xs"
-          placeholder={"PBS\tNº PT\tPT\t2026-08-24"}
+          placeholder={"PBS\tNº PT\tPT\tLIBRA\t2026-08-24"}
           aria-label="Dados de liberação em formato de planilha"
         />
         <p className="text-[11px] text-muted-foreground">
@@ -4021,6 +4024,7 @@ const HISTORY_LABELS: Record<string, string> = {
   pt_number: "Nº PT",
   pt_color: "Cor da PT",
   release_type: "Tipo de Liberação",
+  libra: "LIBRA",
   d1_date: "Data D-1",
   is_immediate: "Atividade imediata",
 };

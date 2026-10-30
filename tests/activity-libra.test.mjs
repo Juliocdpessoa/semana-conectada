@@ -11,5 +11,6 @@ test("weekly model and import preserve optional LIBRA", () => {
 test("LIBRA is between release type and date with a fallback for old weeks", () => {
   const source = read("../src/routes/_authenticated/atividades.tsx");
   assert.match(source, /Tipo de Liberação<\/th>\s*<th[^>]*>LIBRA<\/th>\s*<th[^>]*>Data<\/th>/);
-  assert.match(source, /fmtPlan\(r.planning_data, "LIBRA"\) \?\? "—"/);
+  assert.match(source, /field === "libra"/);
+  assert.match(source, /String\(row.planning_data\?\.LIBRA \?\? ""\)/);
 });

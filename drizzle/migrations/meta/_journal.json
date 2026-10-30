@@ -232,6 +232,13 @@
       "when": 1793372400000,
       "tag": "0032_employee_logical_delete",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1793383200000,
+      "tag": "0033_editable_activity_libra",
+      "breakpoints": true
     }
   ]
 }

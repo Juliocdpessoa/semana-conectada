@@ -318,6 +318,7 @@ const activityPlanningFieldsSchema = z.object({
         expectedVersion: z.number().int().min(1),
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
+        libra: z.string().trim().max(120).nullable().optional(),
         ptColor: z.enum(["red", "yellow", "white"]).nullable(),
         releaseType: z.enum(["PT", "PTT", "ATRE", "OFICINAS"]).nullable(),
         scheduledDate: z
@@ -452,12 +453,14 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       const requested = data.rows[0];
       const { data: current, error: currentError } = await supabase
         .from("activities")
-        .select("id,pbs,pt_number,pt_color,release_type,scheduled_date")
+        .select("id,pbs,pt_number,pt_color,release_type,scheduled_date,planning_data")
         .eq("id", requested.id)
         .maybeSingle();
       if (currentError) return { ok: false as const, error: currentError.message };
       if (!current) return { ok: false as const, error: "Atividade não encontrada." };
+      const currentLibra = (current.planning_data as Record<string, unknown> | null)?.LIBRA;
       const changesRestrictedField =
+        (requested.libra !== undefined && (String(currentLibra ?? "").trim() || null) !== (requested.libra?.trim() || null)) ||
         (current.pbs ?? null) !== requested.pbs ||
         (current.release_type ?? null) !== requested.releaseType ||
         (current.scheduled_date ?? null) !== requested.scheduledDate;
@@ -519,6 +522,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       expected_version: row.expectedVersion,
       pbs: row.pbs,
       pt_number: row.ptNumber,
+      ...(row.libra !== undefined ? { libra: row.libra } : {}),
       pt_color: row.ptColor,
       release_type: row.releaseType,
       scheduled_date: row.scheduledDate,
