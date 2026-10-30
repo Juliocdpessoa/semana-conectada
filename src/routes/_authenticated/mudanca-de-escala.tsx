@@ -1975,7 +1975,7 @@ function EditScheduleModal({
 
 /* ---------- Campo de horário (select + outro) ---------- */
 const ENTRY_TIME_OPTIONS = ["07:30", "17:30", "18:30", "06:00", "06:30"] as const;
-const DEPARTURE_TIME_OPTIONS = ["17:18", "03:18", "04:18", "04:30", "05:00", "07:00"] as const;
+const DEPARTURE_TIME_OPTIONS = ["15:48", "17:18", "03:18", "04:18", "04:30", "05:00", "07:00"] as const;
 
 function TimeSelectField({
   label,
