@@ -18,7 +18,7 @@ test('Operation retains restricted writes and cannot import SAP',()=>{
  assert.equal(a.canImportSap,false);assert.equal(a.canEditPlanningFields,false);
  assert.equal(a.canUpdateActivities,true);assert.equal(a.isOperationOnly,true);
  assert.match(page,/allowedStatuses=\{isOperationOnly \? OPERATION_WORKFLOW_STATUSES : undefined\}/);
- assert.match(page,/isOperationOnly && field === "pt_number"/);
+ assert.match(page,/isOperationOnly && \(field === "pt_number" \|\| field === "libra"\)/);
 });
 test('Planning/Admin writes remain authorized, Consulta/Leader SAP access remains unchanged',()=>{
  for(const role of ['planning','admin'])assert.equal(access([role]).canImportSap,true);

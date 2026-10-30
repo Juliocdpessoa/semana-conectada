@@ -239,6 +239,13 @@
       "when": 1793383200000,
       "tag": "0033_editable_activity_libra",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1793386800000,
+      "tag": "0034_operation_edit_libra",
+      "breakpoints": true
     }
   ]
 }

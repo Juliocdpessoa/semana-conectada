@@ -833,7 +833,7 @@ function PlanningGridCell({
             if (event.key === "Enter") event.currentTarget.blur();
           }}
           className={sharedClass}
-          aria-label={field === "pbs" ? "PBS" : field === "pt_number" ? "Número da PT" : "Data"}
+          aria-label={field === "pbs" ? "PBS" : field === "pt_number" ? "Número da PT" : field === "libra" ? "LIBRA" : "Data"}
         />
       )}
       <span
@@ -3047,7 +3047,7 @@ function AtividadesPage() {
                                   field={field}
                                   editable={
                                     (canEditPlanningFields ||
-                                      (isOperationOnly && field === "pt_number")) &&
+                                      (isOperationOnly && (field === "pt_number" || field === "libra"))) &&
                                     (field !== "scheduled_date" || canEditPlanningDate)
                                   }
                                   onChange={(value) => setPlanningValue(r.id, field, value)}

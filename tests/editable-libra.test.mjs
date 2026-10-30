@@ -13,10 +13,10 @@ test("LIBRA joins the same grid, bulk payload, modal and natural timeline",()=>{
  assert.match(v,/canEditPlanningFields \|\|/);
  assert.doesNotMatch(v,/fmtPlan\(r.planning_data, "LIBRA"\) \?\? "—"/);
 });
-test("server validates LIBRA and operation cannot change it",()=>{
+test("server validates LIBRA and passes its optional value to the scoped RPC",()=>{
  const v=read("src/lib/activities.functions.ts");
  assert.match(v,/libra: z.string\(\).trim\(\).max\(120\).nullable\(\).optional\(\)/);
- assert.match(v,/requested.libra !== undefined/);
+ assert.match(v,/const isOperation = !canEditPlanning/);
  assert.match(v,/row.libra !== undefined \? \{ libra: row.libra \}/);
 });
 test("SQL reuses locking/versioning and existing audit triggers, preserves omitted fields",()=>{
