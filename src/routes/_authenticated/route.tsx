@@ -56,6 +56,13 @@ async function loadSession(): Promise<SessionInfo | null> {
     throw new Error("Não foi possível validar sua sessão. Verifique a conexão e tente novamente.");
   }
   if (!data.user) return null;
+  const { data: passwordState, error: passwordError } = await (supabase as any).rpc("password_reset_state");
+  if (passwordError) throw new Error("Não foi possível validar sua senha. Tente novamente.");
+  if (passwordState?.required) throw redirect({ to: "/redefinir-senha" });
+  if (!passwordState?.allowed) {
+    await supabase.auth.signOut({ scope: "local" });
+    throw redirect({ to: "/auth" });
+  }
   let profile: any = null;
   let roles: any = null;
   for (let attempt = 0; attempt < 3; attempt += 1) {

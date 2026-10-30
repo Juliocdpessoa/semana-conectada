@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireSupabaseAuth } from "@/lib/password-auth";
 import { z } from "zod";
 import { increasedCapacityOverloads, capacityWarningText, type ActivityCapacity } from "./activity-capacity";
 

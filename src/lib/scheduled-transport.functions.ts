@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireSupabaseAuth } from "@/lib/password-auth";
 import { z } from "zod";
 import { requireTransportAccess, fetchAllRows, buildScheduleRows, resolveDates } from "./scheduled-transport.server";
 import { MISSING_BADGE_PREFIX, MISSING_EMPLOYEE_ID_PREFIX } from "./overtime.functions";

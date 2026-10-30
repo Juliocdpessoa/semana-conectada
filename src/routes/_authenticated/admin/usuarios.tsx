@@ -4,11 +4,14 @@ import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { setUserApproval } from "@/lib/activities.functions";
 import { createWorksite, setWorksiteMembership } from "@/lib/worksites.functions";
+import { resetUserPassword } from "@/lib/password-reset.functions";
+import { canResetPassword } from "@/lib/password-reset";
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogCancel } from "@/components/ui/alert-dialog";
 import { filterUsersBySearch } from "@/lib/user-search";
 import { toast } from "sonner";
 import type { SessionInfo } from "../route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
-import { Building2, Search, Users } from "lucide-react";
+import { Building2, Search, Users, KeyRound } from "lucide-react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 
 export const Route = createFileRoute("/_authenticated/admin/usuarios")({
@@ -27,6 +30,7 @@ type Row = {
   full_name: string;
   approval_status: "pending" | "approved" | "blocked";
   roles: AppRole[];
+  resetAudit?: { event: string; happened_at: string; actor_name: string | null };
   memberships: Array<{ worksite_id: string; is_worksite_admin: boolean }>;
 };
 
@@ -106,6 +110,9 @@ function AdminUsers() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const qc = useQueryClient();
   const call = useServerFn(setUserApproval);
+  const resetPasswordCall = useServerFn(resetUserPassword);
+  const [resetTarget, setResetTarget] = useState<Row | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
   const createWorksiteCall = useServerFn(createWorksite);
   const membershipCall = useServerFn(setWorksiteMembership);
   const isGlobalAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
@@ -123,13 +130,14 @@ function AdminUsers() {
   const users = useQuery({
     queryKey: ["admin-users", session.worksiteId],
     queryFn: async () => {
-      const [pRes, rRes, mRes] = await Promise.all([
+      const [pRes, rRes, mRes, auditRes] = await Promise.all([
         (supabase as any)
           .from("profiles")
           .select("*")
           .order("created_at", { ascending: false }),
         supabase.from("user_roles").select("*"),
         (supabase as any).from("worksite_memberships").select("user_id,worksite_id,is_worksite_admin"),
+        (supabase as any).from("password_reset_latest").select("user_id,event,happened_at,actor_name"),
       ]);
       const rolesByUser = new Map<string, string[]>();
       (rRes.data ?? []).forEach((r) => {
@@ -147,10 +155,25 @@ function AdminUsers() {
         full_name: p.full_name,
         approval_status: p.approval_status,
         roles: rolesByUser.get(p.id) ?? [],
+        resetAudit: (auditRes.data ?? []).find((event: any) => event.user_id === p.id),
         memberships: (mRes.data ?? []).filter((m: any) => m.user_id === p.id),
       })) as Row[];
     },
   });
+
+  async function confirmPasswordReset() {
+    if (!resetTarget || resettingPassword) return;
+    setResettingPassword(true);
+    try {
+      const result = await resetPasswordCall({ data: { targetUserId: resetTarget.id } });
+      if (!result.ok) return toast.error(result.error);
+      toast.success("Senha resetada para 123456. O colaborador deverá trocá-la no próximo login. Validade: 24 horas.");
+      setResetTarget(null);
+      await qc.invalidateQueries({ queryKey: ["admin-users"] });
+    } catch {
+      toast.error("Não foi possível confirmar o reset. Atualize a lista antes de tentar novamente.");
+    } finally { setResettingPassword(false); }
+  }
 
   async function updateUser(id: string, status: Row["approval_status"], roles?: AppRole[]) {
     const res = await call({ data: { targetUserId: id, approvalStatus: status, roles } });
@@ -333,7 +356,15 @@ function AdminUsers() {
                       </td>
                     )}
                     <td className="px-3 py-2 text-right">
-                      <div className="inline-flex gap-1.5">
+                      <div className="inline-flex flex-wrap justify-end gap-1.5">
+                        {(() => {
+                          const actor = users.data?.find((row) => row.id === session.userId);
+                          return actor && canResetPassword(actor, u, session.worksiteId) ? (
+                            <button type="button" onClick={() => setResetTarget(u)} className="btn-ghost py-1 text-[11px]">
+                              <KeyRound className="mr-1 h-3.5 w-3.5" /> Resetar senha
+                            </button>
+                          ) : null;
+                        })()}
                         {u.approval_status !== "approved" && (
                           <button onClick={() => updateUser(u.id, "approved")} className="btn-success py-1 text-[11px]">
                             Aprovar
@@ -348,6 +379,11 @@ function AdminUsers() {
                           </button>
                         )}
                       </div>
+                      {u.resetAudit && <p className="mt-1 max-w-[260px] text-[10px] text-muted-foreground">
+                        {u.resetAudit.event === "completed" ? "Senha alterada pelo usuário" : "Troca de senha pendente"}
+                        {" · "}{new Date(u.resetAudit.happened_at).toLocaleString("pt-BR")}
+                        {u.resetAudit.actor_name ? ` · ${u.resetAudit.actor_name}` : ""}
+                      </p>}
                     </td>
                   </tr>
                 ))}
@@ -363,6 +399,23 @@ function AdminUsers() {
         )}
       </Panel>
 
+      <AlertDialog open={Boolean(resetTarget)} onOpenChange={(open) => { if (!open && !resettingPassword) setResetTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar senha de {resetTarget?.full_name || resetTarget?.email}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A senha atual será substituída por 123456, válida por 24 horas. Avise o colaborador por um canal seguro.
+              Ele deverá definir uma nova senha antes de acessar o NEXO. O reset não aprova nem desbloqueia cadastros.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={resettingPassword}>Cancelar</AlertDialogCancel>
+            <button type="button" disabled={resettingPassword} onClick={() => void confirmPasswordReset()} className="btn-primary">
+              {resettingPassword ? "Resetando…" : "Confirmar reset"}
+            </button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <p className="mt-4 text-[11px] text-muted-foreground">
         Para se tornar o primeiro administrador, cadastre-se pela tela de login e peça a um administrador existente que
         promova seu perfil.

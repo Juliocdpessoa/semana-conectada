@@ -2,31 +2,46 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { z } from "zod";
+import { useServerFn } from "@tanstack/react-start";
+import { completeRequiredPasswordChange } from "@/lib/password-reset.functions";
+import { newPasswordSchema, type PasswordResetState } from "@/lib/password-reset";
 import { BrandLogo } from "@/components/brand-logo";
 
 export const Route = createFileRoute("/redefinir-senha")({
   component: ResetPasswordPage,
 });
 
-const passwordSchema = z.string().min(8, { message: "Mínimo 8 caracteres" }).max(72);
+const passwordSchema = newPasswordSchema;
 
 function ResetPasswordPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
+  const [resetState, setResetState] = useState<PasswordResetState | null>(null);
+  const [message, setMessage] = useState("Validando acesso…");
+  const completeChange = useServerFn(completeRequiredPasswordChange);
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    // Supabase envia o token via hash e cria a sessão automaticamente.
+    let active = true;
+    async function initialize() {
+      const { data } = await supabase.auth.getSession();
+      if (!active) return;
+      if (!data.session) { setMessage("Entre com sua senha temporária ou solicite um link em Esqueci minha senha."); return; }
+      const { data: state, error } = await (supabase as any).rpc("password_reset_state");
+      if (!active) return;
+      if (error) { setMessage("Não foi possível validar o acesso. Atualize a página e tente novamente."); return; }
+      setResetState(state);
+      setReady(Boolean(state?.required ? state.can_change : state?.allowed));
+      if (state?.required && !state.can_change)
+        setMessage(state.expired ? "A senha temporária expirou. Solicite um novo reset ao administrador." : "Saia e entre novamente com a senha temporária.");
+    }
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setTimeout(() => void initialize(), 0);
     });
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) setReady(true);
-    });
-    return () => sub.subscription.unsubscribe();
+    void initialize();
+    return () => { active = false; sub.subscription.unsubscribe(); };
   }, []);
 
   async function submit(e: React.FormEvent) {
@@ -36,11 +51,19 @@ function ResetPasswordPage() {
     if (password !== confirm) return toast.error("As senhas não coincidem");
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: parsed.data });
-      if (error) return toast.error(error.message);
+      if (!ready) return;
+      if (resetState?.required) {
+        const result = await completeChange({ data: { password: parsed.data, resetId: resetState.reset_id! } });
+        if (!result.ok) return toast.error(result.error);
+      } else {
+        const { error } = await supabase.auth.updateUser({ password: parsed.data });
+        if (error) return toast.error(error.message);
+      }
       toast.success("Senha atualizada. Faça login novamente.");
       await supabase.auth.signOut();
       navigate({ to: "/auth" });
+    } catch {
+      toast.error("Não foi possível salvar. Verifique sua conexão e tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -57,12 +80,12 @@ function ResetPasswordPage() {
         <div className="surface-card p-6">
           <h2 className="text-base font-semibold text-foreground">Definir nova senha</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Informe e confirme sua nova senha de acesso.
+            {resetState?.required ? "Troca obrigatória: escolha uma nova senha com pelo menos 8 caracteres para acessar o NEXO." : "Informe e confirme sua nova senha de acesso."}
           </p>
 
           {!ready ? (
             <p className="mt-6 text-sm text-muted-foreground">
-              Validando link de recuperação... Se esta tela não avançar, solicite um novo link em "Esqueci minha senha".
+              {message}
             </p>
           ) : (
             <form onSubmit={submit} className="mt-5 space-y-4">
@@ -87,6 +110,10 @@ function ResetPasswordPage() {
               </button>
             </form>
           )}
+          <button type="button" disabled={loading} className="btn-ghost mt-4 w-full text-xs"
+            onClick={async () => { await supabase.auth.signOut({ scope: "local" }); navigate({ to: "/auth" }); }}>
+            Sair e voltar ao login
+          </button>
         </div>
       </div>
     </div>

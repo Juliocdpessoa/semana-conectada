@@ -67,7 +67,7 @@ function AuthPage() {
         return;
       }
 
-      const parsedPw = passwordSchema.safeParse(password);
+      const parsedPw = (mode === "login" ? z.string().min(1, "Informe sua senha").max(72) : passwordSchema).safeParse(password);
       if (!parsedPw.success) return toast.error(parsedPw.error.issues[0].message);
 
       if (mode === "signup") {
@@ -107,7 +107,11 @@ function AuthPage() {
           password: parsedPw.data,
         });
         if (error) return toast.error(error.message);
-        navigate({ to: "/atividades" });
+        const { data: state, error: stateError } = await (supabase as any).rpc("password_reset_state");
+        if (stateError) { await supabase.auth.signOut({ scope: "local" }); return toast.error("Não foi possível validar o acesso. Tente novamente."); }
+        if (state?.required) navigate({ to: "/redefinir-senha" });
+        else if (!state?.allowed) { await supabase.auth.signOut({ scope: "local" }); toast.error("Entre novamente com sua senha atual."); }
+        else navigate({ to: "/atividades" });
       }
     } finally {
       setLoading(false);

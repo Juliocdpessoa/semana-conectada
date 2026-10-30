@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
+import { requireSupabaseAuth } from "@/lib/password-auth";
 
 const GLOBAL_ADMIN_EMAIL = "julio.pessoa@normatel.com.br";
 
