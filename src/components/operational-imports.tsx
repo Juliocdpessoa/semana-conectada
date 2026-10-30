@@ -84,6 +84,7 @@ const WEEKLY_TEMPLATE_COLUMNS = [
   "Local",
   "PBS",
   "Tipo de Liberação",
+  "LIBRA",
   "Status",
   "Justificativa",
   "Observações",
@@ -243,6 +244,7 @@ function parseWorkbook(
             obj[key] = row[c] ?? null;
           }
           obj.__row = i + 1;
+          obj.LIBRA = extractField(obj, "LIBRA");
           rows.push(obj);
         }
         resolve({ sheetName, rows, headerRow, rsProgram, rsProgramError });

@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -499,6 +499,7 @@ const ACTIVITY_EXPORT_COLUMNS = [
   "Local",
   "PBS",
   "Tipo de Liberação",
+  "LIBRA",
   "Status",
   "Justificativa",
   "Observações",
@@ -2961,6 +2962,7 @@ function AtividadesPage() {
                     <th className="px-2 py-2 text-left font-semibold">PBS</th>
                     <th className="px-2 py-2 text-left font-semibold">Nº PT / Cor</th>
                     <th className="px-2 py-2 text-left font-semibold">Tipo de Liberação</th>
+                    <th className="px-2 py-2 text-left font-semibold">LIBRA</th>
                     <th className="px-2 py-2 text-left font-semibold">Data</th>
                     <th className="px-2 py-2 text-left font-semibold">Status</th>
                     {canViewSap && (
@@ -3029,56 +3031,63 @@ function AtividadesPage() {
                       ).map((field) => {
                         const rowIndex = paged.findIndex((row) => row.id === r.id);
                         return (
-                          <td key={field} className="px-1 py-1.5 align-top text-[11px]">
-                            <div
-                              className={cn(
-                                field === "pt_number" && "flex min-w-[185px] items-center gap-2",
-                              )}
-                            >
-                              <PlanningGridCell
-                                value={planningValue(r, field)}
-                                field={field}
-                                editable={
-                                  (canEditPlanningFields ||
-                                    (isOperationOnly && field === "pt_number")) &&
-                                  (field !== "scheduled_date" || canEditPlanningDate)
-                                }
-                                onChange={(value) => setPlanningValue(r.id, field, value)}
-                                onCommit={(value) => commitPlanningCell(r, field, value)}
-                                onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
-                                onDragStart={() => {
-                                  dragSource.current = { rowIndex, field };
-                                  dragTarget.current = { rowIndex, field };
-                                }}
-                                onDragEnter={() => {
-                                  if (dragSource.current?.field === field) {
-                                    dragTarget.current = { rowIndex, field };
+                          <Fragment key={field}>
+                            {field === "scheduled_date" && (
+                              <td className="px-2 py-2 align-top text-[11px]">
+                                {fmtPlan(r.planning_data, "LIBRA") ?? "—"}
+                              </td>
+                            )}
+                            <td key={field} className="px-1 py-1.5 align-top text-[11px]">
+                              <div
+                                className={cn(
+                                  field === "pt_number" && "flex min-w-[185px] items-center gap-2",
+                                )}
+                              >
+                                <PlanningGridCell
+                                  value={planningValue(r, field)}
+                                  field={field}
+                                  editable={
+                                    (canEditPlanningFields ||
+                                      (isOperationOnly && field === "pt_number")) &&
+                                    (field !== "scheduled_date" || canEditPlanningDate)
                                   }
-                                }}
-                                onDragEnd={() => {
-                                  const target = dragTarget.current;
-                                  if (target)
-                                    void fillPlanningByDrag(target.rowIndex, target.field);
-                                }}
-                                onDrop={() => fillPlanningByDrag(rowIndex, field)}
-                              />
-                              {field === "pt_number" &&
-                                (hasPtColorChoice(r) ? (
-                                  <PtColorSelector
-                                    value={effectivePtColor(r)}
-                                    editable={canEditPlanningFields || isOperationOnly}
-                                    onChange={(color) => void changePtColor(r, color)}
-                                  />
-                                ) : (
-                                  <span
-                                    className="px-1 text-sm text-muted-foreground"
-                                    title="Este tipo de liberação não possui cor de PT"
-                                  >
-                                    —
-                                  </span>
-                                ))}
-                            </div>
-                          </td>
+                                  onChange={(value) => setPlanningValue(r.id, field, value)}
+                                  onCommit={(value) => commitPlanningCell(r, field, value)}
+                                  onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
+                                  onDragStart={() => {
+                                    dragSource.current = { rowIndex, field };
+                                    dragTarget.current = { rowIndex, field };
+                                  }}
+                                  onDragEnter={() => {
+                                    if (dragSource.current?.field === field) {
+                                      dragTarget.current = { rowIndex, field };
+                                    }
+                                  }}
+                                  onDragEnd={() => {
+                                    const target = dragTarget.current;
+                                    if (target)
+                                      void fillPlanningByDrag(target.rowIndex, target.field);
+                                  }}
+                                  onDrop={() => fillPlanningByDrag(rowIndex, field)}
+                                />
+                                {field === "pt_number" &&
+                                  (hasPtColorChoice(r) ? (
+                                    <PtColorSelector
+                                      value={effectivePtColor(r)}
+                                      editable={canEditPlanningFields || isOperationOnly}
+                                      onChange={(color) => void changePtColor(r, color)}
+                                    />
+                                  ) : (
+                                    <span
+                                      className="px-1 text-sm text-muted-foreground"
+                                      title="Este tipo de liberação não possui cor de PT"
+                                    >
+                                      —
+                                    </span>
+                                  ))}
+                              </div>
+                            </td>
+                          </Fragment>
                         );
                       })}
                       <td className="px-2 py-2 align-top">
