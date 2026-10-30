@@ -3,7 +3,7 @@
  * Hora Extra continua usando TRANSPORT_EXPORT_HEADERS de overtime.functions.ts (comportamento inalterado).
  * Transporte Programado usa as constantes abaixo, com consolidação por período.
  */
-import { formatDate } from "@/lib/overtime.functions";
+import { formatDate, formatDateTime } from "@/lib/overtime.functions";
 
 export type ScheduledTransportRow = {
   id: string;
@@ -64,12 +64,13 @@ export const SCHEDULED_TRANSPORT_EXPORT_HEADERS = [
   "Ordem",
   "Serviço",
   "Solicitante",
+  "Lançado em",
   "Precisa de transporte",
   "Status",
 ] as const;
 
 export const SCHEDULED_TRANSPORT_EXPORT_WIDTHS = [
-  12, 12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 20, 16,
+  12, 12, 14, 14, 32, 24, 50, 20, 24, 16, 18, 18, 16, 48, 28, 22, 20, 16,
 ] as const;
 
 export const LOGISTICS_SCHEDULED_TRANSPORT_EXPORT_HEADERS = [
@@ -226,6 +227,7 @@ export function mapScheduledTransportExportRow(group: ConsolidatedTransportGroup
     row.order_number || "",
     row.service_description || "",
     row.requester_name || row.requester_email,
+    formatDateTime(row.created_at),
     row.needs_transport ? "Sim" : "Não",
     formatScheduledStatus(row.status),
   ];

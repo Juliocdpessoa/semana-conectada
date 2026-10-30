@@ -43,7 +43,7 @@ import {
   WEEKDAY_SHORT,
 } from "@/lib/transport-export";
 import type { ScheduledTransportRow, ScheduledTransportBatch } from "@/lib/transport-export";
-import { formatDate, filterEmployees, sanitizeEmployeeRow } from "@/lib/overtime.functions";
+import { formatDate, formatDateTime, filterEmployees, sanitizeEmployeeRow } from "@/lib/overtime.functions";
 import type { EmployeeRow } from "@/lib/overtime.functions";
 
 const ALLOWED_ROLES = ["admin", "manager", "logistics"];
@@ -662,6 +662,7 @@ function ScheduledTransportPage() {
                           <th className="px-2 py-2">Ordem</th>
                           <th className="px-2 py-2">Serviço</th>
                           <th className="px-2 py-2">Solicitante</th>
+                          <th className="px-2 py-2">Lançado em</th>
                           <th className="px-2 py-2">Status</th>
                           <th className="px-2 py-2">Ação</th>
                         </tr>
@@ -703,6 +704,7 @@ function ScheduledTransportPage() {
                             <td className="px-2 py-1.5">
                               {row.requester_name || row.requester_email}
                             </td>
+                            <td className="whitespace-nowrap px-2 py-1.5">{formatDateTime(row.created_at)}</td>
                             <td className="px-2 py-1.5">{formatScheduledStatus(row.status)}</td>
                             <td className="whitespace-nowrap px-2 py-1.5">
                               {row.status === "scheduled" && (
@@ -2116,4 +2118,3 @@ function DateSelectField({
     </Field>
   );
 }
-

@@ -1652,6 +1652,7 @@ function TransportView({
                 <div className="mt-1 break-words">
                   <b>Solicitante:</b> {row.requester_name || row.requester_email}
                 </div>
+                <div className="mt-1"><b>Lançado em:</b> {formatDateTime(row.created_at)}</div>
                 <div className="mt-1">
                   <b>Transporte:</b> {row.needs_transport ? "Sim" : "Não"}
                 </div>
@@ -1676,6 +1677,7 @@ function TransportView({
                     "Ordem",
                     "Serviço",
                     "Solicitante",
+                    "Lançado em",
                     "Transporte",
                     "Status",
                   ].map((header) => (
@@ -1698,6 +1700,7 @@ function TransportView({
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.requester_name || row.requester_email}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{formatDateTime(row.created_at)}</td>
                     <td className="px-3 py-2 font-medium">{row.needs_transport ? "Sim" : "Não"}</td>
                     <td className="px-3 py-2">{formatOvertimeStatus(row.status)}</td>
                   </tr>
