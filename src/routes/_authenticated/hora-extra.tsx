@@ -3932,8 +3932,8 @@ function DecideModal({
         },
       });
       if (!res.ok) {
-        if (res.conflict) toast.error("Esta solicitação já foi decidida por outro usuário.");
-        else toast.error(res.error);
+        toast.error(res.error);
+        if (res.conflict) onDone(); // Refresh stale data; never retry an approval automatically.
         return;
       }
       toast.success(
