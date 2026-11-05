@@ -1046,77 +1046,51 @@ const decideSchema = z.object({
   comment: z.string().trim().max(2000).nullable().optional(),
 });
 
+type OvertimeDecisionResult =
+  | { ok: true; count: number; updated: Array<{ id: string; status: string; version: number }> }
+  | { ok: false; error: string; conflict?: boolean; reason?: "changed" | "decided" };
+
 export const decideOvertimeRequest = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => decideSchema.parse(data))
-  .handler(async ({ data, context }) => {
+  .handler(async ({ data, context }): Promise<OvertimeDecisionResult> => {
     const { supabase, userId } = context;
     const info = await loadRoleAndProfile(supabase, userId);
-    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager)) {
-      return {
-        ok: false as const,
-        error: "Somente gerente ou administrador aprovado pode decidir.",
-      };
-    }
-    if (data.decision === "rejected" && !data.comment?.trim()) {
-      return { ok: false as const, error: "Comentário é obrigatório para reprovação." };
-    }
+    if (info.approvalStatus !== "approved" || !(info.isAdmin || info.isManager))
+      return { ok: false, error: "Somente gerente ou administrador aprovado pode decidir." };
+    if (data.decision === "rejected" && !data.comment?.trim())
+      return { ok: false, error: "Comentário é obrigatório para reprovação." };
+    if (!info.worksiteId) return { ok: false, error: "Usuário sem obra vinculada." };
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    if (!info.worksiteId) return { ok: false as const, error: "Usuário sem obra vinculada." };
-    const { data: target, error: targetError } = await db
-      .from("overtime_requests")
-      .select("id, batch_id, status, version")
-      .eq("id", data.id)
-      .eq("worksite_id", info.worksiteId)
-      .maybeSingle();
-    if (targetError) return { ok: false as const, error: targetError.message };
-    if (!target || target.status !== "pending" || target.version !== data.expectedVersion) {
-      return { ok: false as const, conflict: true, current: target };
-    }
+    const { data: target, error: targetError } = await db.from("overtime_requests")
+      .select("id,batch_id,status,version").eq("id", data.id)
+      .eq("worksite_id", info.worksiteId).maybeSingle();
+    if (targetError) return { ok: false, error: targetError.message };
+    if (!target) return { ok: false, conflict: true, reason: "changed", error: "Solicitação não encontrada. A lista será atualizada." };
+    if (target.status !== "pending")
+      return { ok: false, conflict: true, reason: "decided", error: "Este registro não está mais pendente. A lista será atualizada." };
+    if (target.version !== data.expectedVersion)
+      return { ok: false, conflict: true, reason: "changed", error: "A solicitação foi alterada desde a consulta. Confira a lista atualizada e tente novamente." };
 
-    let batchQuery = db
-      .from("overtime_requests")
-      .select("id, status, version")
-      .eq("worksite_id", info.worksiteId);
-    batchQuery = target.batch_id
-      ? batchQuery.eq("batch_id", target.batch_id)
-      : batchQuery.eq("id", target.id);
-    const { data: batchRows, error: batchError } = await batchQuery;
-    if (batchError) return { ok: false as const, error: batchError.message };
-    if (
-      !batchRows?.length ||
-      batchRows.some(
-        (row: { status: string; version: number }) =>
-          row.status !== "pending" || row.version !== data.expectedVersion,
-      )
-    ) {
-      return { ok: false as const, conflict: true, current: target };
+    let query = db.from("overtime_requests").select("id,status,version").eq("worksite_id", info.worksiteId);
+    query = target.batch_id ? query.eq("batch_id", target.batch_id) : query.eq("id", target.id);
+    const { data: snapshot, error: snapshotError } = await query;
+    if (snapshotError) return { ok: false, error: snapshotError.message };
+    // The authenticated RPC repeats authorization and validates every member
+    // under row locks. It commits all pending decisions together or none.
+    const { data: result, error } = await (supabase as any).rpc("decide_overtime_batch", {
+      p_request_id: data.id, p_expected_version: data.expectedVersion,
+      p_snapshot: snapshot, p_decision: data.decision, p_comment: data.comment?.trim() || null,
+    });
+    if (error) {
+      if (error.code === "40001") return { ok: false, conflict: true, reason: "changed", error: "O lote foi alterado. Confira a lista atualizada e tente novamente." };
+      return { ok: false, error: error.message };
     }
-
-    const batchIds = batchRows.map((row: { id: string }) => row.id);
-    const { data: updated, error } = await db
-      .from("overtime_requests")
-      .update({
-        status: data.decision,
-        manager_comment: data.comment?.trim() || null,
-        decided_by_user_id: userId,
-        decided_by_name: info.fullName,
-        decided_by_email: info.email,
-        decided_at: new Date().toISOString(),
-        version: data.expectedVersion + 1,
-      })
-      .in("id", batchIds)
-      .eq("worksite_id", info.worksiteId)
-      .eq("status", "pending")
-      .eq("version", data.expectedVersion)
-      .select("id, status, version");
-    if (error) return { ok: false as const, error: error.message };
-    if ((updated?.length ?? 0) !== batchIds.length) {
-      return { ok: false as const, conflict: true, current: target };
-    }
-    return { ok: true as const, updated, count: updated.length };
+    if (!result || typeof result.ok !== "boolean")
+      return { ok: false, error: "Não foi possível confirmar a decisão. Atualize a lista antes de tentar novamente." };
+    return result as OvertimeDecisionResult;
   });
 
 const cancelSchema = z.object({ id: z.string().uuid(), expectedVersion: z.number().int().min(1) });
