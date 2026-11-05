@@ -260,6 +260,13 @@
       "when": 1793394000000,
       "tag": "0036_fix_password_reset_auth_transaction",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1793880000000,
+      "tag": "0037_atomic_overtime_decision",
+      "breakpoints": true
     }
   ]
 }
