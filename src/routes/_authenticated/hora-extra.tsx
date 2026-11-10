@@ -1,3 +1,4 @@
+import { canCompleteOvertimePt } from "@/lib/overtime-pt";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -31,6 +32,7 @@ import { DateRecordCalendar } from "@/components/date-record-calendar";
 import type { SessionInfo } from "./route";
 import {
   createOvertimeRequest,
+  completeOvertimePt,
   decideOvertimeRequest,
   cancelOvertimeRequest,
   updateOvertimeRequest,
@@ -244,10 +246,10 @@ function OvertimePage() {
       let from = 0;
 
       while (true) {
-        let request = supabase
+        let request = (supabase as any)
           .from("overtime_requests")
           .select(
-            "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id",
+            "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,pt_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id",
           )
           .order("created_at", { ascending: false })
           .order("id", { ascending: false })
@@ -1370,6 +1372,7 @@ function ApprovedDailyExport({
                 <div className="mt-1 break-words">
                   <b>Ordem:</b> {row.order_number || "—"}
                 </div>
+                <div className="mt-1 break-words"><b>Nº PT:</b> {row.pt_number || "—"}</div>
                 <div className="mt-1 break-words">
                   <b>Serviço:</b> {row.service_description}
                 </div>
@@ -1417,6 +1420,7 @@ function ApprovedDailyExport({
                     "Solicitante",
                     "Lançado em",
                     "Ordem",
+                    "Nº PT",
                     "Serviço",
                     "Transporte",
                     "Origem",
@@ -1444,6 +1448,7 @@ function ApprovedDailyExport({
                       {formatDateTime(row.created_at)}
                     </td>
                     <td className="px-3 py-2">{row.order_number || "—"}</td>
+                    <td className="px-3 py-2">{row.pt_number || "—"}</td>
                     <td className="max-w-[280px] px-3 py-2">{row.service_description}</td>
                     <td className="px-3 py-2">{row.needs_transport ? "Sim" : "Não"}</td>
                     <td className="whitespace-nowrap px-3 py-2">
@@ -1722,6 +1727,59 @@ function TransportView({
 }
 
 /* ---------- My Requests ---------- */
+
+function OvertimePtCell({row,onFill}:{row:DisplayOvertimeRow;onFill?:(row:OvertimeRow)=>void}) {
+ const values=new Set((row.groupMembers??[row]).map((member)=>member.pt_number?.trim()||""));
+ if(values.size>1) return <span className="text-xs text-muted-foreground">PTs distintas / pendentes</span>;
+ if(row.pt_number?.trim()) return <span className="break-words">{row.pt_number}</span>;
+ if(!canCompleteOvertimePt(row)) return <span className="text-muted-foreground">—</span>;
+ return <span className="inline-flex flex-wrap items-center gap-2">
+  <span className="rounded border border-warning/50 bg-warning/10 px-2 py-1 text-xs font-semibold text-warning-foreground">PT pendente</span>
+  {onFill && <button type="button" className="btn-outline min-h-8 text-xs" onClick={()=>onFill(row)}>Informar Nº PT</button>}
+ </span>;
+}
+
+function CompleteOvertimePtModal({row,onClose,onSaved}:{row:OvertimeRow;onClose:()=>void;onSaved:()=>void}) {
+ const call=useServerFn(completeOvertimePt);
+ const qc=useQueryClient();
+ const [pt,setPt]=useState("");
+ const [applyBatch,setApplyBatch]=useState(false);
+ const [saving,setSaving]=useState(false);
+ async function save(event:React.FormEvent) {
+  event.preventDefault(); if(saving||!pt.trim())return;
+  setSaving(true);
+  try {
+   const result=await call({data:{id:row.id,expectedVersion:row.version,ptNumber:pt.trim(),applyBatch}});
+   if(!result.ok) {
+    toast.error(result.error||"Não foi possível informar a PT.");
+    if(result.conflict) { await qc.invalidateQueries({queryKey:["overtime-requests"]});onClose(); }
+    return;
+   }
+   await qc.invalidateQueries({predicate:(query)=>String(query.queryKey[0]).startsWith("overtime")});
+   toast.success(`Nº PT informado em ${result.count??1} registro(s). A decisão de aprovação foi mantida.`);
+   onSaved();
+  } catch { toast.error("Não foi possível salvar a PT. Confira a conexão e tente novamente."); }
+  finally {setSaving(false);}
+ }
+ return <Modal title="Informar Nº PT" onClose={()=>{if(!saving)onClose();}}
+  description={`Solicitação #${row.request_number} · ${formatDate(row.overtime_date)} · ${row.employee_name}`}>
+  <form onSubmit={save} className="space-y-4">
+   <Field label="Nº PT" required>
+    <input autoFocus required maxLength={120} value={pt} onChange={(event)=>setPt(event.target.value)} className="input-base" placeholder="Nº da PT ou NA" />
+    <p className="mt-1 text-xs text-muted-foreground">Se for oficina, preencha NA. Apenas a PT será complementada, sem alterar a aprovação, horários ou demais dados.</p>
+   </Field>
+   {row.batch_id && <label className="flex items-start gap-2 text-xs">
+    <input type="checkbox" checked={applyBatch} onChange={(event)=>setApplyBatch(event.target.checked)} />
+    Aplicar também aos outros colaboradores desta mesma solicitação que ainda estão sem PT. PTs já preenchidas não serão substituídas.
+   </label>}
+   <div className="flex justify-end gap-2">
+    <button type="button" disabled={saving} onClick={onClose} className="btn-secondary">Cancelar</button>
+    <button type="submit" disabled={saving||!pt.trim()} className="btn-primary">{saving?"Salvando…":"Salvar Nº PT"}</button>
+   </div>
+  </form>
+ </Modal>;
+}
+
 function MyRequests({
   rows,
   onCancel,
@@ -1735,13 +1793,16 @@ function MyRequests({
   onDelete: (r: OvertimeRow) => void;
   onFilteredRowsChange: (rows: OvertimeRow[]) => void;
 }) {
+  const [ptTarget, setPtTarget] = useState<OvertimeRow | null>(null);
+  const [onlyMissingPt, setOnlyMissingPt] = useState(false);
+  const missingPt = useMemo(() => rows.filter(canCompleteOvertimePt), [rows]);
   const [selectedDate, setSelectedDate] = useState(() => toIsoDate(new Date()));
   const availableDates = useMemo(() => {
     return [...new Set(rows.map((row) => row.overtime_date))].sort((a, b) => b.localeCompare(a));
   }, [rows]);
   const filteredRows = useMemo(
-    () => (selectedDate ? rows.filter((row) => row.overtime_date === selectedDate) : rows),
-    [rows, selectedDate],
+    () => rows.filter((row) => (!selectedDate || row.overtime_date === selectedDate) && (!onlyMissingPt || canCompleteOvertimePt(row))),
+    [rows, selectedDate, onlyMissingPt],
   );
 
   useEffect(() => onFilteredRowsChange(filteredRows), [filteredRows, onFilteredRowsChange]);
@@ -1760,8 +1821,16 @@ function MyRequests({
     );
   }
   return (
+    <>
     <Panel title="Minhas solicitações" padded={false}>
+      {missingPt.length > 0 && <div className="m-3 rounded-md border border-warning/50 bg-warning/10 p-3 text-sm" role="status">
+        <b>{missingPt.length} registro(s) com PT pendente</b>, incluindo dias anteriores. Você pode informar mesmo após a aprovação.
+        <button type="button" className="btn-outline ml-2 text-xs" onClick={() => { setSelectedDate(""); setOnlyMissingPt(true); }}>Ver solicitações sem PT</button>
+      </div>}
       <div className="border-b border-border p-3">
+        <label className="mb-2 flex items-center gap-2 text-xs">
+          <input type="checkbox" checked={onlyMissingPt} onChange={(event) => setOnlyMissingPt(event.target.checked)} /> Somente PT pendente
+        </label>
         <Field label="Filtrar por data">
           <DateRecordCalendar
             value={selectedDate || "all"}
@@ -1779,12 +1848,15 @@ function MyRequests({
         <RequestsTable
           rows={filteredRows}
           showRequester={false}
+          onFillPt={setPtTarget}
           onCancel={onCancel}
           onEdit={onEdit}
           onDelete={onDelete}
         />
       )}
     </Panel>
+    {ptTarget && <CompleteOvertimePtModal row={ptTarget} onClose={() => setPtTarget(null)} onSaved={() => setPtTarget(null)} />}
+    </>
   );
 }
 
@@ -1991,6 +2063,7 @@ function RequestsTable({
   onCancel,
   onEdit,
   onDelete,
+  onFillPt,
   groupedTeamView = false,
 }: {
   rows: DisplayOvertimeRow[];
@@ -2000,6 +2073,7 @@ function RequestsTable({
   onCancel?: (r: OvertimeRow) => void;
   onEdit?: (r: OvertimeRow) => void;
   onDelete?: (r: OvertimeRow) => void;
+  onFillPt?: (r: OvertimeRow) => void;
   groupedTeamView?: boolean;
 }) {
   const pageSize = 30;
@@ -2042,6 +2116,7 @@ function RequestsTable({
                 <OvertimeStatus status={r.status} />
               </span>
             </div>
+            <div className="mt-2"><span className="text-xs text-muted-foreground">Nº PT: </span><OvertimePtCell row={r} onFill={onFillPt} /></div>
             <dl className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-[12px]">
               <div>
                 <dt className="text-[10px] uppercase text-muted-foreground">Ordem</dt>
@@ -2179,6 +2254,7 @@ function RequestsTable({
               {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Matrícula</th>}
               {!groupedTeamView && <th className="px-3 py-2 text-left font-semibold">Função</th>}
               <th className="px-3 py-2 text-left font-semibold">Ordem</th>
+              <th className="px-3 py-2 text-left font-semibold">Nº PT</th>
               <th className="px-3 py-2 text-left font-semibold">Serviço</th>
               <th className="px-3 py-2 text-left font-semibold">Entrada</th>
               <th className="px-3 py-2 text-left font-semibold">Saída</th>
@@ -2206,6 +2282,7 @@ function RequestsTable({
                   <td className="px-3 py-2 tabular">
                     {r.order_number || <span className="text-muted-foreground">—</span>}
                   </td>
+                  <td className="px-3 py-2"><OvertimePtCell row={r} onFill={onFillPt} /></td>
                   <td className="px-3 py-2 max-w-[240px]">
                     <div className="line-clamp-2">{r.service_description}</div>
                   </td>
@@ -2285,7 +2362,7 @@ function RequestsTable({
                   <tr key={`${r.id}-team`} className="border-t-0 bg-muted/20">
                     <td
                       colSpan={
-                        groupedTeamView ? (showRequester ? 12 : 11) : showRequester ? 14 : 13
+                        groupedTeamView ? (showRequester ? 13 : 12) : showRequester ? 15 : 14
                       }
                       className="px-3 pb-3 pt-0"
                     >
@@ -3375,6 +3452,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     activity_id: null as string | null,
     week_id: null as string | null,
     order_number: "",
+    pt_number: "",
     service_description: "",
     overtime_date: new Date().toISOString().slice(0, 10),
     entry_time: "",
@@ -3563,6 +3641,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           activity_id: form.activity_id,
           week_id: form.week_id,
           order_number: form.order_number.trim() || null,
+          pt_number: form.pt_number.trim() || null,
           service_description: form.service_description.trim(),
           overtime_date: form.overtime_date,
           entry_time: form.entry_time || null,
@@ -3855,6 +3934,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             onChange={(e) => setForm({ ...form, order_number: e.target.value })}
             placeholder="Preenchido ao vincular, ou digite manualmente"
           />
+        </Field>
+        <Field label="Nº PT (opcional)">
+          <input className="input-base" maxLength={120} value={form.pt_number}
+            onChange={(event) => setForm({ ...form, pt_number: event.target.value })} placeholder="Nº da PT ou NA" />
+          <p className="mt-1 text-[11px] text-muted-foreground">Se for oficina, preencha NA. Se ainda não souber a PT, informe depois em Minhas solicitações.</p>
         </Field>
         <Field label="Serviço / atividade" required>
           <textarea

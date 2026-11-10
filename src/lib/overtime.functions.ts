@@ -16,6 +16,7 @@ export type OvertimeRow = {
   activity_id: string | null;
   week_id: string | null;
   order_number: string | null;
+  pt_number?: string | null;
   service_description: string;
   overtime_date: string;
   entry_time: string | null;
@@ -125,12 +126,13 @@ export const REGULAR_OVERTIME_EXPORT_HEADERS = [
   "Status",
   "Solicitante",
   "Ordem",
+  "Nº PT",
   "Serviço",
   "Justificativa",
 ] as const;
 
 export const REGULAR_OVERTIME_EXPORT_WIDTHS = [
-  14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 48, 48,
+  14, 14, 32, 24, 12, 18, 18, 10, 14, 28, 16, 20, 48, 48,
 ] as const;
 
 export const LOGISTICS_EXPORT_HEADERS = [
@@ -185,6 +187,7 @@ export function mapRegularOvertimeExportRow(row: OvertimeRow) {
     formatOvertimeStatus(row.status),
     row.requester_name || row.requester_email,
     row.order_number || "",
+    row.pt_number || "",
     row.service_description,
     row.justification,
   ];
@@ -522,7 +525,7 @@ export const listOvertimeExportDates = createServerFn({ method: "POST" })
   });
 
 export const OVERTIME_EXPORT_COLUMNS =
-  "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id";
+  "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,pt_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id";
 
 export const listOvertimeExportPage = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -682,6 +685,7 @@ const createSchema = z
     activity_id: z.string().uuid().nullable().optional(),
     week_id: z.string().uuid().nullable().optional(),
     order_number: z.string().trim().max(64).nullable().optional(),
+    pt_number: z.string().trim().max(120).nullable().optional(),
     service_description: z.string().trim().min(3).max(1000),
     overtime_date: z.string().refine(isValidDate, "Data inválida"),
     entry_time: z
@@ -803,6 +807,8 @@ export const createOvertimeRequest = createServerFn({ method: "POST" })
       activity_id: activityId,
       week_id: weekId,
       order_number: orderNumber,
+      pt_number: data.pt_number?.trim().toUpperCase() === "NA" ? "NA" : data.pt_number?.trim() || null,
+      pt_updated_by: userId,
       service_description: serviceDescription,
       overtime_date: data.overtime_date,
       entry_time: data.entry_time || null,
@@ -1253,3 +1259,12 @@ export const deleteOvertimeRequest = createServerFn({ method: "POST" })
       };
     return { ok: true as const };
   });
+
+export const completeOvertimePt = createServerFn({ method: "POST" })
+ .middleware([requireSupabaseAuth])
+ .validator((data: unknown) => z.object({ id:z.string().uuid(),expectedVersion:z.number().int().min(1),ptNumber:z.string().trim().min(1).max(120),applyBatch:z.boolean().optional() }).parse(data))
+ .handler(async ({data,context}) => {
+  const {data:result,error}=await (context.supabase as any).rpc("complete_overtime_pt",{p_id:data.id,p_expected_version:data.expectedVersion,p_pt:data.ptNumber,p_apply_batch:data.applyBatch??false});
+  if(error) return {ok:false as const,conflict:false,error:error.message};
+  return result as {ok:boolean;count?:number;error?:string;conflict?:boolean};
+ });
