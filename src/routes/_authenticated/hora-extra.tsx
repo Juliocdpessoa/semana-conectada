@@ -979,6 +979,8 @@ function ApprovedDailyExport({
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
+  const [ptSearch, setPtSearch] = useState("");
+  const deferredPtSearch = useDeferredValue(ptSearch);
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
     transportOnly ? "yes" : "all",
   );
@@ -1006,6 +1008,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
+      deferredPtSearch,
       page,
     ],
     enabled: Boolean(effectiveDate),
@@ -1021,6 +1024,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
+            ptSearch: deferredPtSearch,
             page,
             pageSize,
             includeMetadata: false,
@@ -1042,6 +1046,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
+      deferredPtSearch,
     ],
     enabled: Boolean(effectiveDate),
     staleTime: 30 * 1000,
@@ -1056,6 +1061,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
+            ptSearch: deferredPtSearch,
             page: 1,
             pageSize: 1,
             includeMetadata: true,
@@ -1108,6 +1114,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
+      deferredPtSearch,
     ],
   );
 
@@ -1128,6 +1135,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
+            ptSearch: deferredPtSearch,
             includeEmployeeDetails: transportOnly,
           },
         }),
@@ -1228,6 +1236,13 @@ function ApprovedDailyExport({
             </div>
           </Field>
         </div>
+        {!transportOnly && <div className="w-full min-w-0 sm:max-w-xs">
+          <Field label="Filtrar por Nº PT">
+            <input value={ptSearch} maxLength={120} onChange={(event) => setPtSearch(event.target.value)}
+              placeholder="Número completo, parte da PT ou NA…" className="input-base w-full text-[12px]" />
+          </Field>
+          {ptSearch && <button type="button" className="mt-1 text-xs text-primary hover:underline" onClick={() => setPtSearch("")}>Limpar filtro de PT</button>}
+        </div>}
         <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Data da hora extra">
             <DateRecordCalendar
@@ -1734,8 +1749,8 @@ function OvertimePtCell({row,onFill}:{row:DisplayOvertimeRow;onFill?:(row:Overti
  if(row.pt_number?.trim()) return <span className="break-words">{row.pt_number}</span>;
  if(!canCompleteOvertimePt(row)) return <span className="text-muted-foreground">—</span>;
  return <span className="inline-flex flex-wrap items-center gap-2">
-  <span className="rounded border border-warning/50 bg-warning/10 px-2 py-1 text-xs font-semibold text-warning-foreground">PT pendente</span>
-  {onFill && <button type="button" className="btn-outline min-h-8 text-xs" onClick={()=>onFill(row)}>Informar Nº PT</button>}
+  <span className={cn("rounded border px-2 py-1 text-xs font-semibold", onFill ? "border-red-200 bg-red-100 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" : "border-warning/50 bg-warning/10 text-warning-foreground")}>PT pendente</span>
+  {onFill && <button type="button" className="inline-flex min-h-8 items-center rounded-md border border-green-300 bg-green-100 px-3 py-1 text-xs font-medium text-green-900 transition hover:bg-green-200 dark:border-green-800 dark:bg-green-950 dark:text-green-200 dark:hover:bg-green-900" onClick={()=>onFill(row)}>Informar Nº PT</button>}
  </span>;
 }
 
@@ -1823,7 +1838,7 @@ function MyRequests({
   return (
     <>
     <Panel title="Minhas solicitações" padded={false}>
-      {missingPt.length > 0 && <div className="m-3 rounded-md border border-warning/50 bg-warning/10 p-3 text-sm" role="status">
+      {missingPt.length > 0 && <div className="m-3 rounded-md border border-red-200 bg-red-100 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200" role="status">
         <b>{missingPt.length} registro(s) com PT pendente</b>, incluindo dias anteriores. Você pode informar mesmo após a aprovação.
         <button type="button" className="btn-outline ml-2 text-xs" onClick={() => { setSelectedDate(""); setOnlyMissingPt(true); }}>Ver solicitações sem PT</button>
       </div>}

@@ -454,6 +454,7 @@ const exportListSchema = z.object({
     .optional(),
   transport: z.enum(["all", "yes", "no"]).optional().default("all"),
   employeeSearch: z.string().trim().max(120).optional().default(""),
+  ptSearch: z.string().trim().max(120).regex(/^[\p{L}\p{N}\s.\/-]*$/u, "Use o número da PT ou NA.").optional().default(""),
   includeEmployeeDetails: z.boolean().optional().default(false),
 });
 
@@ -469,7 +470,7 @@ function applyOvertimeExportFilters(
   query: any,
   input: Pick<
     z.infer<typeof exportListSchema>,
-    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch"
+    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch" | "ptSearch"
   >,
 ) {
   let filtered = query;
@@ -479,6 +480,7 @@ function applyOvertimeExportFilters(
   if (input.departureTime) filtered = filtered.eq("departure_time", input.departureTime);
   if (input.transport === "yes") filtered = filtered.eq("needs_transport", true);
   if (input.transport === "no") filtered = filtered.eq("needs_transport", false);
+  if (input.ptSearch) filtered = filtered.ilike("pt_number", `%${input.ptSearch}%`);
   const search = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
   if (search) {
     filtered = filtered.or(
@@ -544,7 +546,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
     const metadataSearch = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
     const metadataPromise = input.includeMetadata
-      ? db.rpc("get_overtime_export_metadata", {
+      ? db.rpc("get_overtime_export_metadata_pt", {
         p_worksite_id: info.worksiteId,
         p_date_from: input.dateFrom ?? null,
         p_date_to: input.dateTo ?? null,
@@ -552,6 +554,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
         p_departure_time: input.departureTime ?? null,
         p_transport: input.transport,
         p_employee_search: metadataSearch,
+        p_pt_search: input.ptSearch,
       })
       : Promise.resolve({ data: null, error: null });
 
