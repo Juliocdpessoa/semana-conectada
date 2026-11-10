@@ -980,6 +980,7 @@ function ApprovedDailyExport({
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
   const [ptSearch, setPtSearch] = useState("");
+  const [ptMissing, setPtMissing] = useState(false);
   const deferredPtSearch = useDeferredValue(ptSearch);
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
     transportOnly ? "yes" : "all",
@@ -1009,6 +1010,7 @@ function ApprovedDailyExport({
       transportFilter,
       deferredEmployeeSearch,
       deferredPtSearch,
+      ptMissing,
       page,
     ],
     enabled: Boolean(effectiveDate),
@@ -1024,7 +1026,8 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: deferredPtSearch,
+            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptMissing,
             page,
             pageSize,
             includeMetadata: false,
@@ -1047,6 +1050,7 @@ function ApprovedDailyExport({
       transportFilter,
       deferredEmployeeSearch,
       deferredPtSearch,
+      ptMissing,
     ],
     enabled: Boolean(effectiveDate),
     staleTime: 30 * 1000,
@@ -1061,7 +1065,8 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: deferredPtSearch,
+            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptMissing,
             page: 1,
             pageSize: 1,
             includeMetadata: true,
@@ -1115,6 +1120,7 @@ function ApprovedDailyExport({
       transportFilter,
       deferredEmployeeSearch,
       deferredPtSearch,
+      ptMissing,
     ],
   );
 
@@ -1135,7 +1141,8 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: deferredPtSearch,
+            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptMissing,
             includeEmployeeDetails: transportOnly,
           },
         }),
@@ -1238,9 +1245,13 @@ function ApprovedDailyExport({
         </div>
         {!transportOnly && <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Filtrar por Nº PT">
-            <input value={ptSearch} maxLength={120} onChange={(event) => setPtSearch(event.target.value)}
+            <input disabled={ptMissing} value={ptSearch} maxLength={120} onChange={(event) => setPtSearch(event.target.value)}
               placeholder="Número completo, parte da PT ou NA…" className="input-base w-full text-[12px]" />
           </Field>
+          <label className="mt-2 flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={ptMissing} onChange={(event) => { setPtMissing(event.target.checked); if(event.target.checked) setPtSearch(""); }} />
+            Somente PT não informada
+          </label>
           {ptSearch && <button type="button" className="mt-1 text-xs text-primary hover:underline" onClick={() => setPtSearch("")}>Limpar filtro de PT</button>}
         </div>}
         <div className="w-full min-w-0 sm:max-w-xs">

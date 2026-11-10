@@ -19,11 +19,14 @@ test("server applies PT predicate with the other export filters",()=>{
  assert.ok(calls.some(x=>JSON.stringify(x)===JSON.stringify(["ilike","pt_number","%22.001%"])));
  assert.ok(calls.some(x=>x[0]==="gte"));assert.ok(calls.some(x=>x[0]==="eq"));
  calls.length=0;apply(q,schema.parse({}));assert.equal(calls.some(x=>x[0]==="ilike"),false);
+ calls.length=0;apply(q,schema.parse({ptMissing:true,ptSearch:"22"}));
+ assert.ok(calls.some(x=>x[0]==="or" && x[1]==="pt_number.is.null,pt_number.eq."));
+ assert.equal(calls.some(x=>x[0]==="ilike"),false);
 });
 test("all daily fetches and download receive PT and cache keys include it",()=>{
  const ui=fs.readFileSync(new URL("../src/routes/_authenticated/hora-extra.tsx",import.meta.url),"utf8");
  const d=ui.slice(ui.indexOf("  const loadOvertimeForExport ="),ui.indexOf("/* ---------- Transport view"));
- assert.equal((d.match(/ptSearch: deferredPtSearch/g)||[]).length,3);
+ assert.equal(d.split('ptSearch: ptMissing ? "" : deferredPtSearch').length-1,3);
  assert.equal((d.match(/^      deferredPtSearch,/gm)||[]).length,3);
  assert.ok(ui.includes("border-red-200 bg-red-100"));assert.ok(ui.includes("border-green-300 bg-green-100"));
 });

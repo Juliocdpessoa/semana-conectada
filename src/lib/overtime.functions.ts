@@ -454,6 +454,7 @@ const exportListSchema = z.object({
     .optional(),
   transport: z.enum(["all", "yes", "no"]).optional().default("all"),
   employeeSearch: z.string().trim().max(120).optional().default(""),
+  ptMissing: z.boolean().optional().default(false),
   ptSearch: z.string().trim().max(120).regex(/^[\p{L}\p{N}\s.\/-]*$/u, "Use o número da PT ou NA.").optional().default(""),
   includeEmployeeDetails: z.boolean().optional().default(false),
 });
@@ -470,7 +471,7 @@ function applyOvertimeExportFilters(
   query: any,
   input: Pick<
     z.infer<typeof exportListSchema>,
-    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch" | "ptSearch"
+    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch" | "ptSearch" | "ptMissing"
   >,
 ) {
   let filtered = query;
@@ -480,7 +481,8 @@ function applyOvertimeExportFilters(
   if (input.departureTime) filtered = filtered.eq("departure_time", input.departureTime);
   if (input.transport === "yes") filtered = filtered.eq("needs_transport", true);
   if (input.transport === "no") filtered = filtered.eq("needs_transport", false);
-  if (input.ptSearch) filtered = filtered.ilike("pt_number", `%${input.ptSearch}%`);
+  if (input.ptMissing) filtered = filtered.or("pt_number.is.null,pt_number.eq.");
+  else if (input.ptSearch) filtered = filtered.ilike("pt_number", `%${input.ptSearch}%`);
   const search = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
   if (search) {
     filtered = filtered.or(
@@ -554,7 +556,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
         p_departure_time: input.departureTime ?? null,
         p_transport: input.transport,
         p_employee_search: metadataSearch,
-        p_pt_search: input.ptSearch,
+        p_pt_search: input.ptMissing ? "__NEXO_EMPTY_PT__" : input.ptSearch,
       })
       : Promise.resolve({ data: null, error: null });
 
