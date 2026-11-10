@@ -979,9 +979,9 @@ function ApprovedDailyExport({
   const [selectedEntryTime, setSelectedEntryTime] = useState("");
   const [selectedDepartureTime, setSelectedDepartureTime] = useState("");
   const [employeeSearch, setEmployeeSearch] = useState("");
-  const [ptSearch, setPtSearch] = useState("");
-  const [ptMissing, setPtMissing] = useState(false);
-  const deferredPtSearch = useDeferredValue(ptSearch);
+  const [selectedPt, setSelectedPt] = useState("all");
+  const ptMissing = selectedPt === "missing";
+  const ptNumber = selectedPt.startsWith("pt:") ? selectedPt.slice(3) : "";
   const [transportFilter, setTransportFilter] = useState<"all" | "yes" | "no">(
     transportOnly ? "yes" : "all",
   );
@@ -990,10 +990,11 @@ function ApprovedDailyExport({
   const pageSize = 30;
   const [page, setPage] = useState(1);
   const [filterMetadata, setFilterMetadata] = useState<{
+    ptNumbers: string[];
     entryTimes: string[];
     departureTimes: string[];
     kpis: OvertimeKpis;
-  }>({ entryTimes: [], departureTimes: [], kpis: EMPTY_OVERTIME_KPIS });
+  }>({ ptNumbers: [], entryTimes: [], departureTimes: [], kpis: EMPTY_OVERTIME_KPIS });
   const dateScope =
     effectiveDate === "all"
       ? { dateFrom, dateTo }
@@ -1009,7 +1010,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
-      deferredPtSearch,
+      ptNumber,
       ptMissing,
       page,
     ],
@@ -1026,7 +1027,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptNumber,
             ptMissing,
             page,
             pageSize,
@@ -1049,7 +1050,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
-      deferredPtSearch,
+      ptNumber,
       ptMissing,
     ],
     enabled: Boolean(effectiveDate),
@@ -1065,7 +1066,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptNumber,
             ptMissing,
             page: 1,
             pageSize: 1,
@@ -1088,6 +1089,7 @@ function ApprovedDailyExport({
   useEffect(() => {
     if (!metadataQuery.data?.kpis) return;
     const nextMetadata = {
+      ptNumbers: (metadataQuery.data.ptNumbers ?? []) as string[],
       entryTimes: (metadataQuery.data.entryTimes ?? []) as string[],
       departureTimes: (metadataQuery.data.departureTimes ?? []) as string[],
       kpis: metadataQuery.data.kpis as OvertimeKpis,
@@ -1119,7 +1121,7 @@ function ApprovedDailyExport({
       selectedDepartureTime,
       transportFilter,
       deferredEmployeeSearch,
-      deferredPtSearch,
+      ptNumber,
       ptMissing,
     ],
   );
@@ -1141,7 +1143,7 @@ function ApprovedDailyExport({
             departureTime: selectedDepartureTime || undefined,
             transport: transportOnly ? "yes" : transportFilter,
             employeeSearch: deferredEmployeeSearch,
-            ptSearch: ptMissing ? "" : deferredPtSearch,
+            ptNumber,
             ptMissing,
             includeEmployeeDetails: transportOnly,
           },
@@ -1245,14 +1247,14 @@ function ApprovedDailyExport({
         </div>
         {!transportOnly && <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Filtrar por Nº PT">
-            <input disabled={ptMissing} value={ptSearch} maxLength={120} onChange={(event) => setPtSearch(event.target.value)}
-              placeholder="Número completo, parte da PT ou NA…" className="input-base w-full text-[12px]" />
+            <select aria-label="Filtrar por Nº PT" value={selectedPt} onChange={(event) => setSelectedPt(event.target.value)}
+              className="input-base w-full text-[12px]">
+              <option value="all">Todas as PTs</option>
+              <option value="missing">PT não informada</option>
+              {ptNumber && !filterMetadata.ptNumbers.includes(ptNumber) && <option value={`pt:${ptNumber}`}>{ptNumber}</option>}
+              {filterMetadata.ptNumbers.map((pt) => <option key={pt} value={`pt:${pt}`}>{pt}</option>)}
+            </select>
           </Field>
-          <label className="mt-2 flex items-center gap-2 text-xs">
-            <input type="checkbox" checked={ptMissing} onChange={(event) => { setPtMissing(event.target.checked); if(event.target.checked) setPtSearch(""); }} />
-            PT não informada
-          </label>
-          {ptSearch && <button type="button" className="mt-1 text-xs text-primary hover:underline" onClick={() => setPtSearch("")}>Limpar filtro de PT</button>}
         </div>}
         <div className="w-full min-w-0 sm:max-w-xs">
           <Field label="Data da hora extra">

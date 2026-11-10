@@ -454,6 +454,7 @@ const exportListSchema = z.object({
     .optional(),
   transport: z.enum(["all", "yes", "no"]).optional().default("all"),
   employeeSearch: z.string().trim().max(120).optional().default(""),
+  ptNumber: z.string().max(120).optional().default(""),
   ptMissing: z.boolean().optional().default(false),
   ptSearch: z.string().trim().max(120).regex(/^[\p{L}\p{N}\s.\/-]*$/u, "Use o número da PT ou NA.").optional().default(""),
   includeEmployeeDetails: z.boolean().optional().default(false),
@@ -471,7 +472,7 @@ function applyOvertimeExportFilters(
   query: any,
   input: Pick<
     z.infer<typeof exportListSchema>,
-    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch" | "ptSearch" | "ptMissing"
+    "dateFrom" | "dateTo" | "entryTime" | "departureTime" | "transport" | "employeeSearch" | "ptSearch" | "ptMissing" | "ptNumber"
   >,
 ) {
   let filtered = query;
@@ -482,6 +483,7 @@ function applyOvertimeExportFilters(
   if (input.transport === "yes") filtered = filtered.eq("needs_transport", true);
   if (input.transport === "no") filtered = filtered.eq("needs_transport", false);
   if (input.ptMissing) filtered = filtered.or("pt_number.is.null,pt_number.eq.");
+  else if (input.ptNumber) filtered = filtered.eq("pt_number", input.ptNumber);
   else if (input.ptSearch) filtered = filtered.ilike("pt_number", `%${input.ptSearch}%`);
   const search = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
   if (search) {
@@ -548,7 +550,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
     const db = supabaseAdmin as any;
     const metadataSearch = input.employeeSearch.replace(/[^\p{L}\p{N}\s]/gu, " ").trim();
     const metadataPromise = input.includeMetadata
-      ? db.rpc("get_overtime_export_metadata_pt", {
+      ? db.rpc("get_overtime_export_pt_options", {
         p_worksite_id: info.worksiteId,
         p_date_from: input.dateFrom ?? null,
         p_date_to: input.dateTo ?? null,
@@ -557,6 +559,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
         p_transport: input.transport,
         p_employee_search: metadataSearch,
         p_pt_search: input.ptMissing ? "__NEXO_EMPTY_PT__" : input.ptSearch,
+        p_pt_number: input.ptNumber,
       })
       : Promise.resolve({ data: null, error: null });
 
@@ -582,6 +585,7 @@ export const listOvertimeExportPage = createServerFn({ method: "POST" })
       ok: true as const,
       rows: data ?? [],
       total: count ?? 0,
+      ptNumbers: input.includeMetadata ? (metadata?.ptNumbers ?? []) : null,
       entryTimes: input.includeMetadata ? (metadata?.entryTimes ?? []) : null,
       departureTimes: input.includeMetadata ? (metadata?.departureTimes ?? []) : null,
       kpis: input.includeMetadata ? (metadata?.kpis ?? null) : null,
