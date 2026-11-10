@@ -2120,7 +2120,7 @@ function AtividadesPage() {
       };
       for (let row = 1; row <= 3; row += 1) {
         worksheet.getRow(row).height = 18;
-        for (let column = 1; column <= 23; column += 1) {
+        for (let column = 1; column <= 22; column += 1) {
           const cell = worksheet.getRow(row).getCell(column);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
           cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -2153,7 +2153,7 @@ function AtividadesPage() {
         const row = worksheet.getRow(rowNumber);
         row.font = { name: "Arial", size: 10, bold: true };
         row.alignment = { vertical: "middle" };
-        for (let column = 1; column <= 23; column += 1) {
+        for (let column = 1; column <= 22; column += 1) {
           row.getCell(column).fill = {
             type: "pattern",
             pattern: "solid",
@@ -2190,7 +2190,6 @@ function AtividadesPage() {
         "AND",
         "N.EXE",
         "Observação",
-        "PBS",
         "Espaço confinado",
       ];
       const rows = filtered
@@ -2224,7 +2223,6 @@ function AtividadesPage() {
             "",
             "",
             "",
-            planningValue(activity, "pbs"),
             hasConfinedSpacePbs(planningValue(activity, "pbs")) ? "Sim" : "Não",
           ];
         });
@@ -2240,7 +2238,7 @@ function AtividadesPage() {
         color: { argb: "FFFFFFFF" },
       };
       worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      for (let column = 1; column <= 23; column += 1) {
+      for (let column = 1; column <= 22; column += 1) {
         const cell = worksheet.getRow(9).getCell(column);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
         cell.border = thinBorder;
@@ -2250,7 +2248,7 @@ function AtividadesPage() {
         row.height = 21;
         row.font = { name: "Arial", size: 8 };
         row.alignment = { vertical: "middle", wrapText: true };
-        for (let column = 1; column <= 23; column += 1) {
+        for (let column = 1; column <= 22; column += 1) {
           const cell = row.getCell(column);
           cell.border = thinBorder;
           if (rowNumber % 2 === 0) {
@@ -2262,7 +2260,7 @@ function AtividadesPage() {
           }
         }
         row.getCell(10).numFmt = "dd/mm/yyyy";
-        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 22, 23]) {
+        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 22]) {
           row.getCell(column).alignment = {
             horizontal: "center",
             vertical: "middle",
@@ -2271,14 +2269,14 @@ function AtividadesPage() {
         }
       }
 
-      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36, 14, 14].forEach(
+      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36, 14].forEach(
         (width, index) => {
           worksheet.getColumn(index + 1).width = width;
         },
       );
 
       const lastRow = rows.length + 9;
-      worksheet.pageSetup.printArea = `A1:W${lastRow}`;
+      worksheet.pageSetup.printArea = `A1:V${lastRow}`;
       worksheet.pageSetup.printTitlesRow = "1:9";
 
       const buffer = await workbook.xlsx.writeBuffer();

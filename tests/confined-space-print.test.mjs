@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import fs from "node:fs";
 import { hasConfinedSpacePbs } from "../src/lib/confined-space.ts";
-test("print layout includes PBS and confined space inside print area", async () => {
+test("print includes only confined space, without a PBS column", async () => {
  const source=fs.readFileSync(new URL("../src/routes/_authenticated/atividades.tsx",import.meta.url),"utf8");
  const start=source.indexOf('      const ExcelJS = (await import("exceljs")).default;');
  const end=source.indexOf("      const buffer = await workbook.xlsx.writeBuffer();",start);
@@ -19,10 +19,11 @@ test("print layout includes PBS and confined space inside print area", async () 
  const AsyncFunction=Object.getPrototypeOf(async function(){}).constructor;
  const run=new AsyncFunction("ExcelJS","filtered","activeWeek","gerLabel","planningValue","effectivePtColor","PT_COLOR_LABELS","hasConfinedSpacePbs",code);
  await run(ExcelJS,fixtures,{data:{start_date:"2026-11-09",end_date:"2026-11-13",code:"046"}},()=>"", (r,f)=>r[f]??"",()=>null,{},hasConfinedSpacePbs);
- assert.equal(sheet.getRow(9).values.length,23);
- assert.deepEqual(sheet.getRow(9).values.slice(-2),["PBS","Espaço confinado"]);
- assert.deepEqual(sheet.getRow(10).values.slice(-2),["13,16,22","Sim"]);
- assert.deepEqual(sheet.getRow(11).values.slice(-2),["116","Não"]);
- assert.equal(sheet.pageSetup.printArea,"A1:W11");
- assert.equal(sheet.columns.size,23);
+ assert.equal(sheet.getRow(9).values.length,22);
+ assert.equal(sheet.getRow(9).values.at(-1),"Espaço confinado");
+ assert.equal(sheet.getRow(9).values.includes("PBS"),false);
+ assert.equal(sheet.getRow(10).values.at(-1),"Sim");
+ assert.equal(sheet.getRow(11).values.at(-1),"Não");
+ assert.equal(sheet.pageSetup.printArea,"A1:V11");
+ assert.equal(sheet.columns.size,22);
 });
