@@ -1250,7 +1250,7 @@ function ApprovedDailyExport({
           </Field>
           <label className="mt-2 flex items-center gap-2 text-xs">
             <input type="checkbox" checked={ptMissing} onChange={(event) => { setPtMissing(event.target.checked); if(event.target.checked) setPtSearch(""); }} />
-            Somente PT não informada
+            PT não informada
           </label>
           {ptSearch && <button type="button" className="mt-1 text-xs text-primary hover:underline" onClick={() => setPtSearch("")}>Limpar filtro de PT</button>}
         </div>}
