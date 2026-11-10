@@ -239,7 +239,7 @@ function OvertimePage() {
     queryKey: ["overtime-requests", s.userId, isManager, tab, period.from, period.to],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
-    enabled: !logisticsOnly && (tab === "list" || tab === "queue"),
+    enabled: tab === "list" || (!logisticsOnly && tab === "queue"),
     queryFn: async () => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
@@ -368,7 +368,7 @@ function OvertimePage() {
             Exportação semanal
           </TabBtn>
         )}
-        {canRequest && (
+        {(canRequest || isManager || isLogistics) && (
           <TabBtn active={tab === "list"} onClick={() => selectTab("list")}>
             Minhas solicitações
           </TabBtn>
@@ -418,7 +418,7 @@ function OvertimePage() {
 
       {tab === "weekly_export" && isMeasurementControl && <WeeklyActivityExport />}
 
-      {tab === "list" && canRequest && (
+      {tab === "list" && (canRequest || isManager || isLogistics) && (
         <MyRequests
           rows={myRows}
           onFilteredRowsChange={setFilteredKpiRows}

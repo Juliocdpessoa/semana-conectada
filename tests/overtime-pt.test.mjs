@@ -3,10 +3,11 @@ import { test } from "node:test";
 import fs from "node:fs";
 import ts from "typescript";
 import { canCompleteOvertimePt } from "../src/lib/overtime-pt.ts";
-test("only manual pending or approved missing PT can be completed",()=>{
+test("manual and scale-change pending or approved missing PT can be completed",()=>{
  for(const status of ["pending","approved"]) assert.equal(canCompleteOvertimePt({source_type:"manual",status,pt_number:null}),true);
+ for(const status of ["pending","approved"]) assert.equal(canCompleteOvertimePt({source_type:"scale_change",status,pt_number:null}),true);
  for(const status of ["cancelled","rejected"]) assert.equal(canCompleteOvertimePt({source_type:"manual",status}),false);
- assert.equal(canCompleteOvertimePt({source_type:"scale_change",status:"approved"}),false);
+ assert.equal(canCompleteOvertimePt({source_type:"scale_change",status:"approved"}),true);
  assert.equal(canCompleteOvertimePt({source_type:"manual",status:"approved",pt_number:"NA"}),false);
  assert.equal(canCompleteOvertimePt({source_type:"manual",status:"approved",pt_number:"  "}),true);
 });
