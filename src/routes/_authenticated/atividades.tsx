@@ -1,3 +1,4 @@
+import { hasConfinedSpacePbs, readConfinedSpaceFilter, type ConfinedSpaceFilter } from "@/lib/confined-space";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -133,6 +134,7 @@ type PersistedActivityFilters = {
   gers: string[];
   dates: string[];
   origins: string[];
+  confinedSpace: ConfinedSpaceFilter;
   sapStatuses: SapConfirmationStatus[];
 };
 
@@ -148,6 +150,7 @@ const EMPTY_PERSISTED_ACTIVITY_FILTERS: PersistedActivityFilters = {
   gers: [],
   dates: [],
   origins: [],
+  confinedSpace: "all",
   sapStatuses: [],
 };
 
@@ -171,6 +174,7 @@ function readPersistedActivityFilters(storageKey: string): PersistedActivityFilt
       gers: strings("gers"),
       dates: strings("dates"),
       origins: strings("origins"),
+      confinedSpace: readConfinedSpaceFilter(parsed.confinedSpace),
       sapStatuses: strings("sapStatuses").filter((status): status is SapConfirmationStatus =>
         SAP_STATUS_OPTIONS.includes(status as SapConfirmationStatus),
       ),
@@ -899,6 +903,7 @@ function AtividadesPage() {
   const [gerFilters, setGerFilters] = useState<string[]>([]);
   const [dateFilters, setDateFilters] = useState<string[]>([]);
   const [originFilters, setOriginFilters] = useState<string[]>([]);
+  const [confinedSpace, setConfinedSpace] = useState<ConfinedSpaceFilter>("all");
   const [sapStatusFilters, setSapStatusFilters] = useState<SapConfirmationStatus[]>([]);
   const [loadedFilterStorageKey, setLoadedFilterStorageKey] = useState<string | null>(null);
   const [selectedWeekId, setSelectedWeekId] = useState("");
@@ -937,6 +942,7 @@ function AtividadesPage() {
     setGerFilters(stored.gers);
     setDateFilters(stored.dates);
     setOriginFilters(stored.origins);
+    setConfinedSpace(stored.confinedSpace);
     setSapStatusFilters(stored.sapStatuses);
     setPage(0);
     setLoadedFilterStorageKey(filterStorageKey);
@@ -958,6 +964,7 @@ function AtividadesPage() {
         gers: gerFilters,
         dates: dateFilters,
         origins: originFilters,
+    confinedSpace,
         sapStatuses: sapStatusFilters,
       } satisfies PersistedActivityFilters),
     );
@@ -975,6 +982,7 @@ function AtividadesPage() {
     gerFilters,
     dateFilters,
     originFilters,
+    confinedSpace,
     sapStatusFilters,
   ]);
 
@@ -1024,6 +1032,7 @@ function AtividadesPage() {
     gers: gerFilters,
     dates: dateFilters,
     origins: originFilters,
+    confinedSpace,
   };
   const hasSapSummaryFilters = Boolean(
     deferredSearch.trim() ||
@@ -1036,6 +1045,7 @@ function AtividadesPage() {
     planningGroupFilters.length ||
     gerFilters.length ||
     dateFilters.length ||
+    confinedSpace !== "all" ||
     originFilters.length ||
     sapStatusFilters.length,
   );
@@ -1470,6 +1480,7 @@ function AtividadesPage() {
     gerFilters.length > 0 ? "1" : "",
     dateFilters.length > 0 ? "1" : "",
     originFilters.length > 0 ? "1" : "",
+    confinedSpace !== "all" ? "1" : "",
     canViewSap && sapStatusFilters.length > 0 ? "1" : "",
   ].filter(Boolean).length;
 
@@ -1485,6 +1496,7 @@ function AtividadesPage() {
     setGerFilters([]);
     setDateFilters([]);
     setOriginFilters([]);
+    setConfinedSpace("all");
     setSapStatusFilters([]);
     setPage(0);
   }
@@ -2108,7 +2120,7 @@ function AtividadesPage() {
       };
       for (let row = 1; row <= 3; row += 1) {
         worksheet.getRow(row).height = 18;
-        for (let column = 1; column <= 21; column += 1) {
+        for (let column = 1; column <= 23; column += 1) {
           const cell = worksheet.getRow(row).getCell(column);
           cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
           cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
@@ -2141,7 +2153,7 @@ function AtividadesPage() {
         const row = worksheet.getRow(rowNumber);
         row.font = { name: "Arial", size: 10, bold: true };
         row.alignment = { vertical: "middle" };
-        for (let column = 1; column <= 21; column += 1) {
+        for (let column = 1; column <= 23; column += 1) {
           row.getCell(column).fill = {
             type: "pattern",
             pattern: "solid",
@@ -2178,6 +2190,8 @@ function AtividadesPage() {
         "AND",
         "N.EXE",
         "Observação",
+        "PBS",
+        "Espaço confinado",
       ];
       const rows = filtered
         .slice()
@@ -2210,13 +2224,15 @@ function AtividadesPage() {
             "",
             "",
             "",
+            planningValue(activity, "pbs"),
+            hasConfinedSpacePbs(planningValue(activity, "pbs")) ? "Sim" : "Não",
           ];
         });
 
       worksheet.getRow(9).values = printHeaders;
       rows.forEach((values) => worksheet.addRow(values));
 
-      worksheet.getRow(9).height = 18;
+      worksheet.getRow(9).height = 30;
       worksheet.getRow(9).font = {
         name: "Arial",
         size: 9,
@@ -2224,7 +2240,7 @@ function AtividadesPage() {
         color: { argb: "FFFFFFFF" },
       };
       worksheet.getRow(9).alignment = { horizontal: "center", vertical: "middle", wrapText: true };
-      for (let column = 1; column <= 21; column += 1) {
+      for (let column = 1; column <= 23; column += 1) {
         const cell = worksheet.getRow(9).getCell(column);
         cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: `FF${headerFill}` } };
         cell.border = thinBorder;
@@ -2234,7 +2250,7 @@ function AtividadesPage() {
         row.height = 21;
         row.font = { name: "Arial", size: 8 };
         row.alignment = { vertical: "middle", wrapText: true };
-        for (let column = 1; column <= 21; column += 1) {
+        for (let column = 1; column <= 23; column += 1) {
           const cell = row.getCell(column);
           cell.border = thinBorder;
           if (rowNumber % 2 === 0) {
@@ -2246,7 +2262,7 @@ function AtividadesPage() {
           }
         }
         row.getCell(10).numFmt = "dd/mm/yyyy";
-        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20]) {
+        for (const column of [1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 15, 16, 17, 18, 19, 20, 22, 23]) {
           row.getCell(column).alignment = {
             horizontal: "center",
             vertical: "middle",
@@ -2255,14 +2271,14 @@ function AtividadesPage() {
         }
       }
 
-      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36].forEach(
+      [11, 13, 13, 13, 13, 9, 17, 9, 9, 12, 10, 9, 16, 42, 8, 8, 8, 7, 7, 7, 36, 14, 14].forEach(
         (width, index) => {
           worksheet.getColumn(index + 1).width = width;
         },
       );
 
       const lastRow = rows.length + 9;
-      worksheet.pageSetup.printArea = `A1:U${lastRow}`;
+      worksheet.pageSetup.printArea = `A1:W${lastRow}`;
       worksheet.pageSetup.printTitlesRow = "1:9";
 
       const buffer = await workbook.xlsx.writeBuffer();
@@ -2763,6 +2779,12 @@ function AtividadesPage() {
             selectedPlural="status SAP selecionados"
           />
         )}
+        <select aria-label="Filtrar por espaço confinado" className="input-base h-9 w-auto text-[11px]"
+          value={confinedSpace} onChange={(event) => { setConfinedSpace(readConfinedSpaceFilter(event.target.value)); setPage(0); }}>
+          <option value="all">Espaço confinado: todos</option>
+          <option value="yes">Com espaço confinado</option>
+          <option value="no">Sem espaço confinado</option>
+        </select>
         {canFilterReleaseType && (
           <FilterMultiSelect
             options={[...releaseTypeOptions, ...(hasEmptyReleaseType ? ["__EMPTY__"] : [])]}

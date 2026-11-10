@@ -267,6 +267,13 @@
       "when": 1793880000000,
       "tag": "0037_atomic_overtime_decision",
       "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1794312000000,
+      "tag": "0038_confined_space_filter",
+      "breakpoints": true
     }
   ]
 }
