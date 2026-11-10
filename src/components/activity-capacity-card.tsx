@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle } from "lucide-react";
-import { toast } from "sonner";
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { KpiCard, Modal } from "@/components/ui-kit";
 import {
@@ -16,26 +16,57 @@ const hours = (value: number) =>
 const dateLabel = (value: string | null) =>
   value ? value.split("-").reverse().join("/") : "Sem data";
 
+const CAPACITY_NOTICE_EVENT = "nexo:activity-capacity-notice";
+
 export function notifyActivityCapacity(result: {
   capacityWarnings?: string[];
   capacityCheckFailed?: boolean;
 }) {
-  if (result.capacityWarnings?.length) {
-    const warnings = result.capacityWarnings;
-    toast.warning("Alteração salva — atenção à capacidade", {
-      description:
-        warnings.slice(0, 3).join(" ") +
-        (warnings.length > 3
-          ? ` Mais ${warnings.length - 3} alerta(s); consulte o cartão de capacidade.`
-          : ""),
-      duration: 12_000,
-    });
-  }
+  const warnings = [...(result.capacityWarnings ?? [])];
   if (result.capacityCheckFailed)
-    toast.warning("Alteração salva, mas não foi possível conferir a capacidade.", {
-      description: "Atualize o cartão de capacidade para verificar a sobrecarga.",
-      duration: 10_000,
-    });
+    warnings.push("Não foi possível conferir a capacidade. Atualize o cartão de capacidade para verificar a sobrecarga.");
+  if (warnings.length && typeof window !== "undefined")
+    window.dispatchEvent(new CustomEvent(CAPACITY_NOTICE_EVENT, { detail: warnings }));
+}
+
+function CapacityNotice() {
+  const [queue, setQueue] = useState<string[][]>([]);
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (Array.isArray(detail) && detail.length && detail.every((item) => typeof item === "string"))
+        setQueue((current) => [...current, detail]);
+    };
+    window.addEventListener(CAPACITY_NOTICE_EVENT, receive);
+    return () => window.removeEventListener(CAPACITY_NOTICE_EVENT, receive);
+  }, []);
+  return (
+    <AlertDialog.Root open={queue.length > 0}>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 z-[200] bg-black/50" />
+        <AlertDialog.Content onEscapeKeyDown={(event) => event.preventDefault()} className="fixed left-1/2 top-1/2 z-[201] max-h-[85vh] w-[calc(100vw_-_2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-warning/50 bg-background p-5 text-foreground shadow-xl">
+          <AlertDialog.Title className="flex items-center gap-2 text-base font-semibold">
+            <AlertTriangle className="h-5 w-5 shrink-0 text-warning-foreground" />
+            Alteração salva — atenção à capacidade
+          </AlertDialog.Title>
+          <AlertDialog.Description className="mt-2 text-sm text-muted-foreground">
+            A alteração já foi salva. Confira os alertas abaixo e clique em Confirmar para continuar.
+          </AlertDialog.Description>
+          <ul className="my-4 max-h-[45vh] space-y-2 overflow-y-auto text-sm">
+            {(queue[0] ?? []).map((warning, index) => (
+              <li key={index} className="rounded-md border border-warning/30 bg-warning/10 p-3">{warning}</li>
+            ))}
+          </ul>
+          <div className="flex justify-end">
+            <AlertDialog.Action asChild>
+              <button type="button" className="btn-primary min-h-10 px-5"
+                onClick={() => setQueue((current) => current.slice(1))}>Confirmar</button>
+            </AlertDialog.Action>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
+  );
 }
 
 export function ActivityCapacityCard({
@@ -91,6 +122,7 @@ export function ActivityCapacityCard({
   const hoverRows = capacityOverloadList(summary?.rows ?? []);
   return (
     <>
+      <CapacityNotice />
       <TooltipProvider delayDuration={200}>
         <Tooltip open={!open && hoverOpen} onOpenChange={setHoverOpen}>
           <TooltipTrigger asChild>
