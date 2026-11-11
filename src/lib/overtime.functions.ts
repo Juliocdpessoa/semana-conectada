@@ -1145,6 +1145,7 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
   });
 
 const updateOvertimeSchema = z.object({
+  pt_number: z.string().trim().max(120).nullable().optional(),
   id: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
   overtime_date: z.string().refine(isValidDate, "Data inválida"),
@@ -1165,6 +1166,7 @@ async function loadEditableOvertimeRequest(
   info: Awaited<ReturnType<typeof loadRoleAndProfile>>,
   userId: string,
   id: string,
+  allowMeasurementEdit = false,
 ) {
   if (!info.worksiteId) return { error: "Usuário sem obra vinculada." } as const;
   const { data: request, error } = await db
@@ -1180,7 +1182,7 @@ async function loadEditableOvertimeRequest(
       error: "Solicitações da Mudança de Escala devem ser alteradas naquele módulo.",
     } as const;
   }
-  const elevated = info.isLogistics || info.isAdmin;
+  const elevated = info.isLogistics || info.isAdmin || (allowMeasurementEdit && info.isMeasurementControl);
   const canRequest = info.isLeader || info.isAdmin || info.isMeasurementControl;
   const ownPending =
     canRequest && request.requester_user_id === userId && request.status === "pending";
@@ -1202,7 +1204,7 @@ export const updateOvertimeRequest = createServerFn({ method: "POST" })
       return { ok: false as const, error: "Usuário não aprovado." };
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const db = supabaseAdmin as any;
-    const access = await loadEditableOvertimeRequest(db, info, userId, data.id);
+    const access = await loadEditableOvertimeRequest(db, info, userId, data.id, true);
     if ("error" in access) return { ok: false as const, error: access.error };
     if (access.request.version !== data.expectedVersion) {
       return {
@@ -1214,6 +1216,7 @@ export const updateOvertimeRequest = createServerFn({ method: "POST" })
     const { data: updated, error } = await db
       .from("overtime_requests")
       .update({
+        ...(data.pt_number !== undefined ? { pt_number: data.pt_number?.toUpperCase() === "NA" ? "NA" : data.pt_number || null, pt_updated_by: userId } : {}),
         overtime_date: data.overtime_date,
         entry_time: data.entry_time,
         departure_time: data.departure_time,

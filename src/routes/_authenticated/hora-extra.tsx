@@ -410,7 +410,8 @@ function OvertimePage() {
           }}
           onSelectedDateChange={setExportDate}
           onKpiChange={setExportKpis}
-          canManageRequests={canManageDailyRequests}
+          canManageRequests={canManageDailyRequests || isMeasurementControl}
+          canDeleteRequests={canManageDailyRequests}
           onEdit={setEditingRequest}
           onDelete={setDeletingRequest}
         />
@@ -955,6 +956,7 @@ function ApprovedDailyExport({
   onSelectedDateChange,
   onKpiChange,
   canManageRequests = false,
+  canDeleteRequests = false,
   onEdit,
   onDelete,
 }: {
@@ -970,6 +972,7 @@ function ApprovedDailyExport({
   onSelectedDateChange: (date: string) => void;
   onKpiChange: (kpis: OvertimeKpis) => void;
   canManageRequests?: boolean;
+  canDeleteRequests?: boolean;
   onEdit?: (row: OvertimeRow) => void;
   onDelete?: (row: OvertimeRow) => void;
 }) {
@@ -1422,12 +1425,12 @@ function ApprovedDailyExport({
                     >
                       <Pencil className="h-3.5 w-3.5" /> Editar
                     </button>
-                    <button
+                    {canDeleteRequests && (<button
                       onClick={() => onDelete?.(row)}
                       className="min-h-9 flex-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10"
                     >
                       Excluir
-                    </button>
+                    </button>)}
                   </div>
                 )}
               </article>
@@ -1493,12 +1496,12 @@ function ApprovedDailyExport({
                             >
                               Editar
                             </button>
-                            <button
+                            {canDeleteRequests && (<button
                               onClick={() => onDelete?.(row)}
                               className="rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
                             >
                               Excluir
-                            </button>
+                            </button>)}
                           </div>
                         ) : (
                           <span className="text-muted-foreground">—</span>
@@ -3249,6 +3252,7 @@ function EditOvertimeRequestModal({
   const call = useServerFn(updateOvertimeRequest);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
+    pt_number: row.pt_number ?? "",
     overtime_date: row.overtime_date,
     entry_time: row.entry_time ?? "",
     departure_time: row.departure_time,
@@ -3274,6 +3278,7 @@ function EditOvertimeRequestModal({
         data: {
           id: row.id,
           expectedVersion: row.version,
+          pt_number: form.pt_number.trim() || null,
           overtime_date: form.overtime_date,
           entry_time: form.entry_time || null,
           departure_time: form.departure_time,
@@ -3337,6 +3342,10 @@ function EditOvertimeRequestModal({
             onChange={(e) => setForm((v) => ({ ...v, order_number: e.target.value }))}
             className="input-base w-full text-[12px]"
           />
+        </Field>
+        <Field label="Nº PT">
+          <input value={form.pt_number} maxLength={120} onChange={(e) => setForm((v) => ({ ...v, pt_number: e.target.value }))} className="input-base w-full text-[12px]" />
+          <p className="mt-1 text-[11px] text-muted-foreground">Se for oficina, preencha NA.</p>
         </Field>
         <Field label="Horário de entrada">
           <input
