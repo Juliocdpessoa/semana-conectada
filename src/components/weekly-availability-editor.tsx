@@ -1,3 +1,4 @@
+import { AvailabilityCapacity } from "@/components/availability-capacity";
 import { useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -286,6 +287,7 @@ export function WeeklyAvailabilityEditor({
 
   return (
     <Panel title="Disponibilidade semanal · total já inclui EEP">
+      <AvailabilityCapacity key={week.id} week={week} rows={converted} readOnly={readOnly} onDistribute={(center,local,days)=>{setRows(current=>{const existing=current.filter(r=>r.center===center&&r.local===local);const template=existing[0];if(!template)return current;return [...current.filter(r=>r.center!==center||r.local!==local),...Object.entries(days).map(([date,hours])=>({...template,date,hours:serviceHoursInput(hours)}))];});}} />
       {readOnly && (
         <p className="mb-3 text-xs text-muted-foreground">
           Semana fechada: disponibilidade somente para consulta. O administrador deve reabrir o
