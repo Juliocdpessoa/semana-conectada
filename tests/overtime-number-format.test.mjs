@@ -1,0 +1,5 @@
+import {test} from 'node:test';import assert from 'node:assert/strict';import {z} from 'zod';import fs from 'node:fs';import ts from 'typescript';
+const s=fs.readFileSync(new URL('../src/lib/overtime.functions.ts',import.meta.url),'utf8');
+const f=s.slice(s.indexOf('const updateOvertimeSchema'),s.indexOf('async function loadEditableOvertimeRequest'));
+const schema=new Function('z','isValidDate',ts.transpileModule(f,{compilerOptions:{module:ts.ModuleKind.None}}).outputText+';return updateOvertimeSchema;')(z,()=>true);
+test('order and PT exact formats, optional blanks and leading zero preserved',()=>{for(const key of ['order_number','pt_number']){const field=schema.shape[key];const good=key==='order_number'?['0123456789',null,'']:['01234567','NA','na',null,''];const bad=key==='order_number'?['123','12345678901','ABCDEFGHIJ']:['1234567','123456789','N/A','ABCDEFGH'];for(const v of good)assert.ok(field.safeParse(v).success);for(const v of bad)assert.equal(field.safeParse(v).success,false);}});

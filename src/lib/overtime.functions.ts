@@ -693,8 +693,8 @@ const createSchema = z
 
     activity_id: z.string().uuid().nullable().optional(),
     week_id: z.string().uuid().nullable().optional(),
-    order_number: z.string().trim().max(64).nullable().optional(),
-    pt_number: z.string().trim().max(120).nullable().optional(),
+    order_number: z.string().trim().regex(/^(?:\d{10})?$/, "Número de ordem deve conter exatamente 10 dígitos.").nullable().optional(),
+    pt_number: z.string().trim().toUpperCase().regex(/^(?:\d{8}|NA)?$/, "Nº PT deve conter 8 dígitos ou NA.").nullable().optional(),
     service_description: z.string().trim().min(3).max(1000),
     overtime_date: z.string().refine(isValidDate, "Data inválida"),
     entry_time: z
@@ -1145,7 +1145,7 @@ export const cancelOvertimeRequest = createServerFn({ method: "POST" })
   });
 
 const updateOvertimeSchema = z.object({
-  pt_number: z.string().trim().max(120).nullable().optional(),
+  pt_number: z.string().trim().toUpperCase().regex(/^(?:\d{8}|NA)?$/, "Nº PT deve conter 8 dígitos ou NA.").nullable().optional(),
   id: z.string().uuid(),
   expectedVersion: z.number().int().min(1),
   overtime_date: z.string().refine(isValidDate, "Data inválida"),
@@ -1156,7 +1156,7 @@ const updateOvertimeSchema = z.object({
   departure_time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horário inválido"),
   needs_snack: z.boolean(),
   needs_transport: z.boolean(),
-  order_number: z.string().trim().max(64).nullable(),
+  order_number: z.string().trim().regex(/^(?:\d{10})?$/, "Número de ordem deve conter exatamente 10 dígitos.").nullable(),
   service_description: z.string().trim().min(3).max(1000),
   justification: z.string().trim().min(3).max(1000),
 });
@@ -1274,7 +1274,7 @@ export const deleteOvertimeRequest = createServerFn({ method: "POST" })
 
 export const completeOvertimePt = createServerFn({ method: "POST" })
  .middleware([requireSupabaseAuth])
- .validator((data: unknown) => z.object({ id:z.string().uuid(),expectedVersion:z.number().int().min(1),ptNumber:z.string().trim().min(1).max(120),applyBatch:z.boolean().optional() }).parse(data))
+ .validator((data: unknown) => z.object({ id:z.string().uuid(),expectedVersion:z.number().int().min(1),ptNumber:z.string().trim().toUpperCase().regex(/^(?:\d{8}|NA)$/, "Nº PT deve conter 8 dígitos ou NA."),applyBatch:z.boolean().optional() }).parse(data))
  .handler(async ({data,context}) => {
   const {data:result,error}=await (context.supabase as any).rpc("complete_overtime_pt",{p_id:data.id,p_expected_version:data.expectedVersion,p_pt:data.ptNumber,p_apply_batch:data.applyBatch??false});
   if(error) return {ok:false as const,conflict:false,error:error.message};
