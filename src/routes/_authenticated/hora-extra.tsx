@@ -3702,7 +3702,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
   }
 
   return (
-    <Modal onClose={onClose} title="Nova solicitação de hora extra" size="lg">
+    <Modal onClose={onClose} title="Nova solicitação de hora extra" size="lg" closeOnBackdropClick={false}>
       <div className="rounded-md border border-border bg-muted/30 p-3">
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

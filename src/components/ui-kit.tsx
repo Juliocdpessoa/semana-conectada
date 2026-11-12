@@ -184,6 +184,7 @@ export function Modal({
   onClose,
   footer,
   size = "md",
+  closeOnBackdropClick = true,
 }: {
   title: string;
   description?: string;
@@ -191,6 +192,7 @@ export function Modal({
   onClose: () => void;
   footer?: ReactNode;
   size?: "md" | "lg";
+  closeOnBackdropClick?: boolean;
 }) {
   return (
     <div
