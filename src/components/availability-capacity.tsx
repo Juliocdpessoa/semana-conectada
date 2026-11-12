@@ -10,7 +10,7 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  const defaults=Object.fromEntries(dates.map(d=>[d,[0,6].includes(new Date(d+"T12:00:00").getDay())?0:8.8]));
  const [days,setDays]=useState<Record<string,number>>(defaults);
  const [version,setVersion]=useState(0),[saved,setSaved]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
- const [mode,setMode]=useState("week"),[metric,setMetric]=useState("hh"),[center,setCenter]=useState(""),[total,setTotal]=useState("");
+ const [mode,setMode]=useState("week"),[metric,setMetric]=useState("hh");
  const [history,setHistory]=useState<any[]>([]);
  useEffect(()=>{let active=true;setLoaded(false);
  (async()=>{const {data,error}=await (supabase as any).from("weekly_capacity_journey").select("*").eq("week_id",week.id).maybeSingle();
@@ -22,10 +22,7 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  for(const r of rows){if(mode!=="week"&&r.date!==mode)continue;const k=JSON.stringify([r.center,r.local]);const g=groups.get(k)??{center:r.center,local:r.local,hours:0};g.hours+=r.hours;groups.set(k,g);}
  const bars=[...groups.entries()].sort((a,b)=>b[1].hours-a[1].hours);
  const max=Math.max(1,...bars.map(([,g])=>metric==="hh"?g.hours:denominator?g.hours/denominator:0));
- const choices=[...new Map(rows.map(r=>[JSON.stringify([r.center,r.local]),r])).entries()];
- const weekly=Object.values(days).reduce((a,b)=>a+b,0),amount=Number(total.replace(",","."));
- const preview:Record<string,number>={};let allocated=0;const activeDates=dates.filter(d=>days[d]>0);
- activeDates.forEach((d,i)=>{const value=i===activeDates.length-1?Math.round((amount-allocated)*100)/100:Math.round(amount*days[d]/weekly*100)/100;preview[d]=value;allocated+=value;});
+ const weekly=Object.values(days).reduce((a,b)=>a+b,0);
  async function save(){if(readOnly||busy||!loaded)return;setBusy(true);
  try{const db=supabase as any;const result=version?await db.from("weekly_capacity_journey").update({days}).eq("week_id",week.id).eq("version",version).select().maybeSingle():await db.from("weekly_capacity_journey").insert({week_id:week.id,days}).select().single();
  if(result.error||!result.data)throw Error("Jornada alterada por outra pessoa ou sem permissão. Atualize a tela.");
@@ -44,11 +41,19 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  {history.length>0&&<div className="max-h-40 overflow-auto text-xs">{history.map(h=><p key={h.id}>Versão {h.version} · {new Date(h.updated_at).toLocaleString("pt-BR")} · {h.updated_by_name||h.updated_by} · {Object.entries(h.days).map(([d,v])=>d+": "+v+"h").join(" | ")}</p>)}</div>}
  <div className="flex flex-wrap gap-2"><select aria-label="Período do gráfico" className="input-base text-xs" value={mode} onChange={e=>setMode(e.target.value)}><option value="week">Semana completa</option>{dates.map(d=><option key={d} value={d}>{d.slice(8)}/{d.slice(5,7)}</option>)}</select><select aria-label="Métrica do gráfico" className="input-base text-xs" value={metric} onChange={e=>setMetric(e.target.value)}><option value="hh">HH disponível</option><option value="people">Pessoas equivalentes</option></select></div>
  {!denominator&&<p className="text-xs text-amber-700">Jornada zero: não é possível calcular pessoas equivalentes neste período.</p>}
- <div className="max-h-96 space-y-2 overflow-auto">{bars.map(([k,g])=>{const v=metric==="hh"?g.hours:denominator?g.hours/denominator:0;return <div key={k} className="grid grid-cols-[minmax(100px,1fr)_3fr] items-center gap-3 text-xs"><span>{g.center} · {g.local}</span><div><div className="h-4 rounded bg-muted"><div className="h-full rounded bg-primary" style={{width:(v/max*100)+"%"}}/></div><span>{fmt(g.hours)} HH · {denominator?fmt(g.hours/denominator)+" pessoas equivalentes":"sem referência"}</span></div></div>})}</div>
- {!readOnly&&<details className="border-t pt-3"><summary className="cursor-pointer text-xs font-medium">Distribuir HH semanal por jornada</summary><p className="my-2 text-xs">Sugestão proporcional. Aplicar altera o rascunho; use Salvar disponibilidade para registrar a versão.</p>
- <div className="flex flex-wrap gap-2"><select aria-label="Centro para distribuição" className="input-base" value={center} onChange={e=>setCenter(e.target.value)}><option value="">Selecione o centro e local</option>{choices.map(([k,r])=><option key={k} value={k}>{r.center} · {r.local}</option>)}</select><input aria-label="HH semanal para distribuição" className="input-base" placeholder="HH semanal" value={total} onChange={e=>setTotal(e.target.value)}/></div>
- {amount>0&&weekly>0&&<p className="my-2 text-xs">{fmt(amount/weekly)} pessoas equivalentes · {Object.entries(preview).map(([d,h])=>d.slice(8)+": "+fmt(h)+" HH").join(" | ")}</p>}
- <button className="btn-primary mt-2 text-xs" disabled={!loaded||!center||!Number.isFinite(amount)||amount<=0||weekly<=0} onClick={()=>{const [c,l]=JSON.parse(center);if(window.confirm("Aplicar esta distribuição ao rascunho de "+c+"? As cargas dos demais centros serão preservadas."))onDistribute(c,l,Object.fromEntries(dates.map(d=>[d,preview[d]??0])));}}>Aplicar prévia ao rascunho</button>
- </details>}
+
+ <div className="overflow-x-auto pb-2">
+ <div role="img" aria-label={metric==="hh"?"HH disponível por centro de trabalho":"Pessoas equivalentes por centro de trabalho"} className="flex min-w-full items-end gap-3 border-b border-border px-2 pt-8" style={{height:340,width:Math.max(600,bars.length*105)}}>
+ {bars.map(([k,g])=>{const v=metric==="hh"?g.hours:denominator?g.hours/denominator:0;return <div key={k} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={g.center+" · "+g.local+" | "+fmt(g.hours)+" HH | "+(denominator?fmt(g.hours/denominator)+" pessoas equivalentes":"sem referência")}>
+ <div className="flex w-full flex-1 flex-col justify-end items-center">
+ <span className="mb-1 whitespace-nowrap text-xs font-semibold">{fmt(v)}</span>
+ <div className="w-10 rounded-t bg-primary transition-all hover:brightness-110 sm:w-14" style={{height:(v/max*230)+"px",minHeight:v>0?2:0}}/>
+ </div>
+ <div className="h-16 w-full pt-2 text-center text-[10px]"><div className="break-words font-semibold">{g.center}</div><div className="text-muted-foreground">{g.local}</div></div>
+ </div>})}
+ </div>
+ </div>
+ <p className="text-xs text-muted-foreground">{metric==="hh"?"HH disponível":"Pessoas equivalentes"} · Passe o mouse sobre uma coluna para ver os dois valores.</p>
+
  </section>;
 }
