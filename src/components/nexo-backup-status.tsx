@@ -14,6 +14,8 @@ export function NexoBackupStatus({ worksiteId }: { worksiteId: string }) {
       if (error) throw error;
       return data as {
         pending: number;
+        capturePending?: number;
+        captureFailures?: number;
         lastCaptured: string | null;
         lastDelivered: string | null;
         deviceLastSeen: string | null;
@@ -32,7 +34,9 @@ export function NexoBackupStatus({ worksiteId }: { worksiteId: string }) {
         "Consultando…"
       ) : (
         <>
-          {status.data.pending} pendente(s) de recebimento local{" | "}Último recebido:{" "}
+          {status.data.capturePending ?? 0} aguardando geração
+          {(status.data.captureFailures ?? 0) > 0 ? " (com falha; nova tentativa automática)" : ""}
+          {" | "}{status.data.pending} pendente(s) de recebimento local{" | "}Último recebido:{" "}
           {date(status.data.lastDelivered)}
           <span className="ml-2 text-muted-foreground">
             Destino: C:\Backup NEXO. O computador receptor precisa estar ligado, com a sessão
