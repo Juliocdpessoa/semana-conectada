@@ -296,7 +296,13 @@ export function calculateCenterRealization(
       hasSap,
       local,
     );
-    return result.rows.map((r) => ({ ...r, center }));
+    return result.rows.map((r) => {
+      // Capacity is capped only after all centers of the specialty are combined.
+      const considered = r.completedForRs + r.immediate;
+      return { ...r, center, considered,
+        excess: Math.max(0, r.actual - considered),
+        rs: hasSap && r.available > 0 ? considered / r.available * 100 : null };
+    });
   });
 }
 
