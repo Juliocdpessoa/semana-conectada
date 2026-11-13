@@ -1778,7 +1778,7 @@ function CompleteOvertimePtModal({row,onClose,onSaved}:{row:OvertimeRow;onClose:
  const [saving,setSaving]=useState(false);
  async function save(event:React.FormEvent) {
   event.preventDefault(); if(saving||!pt.trim())return;
-  if(!/^(?:\d{8}|NA)$/.test(pt.trim().toUpperCase())) return toast.error("Nº PT deve conter 8 dígitos ou NA.");
+  if(!/^(?:\d{8}|NA|ATRE)$/.test(pt.trim().toUpperCase())) return toast.error("Nº PT deve conter 8 dígitos, NA ou ATRE.");
   setSaving(true);
   try {
    const result=await call({data:{id:row.id,expectedVersion:row.version,ptNumber:pt.trim().toUpperCase(),applyBatch}});
@@ -1797,7 +1797,7 @@ function CompleteOvertimePtModal({row,onClose,onSaved}:{row:OvertimeRow;onClose:
   description={`Solicitação #${row.request_number} · ${formatDate(row.overtime_date)} · ${row.employee_name}`}>
   <form onSubmit={save} className="space-y-4">
    <Field label="Nº PT" required>
-    <input autoFocus required maxLength={8} pattern="([0-9]{8}|[Nn][Aa])" value={pt} onChange={(event)=>{const value=event.target.value.toUpperCase();if(/^(?:[0-9]{0,8}|N|NA)$/.test(value))setPt(value);}} className="input-base" placeholder="Nº da PT ou NA" />
+    <input autoFocus required maxLength={8} pattern="([0-9]{8}|[Nn][Aa]|[Aa][Tt][Rr][Ee])" value={pt} onChange={(event)=>{const value=event.target.value.toUpperCase();if(/^(?:[0-9]{0,8}|N|NA|A|AT|ATR|ATRE)$/.test(value))setPt(value);}} className="input-base" placeholder="Nº da PT, NA ou ATRE" />
     <p className="mt-1 text-xs text-muted-foreground">Se for oficina, preencha NA. Apenas a PT será complementada, sem alterar a aprovação, horários ou demais dados.</p>
    </Field>
    {row.batch_id && <label className="flex items-start gap-2 text-xs">
@@ -3345,7 +3345,7 @@ function EditOvertimeRequestModal({
           />
         </Field>
         <Field label="Nº PT">
-          <input value={form.pt_number} maxLength={8} onChange={(e) => setForm((v) => ({ ...v, pt_number: /^(?:[0-9]{0,8}|N|NA)$/.test(e.target.value.toUpperCase()) ? e.target.value.toUpperCase() : v.pt_number }))} className="input-base w-full text-[12px]" />
+          <input value={form.pt_number} maxLength={8} onChange={(e) => setForm((v) => ({ ...v, pt_number: /^(?:[0-9]{0,8}|N|NA|A|AT|ATR|ATRE)$/.test(e.target.value.toUpperCase()) ? e.target.value.toUpperCase() : v.pt_number }))} className="input-base w-full text-[12px]" />
           <p className="mt-1 text-[11px] text-muted-foreground">Se for oficina, preencha NA.</p>
         </Field>
         <Field label="Horário de entrada">
@@ -3975,7 +3975,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
         </Field>
         <Field label="Nº PT (opcional)">
           <input className="input-base" maxLength={8} value={form.pt_number}
-            onChange={(event) => { const value = event.target.value.toUpperCase(); if (/^(?:[0-9]{0,8}|N|NA)$/.test(value)) setForm({ ...form, pt_number: value }); }} placeholder="Nº da PT ou NA" />
+            onChange={(event) => { const value = event.target.value.toUpperCase(); if (/^(?:[0-9]{0,8}|N|NA|A|AT|ATR|ATRE)$/.test(value)) setForm({ ...form, pt_number: value }); }} placeholder="Nº da PT, NA ou ATRE" />
           <p className="mt-1 text-[11px] text-muted-foreground">Se for oficina, preencha NA. Se ainda não souber a PT, informe depois em Minhas solicitações.</p>
         </Field>
         <Field label="Serviço / atividade" required>

@@ -1,0 +1,2 @@
+import {test} from "node:test";import assert from "node:assert/strict";import fs from "node:fs";
+test("all three PT validation paths accept ATRE and retain numeric length",()=>{const s=fs.readFileSync(new URL("../src/lib/overtime.functions.ts",import.meta.url),"utf8");assert.equal((s.match(/\\d\{8\}\|NA\|ATRE/g)||[]).length,3);const valid=/^(?:\d{8}|NA|ATRE)$/;for(const v of ["ATRE","NA","01234567"])assert.ok(valid.test(v));for(const v of ["ATR","ATREX","1234567","123456789"])assert.equal(valid.test(v),false);});
