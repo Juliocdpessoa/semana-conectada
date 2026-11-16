@@ -14,6 +14,7 @@ type Row = {
   week_id: string;
   week_code: string;
   order_number: string;
+  confirmation: string | null;
   operation: string | null;
   suboperation: string | null;
   description: string;
@@ -143,12 +144,13 @@ export function RsCenterPendingTasks({
             )
           ) : (
             <div className="max-h-[440px] overflow-auto rounded-md border border-border bg-card">
-              <table className="w-full min-w-[940px] text-left text-xs">
+              <table className="w-full min-w-[1040px] text-left text-xs">
                 <thead className="sticky top-0 bg-muted">
                   <tr>
                     {[
                       "Semana / Data",
                       "Ordem / Operação",
+                      "Confirmação",
                       "Atividade",
                       "HH programado",
                       "Status operacional",
@@ -177,6 +179,7 @@ export function RsCenterPendingTasks({
                           {row.suboperation ? ` / ${row.suboperation}` : ""}
                         </div>
                       </td>
+                      <td className="p-2 font-mono">{row.confirmation || "—"}</td>
                       <td className="min-w-48 p-2">{row.description}</td>
                       <td className="p-2 text-right tabular-nums">{hours(row.planned_hh)}</td>
                       <td className="min-w-36 p-2">{pendingOperationalLabel(row.status)}</td>
@@ -204,7 +207,7 @@ export function RsCenterPendingTasks({
                 <tfoot className="border-t-2 border-border bg-muted font-semibold">
                   {query.data.total > 50 && (
                     <tr className="rs-hover-row">
-                      <th scope="row" colSpan={3} className="p-2">
+                      <th scope="row" colSpan={4} className="p-2">
                         Subtotal desta página · HH
                       </th>
                       <td className="p-2 text-right tabular-nums">
@@ -216,7 +219,7 @@ export function RsCenterPendingTasks({
                     </tr>
                   )}
                   <tr className="rs-hover-row">
-                    <th scope="row" colSpan={3} className="p-2">
+                    <th scope="row" colSpan={4} className="p-2">
                       Total das tarefas sem apropriação · HH
                     </th>
                     <td className="p-2 text-right tabular-nums">
