@@ -11,7 +11,10 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  const [days,setDays]=useState<Record<string,number>>(defaults);
  const [version,setVersion]=useState(0),[saved,setSaved]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
  const [mode,setMode]=useState("week"),[metric,setMetric]=useState("hh");
- const [history,setHistory]=useState<any[]>([]);
+ const [specialty,setSpecialty]=useState("");
+ const [local,setLocal]=useState("");
+ const key=(value:string)=>value.trim().toUpperCase();
+ const specialties=[...new Set(rows.map(r=>r.specialty.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
  useEffect(()=>{let active=true;setLoaded(false);
  (async()=>{const {data,error}=await (supabase as any).from("weekly_capacity_journey").select("*").eq("week_id",week.id).maybeSingle();
  if(!active)return;if(error){toast.error("Não foi possível carregar a jornada.");return;}
@@ -19,7 +22,7 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  })();return()=>{active=false};},[week.id]);
  const denominator=mode==="week"?Object.values(days).reduce((a,b)=>a+b,0):(days[mode]??0);
  const groups=new Map<string,{center:string;local:string;hours:number}>();
- for(const r of rows){if(mode!=="week"&&r.date!==mode)continue;const k=JSON.stringify([r.center,r.local]);const g=groups.get(k)??{center:r.center,local:r.local,hours:0};g.hours+=r.hours;groups.set(k,g);}
+ for(const r of rows){if((specialty&&key(r.specialty)!==key(specialty))||(local&&key(r.local)!==local)||(mode!=="week"&&r.date!==mode))continue;const k=JSON.stringify([r.center,r.local]);const g=groups.get(k)??{center:r.center,local:r.local,hours:0};g.hours+=r.hours;groups.set(k,g);}
  const bars=[...groups.entries()].sort((a,b)=>b[1].hours-a[1].hours);
  const max=Math.max(1,...bars.map(([,g])=>metric==="hh"?g.hours:denominator?g.hours/denominator:0));
  const weekly=Object.values(days).reduce((a,b)=>a+b,0);
@@ -35,13 +38,15 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  {dates.map(d=><label key={d} className="text-xs">{d.slice(8)}/{d.slice(5,7)}<input aria-label={"Jornada "+d} type="number" min="0" max="24" step="0.1" disabled={readOnly||!loaded} value={days[d]??0} onChange={e=>setDays({...days,[d]:Math.min(24,Math.max(0,Number(e.target.value)))})} className="input-base block w-20"/></label>)}
  <span className="text-xs">{fmt(weekly)} h/pessoa na semana</span>
  {!readOnly&&<button className="btn-primary text-xs" disabled={busy||!loaded} onClick={save}>Salvar jornada</button>}
- <button className="btn-secondary text-xs" onClick={async()=>{const {data,error}=await (supabase as any).from("weekly_capacity_journey_history").select("*").eq("week_id",week.id).order("updated_at",{ascending:false}).limit(30);if(error)toast.error("Erro ao consultar histórico");else setHistory(data??[]);}}>Histórico da jornada</button>
  </div>
  <p className="text-xs text-muted-foreground">{saved?"Jornada salva em "+saved:"Referência sugerida de 8,8 h por dia útil: confira e salve antes de usar como referência oficial."}</p>
- {history.length>0&&<div className="max-h-40 overflow-auto text-xs">{history.map(h=><p key={h.id}>Versão {h.version} · {new Date(h.updated_at).toLocaleString("pt-BR")} · {h.updated_by_name||h.updated_by} · {Object.entries(h.days).map(([d,v])=>d+": "+v+"h").join(" | ")}</p>)}</div>}
- <div className="flex flex-wrap gap-2"><select aria-label="Período do gráfico" className="input-base text-xs" value={mode} onChange={e=>setMode(e.target.value)}><option value="week">Semana completa</option>{dates.map(d=><option key={d} value={d}>{d.slice(8)}/{d.slice(5,7)}</option>)}</select><select aria-label="Métrica do gráfico" className="input-base text-xs" value={metric} onChange={e=>setMetric(e.target.value)}><option value="hh">HH disponível</option><option value="people">Pessoas equivalentes</option></select></div>
+ <div className="flex flex-wrap gap-2">
+ <label className="text-xs">Especialidade<select aria-label="Especialidade do gráfico" className="input-base block text-xs" value={specialty} onChange={e=>setSpecialty(e.target.value)}><option value="">Todas as especialidades</option>{specialties.map(v=><option key={v} value={v}>{v}</option>)}</select></label>
+ <label className="text-xs">Local<select aria-label="Local do gráfico" className="input-base block text-xs" value={local} onChange={e=>setLocal(e.target.value)}><option value="">IARI + ROTINA</option><option value="IARI">IARI</option><option value="ROTINA">ROTINA</option></select></label>
+ <select aria-label="Período do gráfico" className="input-base text-xs" value={mode} onChange={e=>setMode(e.target.value)}><option value="week">Semana completa</option>{dates.map(d=><option key={d} value={d}>{d.slice(8)}/{d.slice(5,7)}</option>)}</select><select aria-label="Métrica do gráfico" className="input-base text-xs" value={metric} onChange={e=>setMetric(e.target.value)}><option value="hh">HH disponível</option><option value="people">Pessoas equivalentes</option></select></div>
  {!denominator&&<p className="text-xs text-amber-700">Jornada zero: não é possível calcular pessoas equivalentes neste período.</p>}
 
+ {!bars.length&&<p className="text-xs text-muted-foreground">Nenhum centro de trabalho neste recorte.</p>}
  <div className="overflow-x-auto pb-2">
  <div role="img" aria-label={metric==="hh"?"HH disponível por centro de trabalho":"Pessoas equivalentes por centro de trabalho"} className="flex min-w-full items-end gap-3 border-b border-border px-2 pt-8" style={{height:340,width:Math.max(600,bars.length*105)}}>
  {bars.map(([k,g])=>{const v=metric==="hh"?g.hours:denominator?g.hours/denominator:0;return <div key={k} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={g.center+" · "+g.local+" | "+fmt(g.hours)+" HH | "+(denominator?fmt(g.hours/denominator)+" pessoas equivalentes":"sem referência")}>
