@@ -1,3 +1,4 @@
+import { RsCenterImmediateTasks } from "@/components/rs-center-immediate-tasks";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -257,6 +258,7 @@ export function RsCenterPendingTasks({
           )}
         </>
       )}
+      <RsCenterImmediateTasks key={center+revision} center={center} sources={sources} local={local} userId={userId} worksiteId={worksiteId} revision={revision} />
     </section>
   );
 }
