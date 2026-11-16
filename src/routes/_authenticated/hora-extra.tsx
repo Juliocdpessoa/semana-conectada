@@ -1417,7 +1417,7 @@ function ApprovedDailyExport({
                 <div className="mt-1 break-words">
                   <b>Justificativa:</b> {row.justification}
                 </div>
-                {canManageRequests && row.source_type === "manual" && (
+                {canManageRequests && (row.source_type === "manual" || row.source_type === "scale_change") && (
                   <div className="mt-3 flex gap-2 border-t border-border pt-3">
                     <button
                       onClick={() => onEdit?.(row)}
@@ -1425,7 +1425,7 @@ function ApprovedDailyExport({
                     >
                       <Pencil className="h-3.5 w-3.5" /> Editar
                     </button>
-                    {canDeleteRequests && (<button
+                    {canDeleteRequests && row.source_type === "manual" && (<button
                       onClick={() => onDelete?.(row)}
                       className="min-h-9 flex-1 rounded border border-destructive/40 text-[11px] text-destructive hover:bg-destructive/10"
                     >
@@ -1488,7 +1488,7 @@ function ApprovedDailyExport({
                     <td className="max-w-[280px] px-3 py-2">{row.justification}</td>
                     {canManageRequests && (
                       <td className="whitespace-nowrap px-3 py-2 text-right">
-                        {row.source_type === "manual" ? (
+                        {(row.source_type === "manual" || row.source_type === "scale_change") ? (
                           <div className="inline-flex gap-1.5">
                             <button
                               onClick={() => onEdit?.(row)}
@@ -1496,7 +1496,7 @@ function ApprovedDailyExport({
                             >
                               Editar
                             </button>
-                            {canDeleteRequests && (<button
+                            {canDeleteRequests && row.source_type === "manual" && (<button
                               onClick={() => onDelete?.(row)}
                               className="rounded border border-destructive/40 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10"
                             >
@@ -3285,7 +3285,7 @@ function EditOvertimeRequestModal({
           departure_time: form.departure_time,
           needs_snack: form.needs_snack,
           needs_transport: form.needs_transport,
-          order_number: form.order_number.trim() || null,
+          order_number: row.source_type === "scale_change" ? null : form.order_number.trim() || null,
           service_description: form.service_description.trim(),
           justification: form.justification.trim(),
         },
@@ -3302,6 +3302,13 @@ function EditOvertimeRequestModal({
     }
   }
 
+  if (row.source_type === "scale_change") return (
+    <Modal title="Editar Nº PT · Mudança de Escala" onClose={onClose}>
+      <p className="mb-3 text-xs text-muted-foreground">Somente a PT será alterada. Dados da escala e aprovação serão preservados.</p>
+      <Field label="Nº PT"><input className="input-base" maxLength={8} value={form.pt_number} onChange={e=>{const value=e.target.value.toUpperCase();if(/^(?:[0-9]{0,8}|N|NA|A|AT|ATR|ATRE)$/.test(value))setForm(v=>({...v,pt_number:value}));}} /></Field>
+      <button className="btn-primary mt-3" disabled={saving} onClick={save}>{saving?"Salvando…":"Salvar PT"}</button>
+    </Modal>
+  );
   return (
     <Modal
       title="Editar solicitação"

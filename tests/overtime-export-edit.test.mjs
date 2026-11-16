@@ -13,10 +13,11 @@ test("measurement can edit others' requests but cannot delete them",async()=>{
  assert.ok((await access(db(row),info,"me","id",true)).request);
  assert.ok((await access(db(row),info,"me","id")).error);
  assert.ok((await access(db(null),info,"me","id",true)).error);
- assert.ok((await access(db({...row,source_type:"scale_change"}),info,"me","id",true)).error);
+ assert.ok((await access(db({...row,source_type:"scale_change"}),info,"me","id",true)).request);
+ assert.ok((await access(db({...row,source_type:"scale_change"}),info,"me","id")).error);
 });
 test("PT is optional for old callers and audit actor is explicit",()=>{
- assert.ok(server.includes("pt_number: z.string().trim().max(120).nullable().optional()"));
+ assert.ok(server.includes("pt_number: z.string().trim().toUpperCase().regex("));
  assert.ok(server.includes("pt_updated_by: userId"));
  const edit=server.slice(server.indexOf("export const updateOvertimeRequest"),server.indexOf("export const deleteOvertimeRequest"));
  assert.ok(edit.includes("data.id, true"));assert.ok(edit.includes('.eq("version", data.expectedVersion)'));

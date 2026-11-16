@@ -1177,7 +1177,7 @@ async function loadEditableOvertimeRequest(
     .maybeSingle();
   if (error) return { error: error.message } as const;
   if (!request) return { error: "Solicitação não encontrada." } as const;
-  if (request.source_type !== "manual") {
+  if (request.source_type !== "manual" && !(allowMeasurementEdit && request.source_type === "scale_change")) {
     return {
       error: "Solicitações da Mudança de Escala devem ser alteradas naquele módulo.",
     } as const;
@@ -1215,7 +1215,11 @@ export const updateOvertimeRequest = createServerFn({ method: "POST" })
     }
     const { data: updated, error } = await db
       .from("overtime_requests")
-      .update({
+      .update(access.request.source_type === "scale_change" ? {
+        pt_number: data.pt_number?.toUpperCase() === "NA" ? "NA" : data.pt_number || null,
+        pt_updated_by: userId,
+        version: data.expectedVersion + 1,
+      } : {
         ...(data.pt_number !== undefined ? { pt_number: data.pt_number?.toUpperCase() === "NA" ? "NA" : data.pt_number || null, pt_updated_by: userId } : {}),
         overtime_date: data.overtime_date,
         entry_time: data.entry_time,
