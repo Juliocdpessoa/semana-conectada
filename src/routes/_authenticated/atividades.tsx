@@ -1,3 +1,5 @@
+import { ContinuousActivities } from "@/components/continuous-activities";
+import type { ContinuousConfig } from "@/lib/continuous-activities";
 import { hasConfinedSpacePbs, readConfinedSpaceFilter, type ConfinedSpaceFilter } from "@/lib/confined-space";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -858,7 +860,7 @@ function PlanningGridCell({
   );
 }
 
-function AtividadesPage() {
+function WeeklyActivitiesPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const filterStorageKey = `nexo:activity-filters:${session.userId}:${session.worksiteId}`;
   const effectiveRoles =
@@ -4491,4 +4493,12 @@ function BulkModal({
       )}
     </Modal>
   );
+}
+
+function AtividadesPage(){
+ const {session}=Route.useRouteContext() as {session:SessionInfo};
+ const cfg=useQuery({queryKey:["activity-page-config",session.worksiteId],queryFn:async()=>{const {data,error}=await (supabase as any).from("activity_page_configs").select("*").eq("worksite_id",session.worksiteId).maybeSingle();if(error)throw error;return data as ContinuousConfig|null;}});
+ if(cfg.isPending)return <p role="status">Carregando configuração de atividades…</p>;
+ if(cfg.isError)return <p role="alert">Não foi possível carregar a configuração. <button onClick={()=>void cfg.refetch()}>Tentar novamente</button></p>;
+ return cfg.data?.mode==="continuous"?<ContinuousActivities key={session.worksiteId} session={session} cfg={cfg.data}/>:<WeeklyActivitiesPage/>;
 }

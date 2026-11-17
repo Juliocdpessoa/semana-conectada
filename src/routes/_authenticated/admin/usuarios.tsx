@@ -1,3 +1,4 @@
+import { ActivityPageConfiguration } from "@/components/activity-page-configuration";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -275,6 +276,7 @@ function AdminUsers() {
         </Panel>
       )}
 
+      {session.roles.includes("admin") && <ActivityPageConfiguration worksiteId={session.worksiteId} />}
       <Panel title={`Usuários · ${session.worksiteCode}`} padded={false}>
         <div className="flex flex-wrap items-end gap-3 border-b border-border p-3">
           <div className="w-full sm:max-w-md">
