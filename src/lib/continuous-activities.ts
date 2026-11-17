@@ -7,15 +7,25 @@ export function continuousKey(d:Record<string,unknown>){
  // Never use OS alone: one OS may have several budgets.
  return JSON.stringify([d.ss??"",d.os??"",d.budget??"",String(d.description??"").trim()]);}
 export function parseContinuousGrid(grid:unknown[][],cfg:ContinuousConfig,parseDate:(n:number)=>string){
- const index=grid.findIndex(r=>normalizeHeader(r[1])===normalizeHeader(cfg.fields.find(f=>f.key==="ss")?.label??"Nº S.S")&&normalizeHeader(r[3])===normalizeHeader(cfg.fields.find(f=>f.key==="requester")?.label??"SOLICITANTE")&&normalizeHeader(r[4])===normalizeHeader(cfg.fields.find(f=>f.key==="description")?.label??"SOLICITAÇÃO"));
+ const label=(key:string)=>normalizeHeader(cfg.fields.find(f=>f.key===key)?.label??key);
+ const index=grid.findIndex(r=>["ss","requester","description"].every(key=>r.some(v=>normalizeHeader(v)===label(key))));
  if(index<0)throw Error("Cabeçalho da aba ORÇAMENTOS não encontrado: confira Nº S.S, SOLICITANTE e SOLICITAÇÃO.");
+ const headers=grid[index].map(normalizeHeader);
+ const legacy=headers[1]===label("ss")&&headers[3]===label("requester")&&headers[4]===label("description");
+ const columns=new Map<string,number>();
+ for(const field of cfg.fields){
+ const matches=headers.map((h,i)=>h===label(field.key)?i:-1).filter(i=>i>=0);
+ if(matches.length>1)throw Error("Coluna duplicada: "+field.label);
+ const position=legacy?fiocruzColumns.indexOf(field.key)+1:(matches[0]??-1);
+ if(position<0)throw Error("Coluna não encontrada: "+field.label);
+ columns.set(field.key,position);
+ }
  const seen=new Set<string>();const result:Array<{key:string;data:Record<string,unknown>;line:number}>=[];
  for(let i=index+1;i<grid.length;i++){
  const row=grid[i];if(!row?.some(v=>v!==null&&v!==undefined&&String(v).trim()!==""))continue;
  const data:Record<string,unknown>={};
- for(let j=0;j<fiocruzColumns.length;j++){
- const key=fiocruzColumns[j];if(!key)continue;
- const f=cfg.fields.find(f=>f.key===key);let v=row[j+1];
+ for(const f of cfg.fields){
+ const key=f.key;let v=row[columns.get(key)!];
  if(v===null||v===undefined||v===""||v==="-"){data[key]=null;continue;}
  if(key==="status"){const label=normalizeHeader(v);const st=cfg.statuses.find(s=>normalizeHeader(s.key+"-"+s.label)===label||normalizeHeader(s.label)===label||s.key===String(v).trim());if(!st||!st.active)throw Error("Status não configurado na linha "+(i+1)+": "+v);v=st.key;}
  else if(f?.type==="number"){if(typeof v!=="number"){const text=String(v).replace(/R\$/g,"").trim();v=Number(text.includes(",")?text.replace(/\./g,"").replace(",","."):text);}if(!Number.isFinite(v)||Number(v)<0)throw Error("Valor inválido na linha "+(i+1));}
