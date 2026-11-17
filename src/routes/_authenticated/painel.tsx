@@ -1,3 +1,5 @@
+import { ContinuousActivities } from "@/components/continuous-activities";
+import type { ContinuousConfig } from "@/lib/continuous-activities";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
@@ -61,7 +63,7 @@ type PanelView =
   | "realizacao-semanal"
   | "disponibilidade-hh"
   | "importacoes";
-function PainelPage() {
+function WeeklyPainelPage() {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const canAccessRs = session.roles.some((role) => role === "planning" || role === "admin");
   const requestedView =
@@ -1861,4 +1863,12 @@ function formatDateTimeNe(value: string | null) {
   return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeStyle: "short" }).format(
     new Date(value),
   );
+}
+
+function PainelPage(){
+ const {session}=Route.useRouteContext() as {session:SessionInfo};
+ const cfg=useQuery({queryKey:["activity-page-config",session.worksiteId],queryFn:async()=>{const {data,error}=await (supabase as any).from("activity_page_configs").select("*").eq("worksite_id",session.worksiteId).maybeSingle();if(error)throw error;return data as ContinuousConfig|null;}});
+ if(cfg.isPending)return <p role="status">Carregando configuração…</p>;
+ if(cfg.isError)return <p role="alert">Não foi possível carregar. <button onClick={()=>void cfg.refetch()}>Tentar novamente</button></p>;
+ return cfg.data?.mode==="continuous"?<main className="px-4 py-6 sm:px-6"><ContinuousActivities key={session.worksiteId} session={session} cfg={cfg.data} importsOnly/></main>:<WeeklyPainelPage/>;
 }
