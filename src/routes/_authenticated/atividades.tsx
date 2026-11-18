@@ -1,3 +1,4 @@
+import { buildPlanningPatch, clearSavedPlanningDraft, type PlanningSnapshot } from "@/lib/activity-planning-patch";
 import { ContinuousActivities } from "@/components/continuous-activities";
 import type { ContinuousConfig } from "@/lib/continuous-activities";
 import { hasConfinedSpacePbs, readConfinedSpaceFilter, type ConfinedSpaceFilter } from "@/lib/confined-space";
@@ -761,6 +762,7 @@ function PlanningGridCell({
   editable,
   onChange,
   onCommit,
+  onCancelEdit,
   onPaste,
   onDragStart,
   onDragEnter,
@@ -771,7 +773,8 @@ function PlanningGridCell({
   field: PlanningField;
   editable: boolean;
   onChange: (value: string) => void;
-  onCommit: (value: string) => void;
+  onCommit: (value: string, baseline?: string) => void;
+  onCancelEdit: () => void;
   onPaste: (event: ClipboardEvent<HTMLElement>) => void;
   onDragStart: () => void;
   onDragEnter: () => void;
@@ -779,6 +782,8 @@ function PlanningGridCell({
   onDrop: () => void;
 }) {
   const [isDragOver, setIsDragOver] = useState(false);
+  const focusedValue = useRef(value);
+  const cellDirty = useRef(false);
 
   if (!editable) {
     return field === "scheduled_date" ? <>{formatDate(value || null)}</> : <>{value || "—"}</>;
@@ -817,7 +822,7 @@ function PlanningGridCell({
           value={value}
           onChange={(event) => {
             onChange(event.target.value);
-            onCommit(event.target.value);
+            onCommit(event.target.value, value);
           }}
           className={sharedClass}
           aria-label="Tipo de liberação"
@@ -833,8 +838,14 @@ function PlanningGridCell({
         <input
           type={field === "scheduled_date" ? "date" : "text"}
           value={value}
-          onChange={(event) => onChange(event.target.value)}
-          onBlur={(event) => onCommit(event.target.value)}
+          onFocus={() => { focusedValue.current = value; cellDirty.current = false; }}
+          onChange={(event) => { cellDirty.current = true; onChange(event.target.value); }}
+          onBlur={(event) => {
+            if (cellDirty.current && event.target.value.trim() !== focusedValue.current.trim())
+              onCommit(event.target.value, focusedValue.current);
+            else onCancelEdit();
+            cellDirty.current = false;
+          }}
           onKeyDown={(event) => {
             if (event.key === "Enter") event.currentTarget.blur();
           }}
@@ -890,7 +901,7 @@ function WeeklyActivitiesPage() {
   const [planningDrafts, setPlanningDrafts] = useState<Record<string, Partial<PlanningDraft>>>({});
   const planningSavesPendingRef = useRef(0);
   const planningSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
-  const planningVersionsRef = useRef(new Map<string, number>());
+  const planningSavedRef = useRef(new Map<string, PlanningSnapshot>());
   const [planningSavePending, setPlanningSavePending] = useState(false);
   const dragSource = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
   const dragTarget = useRef<{ rowIndex: number; field: PlanningField } | null>(null);
@@ -909,6 +920,7 @@ function WeeklyActivitiesPage() {
   const [sapStatusFilters, setSapStatusFilters] = useState<SapConfirmationStatus[]>([]);
   const [loadedFilterStorageKey, setLoadedFilterStorageKey] = useState<string | null>(null);
   const [selectedWeekId, setSelectedWeekId] = useState("");
+  useEffect(() => { planningSavedRef.current.clear(); setPlanningDrafts({}); }, [session.userId, session.worksiteId, selectedWeekId]);
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [editing, setEditing] = useState<ActivityRow | null>(null);
@@ -1553,50 +1565,39 @@ function WeeklyActivitiesPage() {
   }
 
   function planningPayload(row: ActivityRow, overrides: Partial<PlanningDraft> = {}) {
-    const current = {
-      pbs: planningValue(row, "pbs"),
-      pt_number: planningValue(row, "pt_number"),
-      libra: planningValue(row, "libra"),
-      pt_color: row.pt_color ?? "",
-      release_type: planningValue(row, "release_type"),
-      scheduled_date: planningValue(row, "scheduled_date"),
-      ...overrides,
-    };
-    return {
-      id: row.id,
-      expectedVersion: Math.max(planningVersionsRef.current.get(row.id) ?? 0, row.version),
-      pbs: current.pbs || null,
-      ptNumber: current.pt_number || null,
-      libra: current.libra || null,
-      ptColor: (current.pt_color || null) as PtColor | null,
-      releaseType: (current.release_type || null) as (typeof RELEASE_TYPES)[number] | null,
-      scheduledDate: current.scheduled_date || null,
-    };
+    const saved = planningSavedRef.current.get(row.id);
+    return buildPlanningPatch(saved && saved.version > row.version ? saved : row, overrides);
   }
 
   async function persistPlanningRows(
     payload: ReturnType<typeof planningPayload>[],
     showSuccess = false,
   ) {
+    setPlanningDrafts(previous => clearSavedPlanningDraft(previous, payload.filter(row => row.fields.length === 0)));
+    payload = payload.filter(row => row.fields.length > 0);
+    if (!payload.length) return;
     planningSavesPendingRef.current += 1;
     setPlanningSavePending(true);
     const run = planningSaveQueueRef.current.then(async () => {
-      const versionedPayload = payload.map((row) => ({
-        ...row,
-        expectedVersion: Math.max(
-          planningVersionsRef.current.get(row.id) ?? 0,
-          row.expectedVersion,
-        ),
-      }));
+      const versionedPayload = payload.map(patch => {
+        const saved = planningSavedRef.current.get(patch.id);
+        if (!saved || saved.version <= patch.expectedVersion) return patch;
+        // Only rebase on our own successful save, retaining the explicit field intent.
+        const keys = {pbs:"pbs",pt_number:"ptNumber",pt_color:"ptColor",release_type:"releaseType",libra:"libra",scheduled_date:"scheduledDate"} as const;
+        return buildPlanningPatch(saved, Object.fromEntries(patch.fields.map(f => [f, patch[keys[f]]])));
+      }).filter(row => row.fields.length > 0);
       try {
+        if (!versionedPayload.length) { setPlanningDrafts(previous => clearSavedPlanningDraft(previous, payload)); return; }
         const result = await savePlanningFields({ data: { rows: versionedPayload } });
         if (!result.ok) throw new Error(result.error);
-        for (const row of versionedPayload)
-          planningVersionsRef.current.set(row.id, row.expectedVersion + 1);
+        for (const row of result.rows ?? []) planningSavedRef.current.set(row.id, row);
+        setPlanningDrafts(previous => clearSavedPlanningDraft(previous, versionedPayload));
+        for (const row of versionedPayload) void qc.invalidateQueries({ queryKey: ["activity-timeline", row.id] });
         if (showSuccess) toast.success(`${result.count} atividade(s) preenchida(s).`);
         notifyActivityCapacity(result);
         qc.invalidateQueries({ queryKey: ["activities"] });
       } catch (error: any) {
+        for (const row of payload) planningSavedRef.current.delete(row.id);
         const failedIds = new Set(payload.map((row) => row.id));
         setPlanningDrafts((previous) =>
           Object.fromEntries(Object.entries(previous).filter(([id]) => !failedIds.has(id))),
@@ -1617,7 +1618,7 @@ function WeeklyActivitiesPage() {
     await persistPlanningRows([planningPayload(row, { pt_color: color ?? "" })]);
   }
 
-  async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string) {
+  async function commitPlanningCell(row: ActivityRow, field: PlanningField, rawValue: string, baseline?: string) {
     if (field === "scheduled_date" && !canEditPlanningDate) {
       toast.error(
         `A alteração de datas está bloqueada após ${dateEditSettings.data?.cutoffTime ?? "15:00"}.`,
@@ -1637,7 +1638,9 @@ function WeeklyActivitiesPage() {
           setPlanningValue(row.id, "pt_color", "white");
         }
       }
-      await persistPlanningRows([planningPayload(row, overrides)]);
+      const patch = planningPayload(row, overrides);
+      if (baseline !== undefined && patch.fields.includes(field)) patch.expectedValues[field] = baseline.trim() || null;
+      await persistPlanningRows([patch]);
     } catch (error: any) {
       toast.error(error?.message ?? "Valor inválido.");
     }
@@ -2025,15 +2028,9 @@ function WeeklyActivitiesPage() {
     try {
       const result = await savePlanningFields({
         data: {
-          rows: ptImportChanges.map(({ row, nextPtNumber, nextPtColor }) => ({
-            id: row.id,
-            expectedVersion: row.version,
-            pbs: row.pbs,
-            ptNumber: nextPtNumber,
-            ptColor: nextPtColor,
-            releaseType: row.release_type as "PT" | "PTT" | "ATRE" | "OFICINAS" | null,
-            scheduledDate: row.scheduled_date,
-          })),
+          rows: ptImportChanges.map(({ row, nextPtNumber, nextPtColor }) =>
+            buildPlanningPatch(row, {pt_number:nextPtNumber, pt_color:nextPtColor})
+          ).filter(row => row.fields.length > 0),
         },
       });
       if (!result.ok) throw new Error(result.error);
@@ -3073,7 +3070,12 @@ function WeeklyActivitiesPage() {
                                     (field !== "scheduled_date" || canEditPlanningDate)
                                   }
                                   onChange={(value) => setPlanningValue(r.id, field, value)}
-                                  onCommit={(value) => commitPlanningCell(r, field, value)}
+                                  onCancelEdit={() => setPlanningDrafts(previous => {
+                                    const next={...previous}; const draft={...next[r.id]};
+                                    delete draft[field]; if(Object.keys(draft).length)next[r.id]=draft;else delete next[r.id];
+                                    return next;
+                                  })}
+                                  onCommit={(value, baseline) => commitPlanningCell(r, field, value, baseline)}
                                   onPaste={(event) => pastePlanningGrid(event, rowIndex, field)}
                                   onDragStart={() => {
                                     dragSource.current = { rowIndex, field };
@@ -3703,19 +3705,15 @@ function PlanningFieldsModal({
         if (scheduledDate && !/^\d{4}-\d{2}-\d{2}$/.test(scheduledDate)) {
           throw new Error(`Data inválida na linha ${index + 1}. Use AAAA-MM-DD.`);
         }
-        return {
-          id: rows[index].id,
-          expectedVersion: rows[index].version,
-          ptColor: (releaseType === "ATRE" || releaseType === "OFICINAS") ? null : rows[index].pt_color,
-          libra: libra || null,
-          pbs: pbs || null,
-          ptNumber: ptNumber || null,
-          releaseType: (releaseType || null) as (typeof RELEASE_TYPES)[number] | null,
-          scheduledDate: scheduledDate || null,
-        };
+        return buildPlanningPatch(rows[index], {
+          pt_color: (releaseType === "ATRE" || releaseType === "OFICINAS") ? null : rows[index].pt_color,
+          libra, pbs, pt_number:ptNumber, release_type:releaseType, scheduled_date:scheduledDate,
+        });
       });
       setSaving(true);
-      const result = await saveFields({ data: { rows: parsed } });
+      const changed = parsed.filter(row => row.fields.length > 0);
+      if (!changed.length) { onSaved(); return; }
+      const result = await saveFields({ data: { rows: changed } });
       if (!result.ok) throw new Error(result.error);
       toast.success(`${result.count} atividade(s) atualizada(s).`);
       notifyActivityCapacity(result);

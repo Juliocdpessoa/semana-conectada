@@ -316,6 +316,8 @@ const activityPlanningFieldsSchema = z.object({
       z.object({
         id: z.string().uuid(),
         expectedVersion: z.number().int().min(1),
+        fields: z.array(z.enum(["pbs","pt_number","pt_color","release_type","libra","scheduled_date"])).min(1).max(6),
+        expectedValues: z.record(z.string(), z.string().nullable()),
         pbs: z.string().max(120).nullable(),
         ptNumber: z.string().max(120).nullable(),
         libra: z.string().trim().max(120).nullable().optional(),
@@ -459,9 +461,9 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       if (currentError) return { ok: false as const, error: currentError.message };
       if (!current) return { ok: false as const, error: "Atividade não encontrada." };
       const changesRestrictedField =
-        (current.pbs ?? null) !== requested.pbs ||
-        (current.release_type ?? null) !== requested.releaseType ||
-        (current.scheduled_date ?? null) !== requested.scheduledDate;
+        (requested.fields.includes("pbs") && (current.pbs ?? null) !== requested.pbs) ||
+        (requested.fields.includes("release_type") && (current.release_type ?? null) !== requested.releaseType) ||
+        (requested.fields.includes("scheduled_date") && (current.scheduled_date ?? null) !== requested.scheduledDate);
       if (changesRestrictedField) {
         return {
           ok: false as const,
@@ -470,7 +472,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       }
       if (
         (current.release_type === "ATRE" || current.release_type === "OFICINAS") &&
-        requested.ptColor !== null
+        requested.fields.includes("pt_color") && requested.ptColor !== null
       ) {
         return {
           ok: false as const,
@@ -489,7 +491,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       if (currentRowsError) return { ok: false as const, error: currentRowsError.message };
       const currentDates = new Map((currentRows ?? []).map((row) => [row.id, row.scheduled_date]));
       const changesDate = data.rows.some(
-        (row) => (currentDates.get(row.id) ?? null) !== row.scheduledDate,
+        (row) => row.fields.includes("scheduled_date") && (currentDates.get(row.id) ?? null) !== row.scheduledDate,
       );
       if (changesDate) {
         return {
@@ -505,7 +507,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
       .from("activities").select("id,week_id,scheduled_date").in("id", data.rows.map((row) => row.id));
     const requestedDates = new Map(data.rows.map((row) => [row.id, row.scheduledDate]));
     const movedWeeks = [...new Set((datesBefore ?? [])
-      .filter((row) => row.scheduled_date !== requestedDates.get(row.id)).map((row) => row.week_id))];
+      .filter((row) => data.rows.some(requested => requested.id === row.id && requested.fields.includes("scheduled_date")) && row.scheduled_date !== requestedDates.get(row.id)).map((row) => row.week_id))];
     const capacityBefore = new Map<string, ActivityCapacity>();
     let capacityCheckFailed = Boolean(datesError);
     for (const weekId of movedWeeks) {
@@ -515,21 +517,13 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
         else capacityBefore.set(weekId, snapshot.data as ActivityCapacity);
       } catch { capacityCheckFailed = true; }
     }
-    const payload = data.rows.map((row) => ({
-      id: row.id,
-      expected_version: row.expectedVersion,
-      pbs: row.pbs,
-      pt_number: row.ptNumber,
-      ...(row.libra !== undefined ? { libra: row.libra } : {}),
-      pt_color: row.ptColor,
-      release_type: row.releaseType,
-      scheduled_date: row.scheduledDate,
-    }));
-    const { data: updatedCount, error } = await (supabase as any).rpc(
-      "bulk_update_activity_planning_fields",
-      {
-        p_rows: payload,
-      },
+    const payload = data.rows.map((row) => {
+      const values = {pbs:row.pbs,pt_number:row.ptNumber,pt_color:row.ptColor,release_type:row.releaseType,libra:row.libra,scheduled_date:row.scheduledDate};
+      return {id:row.id,expected_version:row.expectedVersion,fields:row.fields,expected_values:row.expectedValues,
+        ...Object.fromEntries(row.fields.map(field => [field,values[field]]))};
+    });
+    const { data: saved, error } = await (supabase as any).rpc(
+      "patch_activity_planning_fields", { p_rows: payload },
     );
     if (error) return { ok: false as const, error: error.message };
     const capacityWarnings: string[] = [];
@@ -546,7 +540,7 @@ export const bulkUpdateActivityPlanningFields = createServerFn({ method: "POST" 
         }
       } catch { capacityCheckFailed = true; }
     }
-    return { ok: true as const, count: Number(updatedCount ?? 0), capacityWarnings, capacityCheckFailed };
+    return { ok: true as const, count: Number(saved?.count ?? 0), rows: (saved?.rows ?? []) as Array<{id:string;version:number;pbs:string|null;pt_number:string|null;pt_color:string|null;release_type:string|null;scheduled_date:string|null;planning_data:Record<string,string|null>|null}>, capacityWarnings, capacityCheckFailed };
   });
 
 const immediateSchema = z.object({
