@@ -1173,10 +1173,11 @@ function RsContent({
               Confirmações repetidas em vários dias não multiplicam a apropriação.
             </p>
             <p>
-              TCoi inclui somente apropriações externas à programação com código 2. Código 1 (
-              {hours(data.unprogrammed)}) não entra no RS. Somente linhas confirmadas com HH
-              positivo da última carga SAP detalhada são consideradas; estornos devem ser
-              conciliados na origem.
+              TCoi inclui apropriações fora da programação com código 2 e, na RPBC, código 1
+              quando o centro está vinculado ao IARI. Código 1 da ROTINA não entra no RS.
+              O programado não é aumentado por essas apropriações. Semanas fechadas mantêm a
+              regra registrada no fechamento. Somente linhas confirmadas com HH positivo da
+              última carga SAP detalhada são consideradas; estornos devem ser conciliados na origem.
             </p>
             <p>
               Centros da programação e do SAP são vinculados às especialidades pela disponibilidade,
