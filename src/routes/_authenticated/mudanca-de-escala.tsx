@@ -1,7 +1,8 @@
+import {scaleChangeDraftKey,restoreScaleChangeDraft} from "@/lib/scale-change-draft";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { toast } from "sonner";
 import {
   Bus,
@@ -116,7 +117,7 @@ function ScheduledTransportPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const query = useQuery({
-    queryKey: ["scheduled-transport", filters, page],
+    queryKey: ["scheduled-transport", session.userId, session.worksiteId, filters, page],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     queryFn: async () => {
@@ -141,7 +142,8 @@ function ScheduledTransportPage() {
   });
 
   const employeesQuery = useQuery({
-    queryKey: ["active-employees"],
+    queryKey: ["active-employees", session.userId, session.worksiteId],
+    refetchOnWindowFocus: false,
     enabled: newOpen || showDaysOff,
     staleTime: 5 * 60 * 1000,
     queryFn: async () => {
@@ -153,6 +155,7 @@ function ScheduledTransportPage() {
           .select(
             "id,badge,employee_id,admission_date,full_name,job_title,address,neighborhood,city,phone,message_contact,transport_line,is_active",
           )
+          .eq("worksite_id", session.worksiteId)
           .eq("is_active", true)
           .order("full_name")
           .range(from, from + pageSize - 1);
@@ -764,24 +767,26 @@ function ScheduledTransportPage() {
             </Panel>
           </div>
 
-          {newOpen && employeesQuery.isLoading && (
-            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+          {newOpen && employeesQuery.data === undefined && employeesQuery.isPending && (
+            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} closeOnBackdropClick={false} footer={null}>
               <div className="py-8 text-center text-sm text-muted-foreground">
                 Carregando colaboradores...
               </div>
             </Modal>
           )}
 
-          {newOpen && employeesQuery.isError && (
-            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} footer={null}>
+          {newOpen && employeesQuery.data === undefined && employeesQuery.isError && (
+            <Modal title="Nova mudança de escala" onClose={() => setNewOpen(false)} closeOnBackdropClick={false} footer={null}>
               <div className="py-8 text-center text-sm text-destructive">
                 Não foi possível carregar os colaboradores.
               </div>
             </Modal>
           )}
 
-          {newOpen && employeesQuery.isSuccess && (
+          {newOpen && employeesQuery.data !== undefined && (
             <NewScheduleModal
+              key={session.userId + ":" + session.worksiteId}
+              draftStorageKey={scaleChangeDraftKey(session.userId, session.worksiteId)}
               employees={employees}
               onClose={() => setNewOpen(false)}
               onSaved={() => {
@@ -1490,10 +1495,12 @@ function DayOffFormModal({
 
 function NewScheduleModal({
   employees,
+  draftStorageKey,
   onClose,
   onSaved,
 }: {
   employees: EmployeeRow[];
+  draftStorageKey: string;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1512,6 +1519,47 @@ function NewScheduleModal({
   const [observation, setObservation] = useState("");
   const [preview, setPreview] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [draftLoaded,setDraftLoaded]=useState(false);
+  const stopDraft=useRef(false);
+  const notifiedDraft=useRef(false);
+  const storageWarning=useRef(false);
+  const hasDraft=ids.size>0||transportIds.size>0||startDate!==todayIso||!!endDate||!!entryTime||!!departureTime||!!orderNumber||!!service||!!observation||weekdays.length!==5||![1,2,3,4,5].every(day=>weekdays.includes(day));
+  useEffect(()=>{
+    try{
+      const raw=sessionStorage.getItem(draftStorageKey);
+      const restored=restoreScaleChangeDraft(raw,new Set(employees.map(e=>e.id)));
+      if(restored){
+        setIds(new Set(restored.ids));setTransportIds(new Set(restored.transportIds));
+        setStartDate(restored.startDate||todayIso);setEndDate(restored.endDate);
+        setWeekdays(restored.weekdays);setEntryTime(restored.entryTime);setDepartureTime(restored.departureTime);
+        setOrderNumber(restored.orderNumber);setService(restored.service);setObservation(restored.observation);setSearch(restored.search);
+        if(!notifiedDraft.current){toast.message("Rascunho recuperado. Confira os dados antes de enviar.");notifiedDraft.current=true;}
+      }
+    }catch{toast.message("Não foi possível recuperar o rascunho deste navegador.");}
+    setDraftLoaded(true);
+  },[draftStorageKey]);
+  function persistDraft(){
+    if(!draftLoaded||stopDraft.current)return true;
+    try{
+      if(!hasDraft){sessionStorage.removeItem(draftStorageKey);return true;}
+      sessionStorage.setItem(draftStorageKey,JSON.stringify({version:1,ids:[...ids],transportIds:[...transportIds],weekdays,search,startDate,endDate,entryTime,departureTime,orderNumber,service,observation}));
+      return true;
+    }catch{if(!storageWarning.current){toast.warning("Este navegador não permitiu guardar o rascunho. Evite atualizar a página antes de salvar.");storageWarning.current=true;}return false;}
+  }
+  useEffect(()=>{persistDraft();},[draftLoaded,ids,transportIds,weekdays,search,startDate,endDate,entryTime,departureTime,orderNumber,service,observation,draftStorageKey]);
+  function requestClose(){
+    if(saving)return;
+    if(hasDraft&&!window.confirm("Fechar o formulário? O preenchimento será mantido como rascunho neste navegador."))return;
+    if(!persistDraft()){toast.error("Não foi possível guardar o rascunho. Salve o lançamento ou descarte o preenchimento antes de fechar.");return;}
+    onClose();
+  }
+  function discardDraft(){
+    if(saving||!window.confirm("Descartar o rascunho não enviado? Os lançamentos já salvos não serão alterados."))return;
+    stopDraft.current=true;
+    try{sessionStorage.removeItem(draftStorageKey);}catch{}
+    onClose();
+  }
+
 
   const visible = useMemo(
     () => filterEmployees(employees, search).slice(0, 200),
@@ -1599,6 +1647,8 @@ function NewScheduleModal({
         `${result.count} registro(s) criado(s)` +
           (result.skipped ? ` · ${result.skipped} duplicado(s) ignorado(s)` : ""),
       );
+      stopDraft.current=true;
+      try{sessionStorage.removeItem(draftStorageKey);}catch{}
       onSaved();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Falha ao salvar a mudança de escala.");
@@ -1610,7 +1660,8 @@ function NewScheduleModal({
   const canPreview = ids.size > 0 && dates.length > 0 && entryTime && departureTime;
 
   return (
-    <Modal title="Nova Mudança de Escala" onClose={onClose} size="lg">
+    <Modal title="Nova Mudança de Escala" onClose={requestClose} closeOnBackdropClick={false} size="lg">
+      <p className="mb-3 text-xs text-muted-foreground">O preenchimento é guardado como rascunho nesta aba do navegador, separado por usuário e obra. Não equivale a uma solicitação enviada.</p>
       {!preview ? (
         <div className="space-y-4">
           <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 [&>*]:min-w-0">
@@ -1777,8 +1828,9 @@ function NewScheduleModal({
             )}
           </Field>
 
-          <div className="flex justify-end gap-2">
-            <button type="button" onClick={onClose} className="btn-secondary min-h-9 text-[12px]">
+          <div className="flex flex-wrap justify-end gap-2">
+            {hasDraft&&<button type="button" onClick={discardDraft} disabled={saving} className="btn-ghost min-h-9 text-xs text-destructive">Descartar rascunho</button>}
+            <button type="button" onClick={requestClose} className="btn-secondary min-h-9 text-[12px]">
               Cancelar
             </button>
             <button
@@ -1890,7 +1942,7 @@ function EditScheduleModal({
   }
 
   return (
-    <Modal title={`Editar mudança de escala · ${row.employee_name}`} onClose={onClose}>
+    <Modal title={`Editar mudança de escala · ${row.employee_name}`} onClose={()=>{if(!saving)onClose();}} closeOnBackdropClick={false}>
       <div className="space-y-3">
         <div className="text-[12px] text-muted-foreground">
           Data: {formatDate(row.transport_date)}
