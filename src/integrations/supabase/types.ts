@@ -288,6 +288,139 @@ export type Database = {
           },
         ]
       }
+      activity_page_configs: {
+        Row: {
+          fields: Json
+          mode: string
+          statuses: Json
+          updated_at: string
+          updated_by: string | null
+          updated_by_name: string | null
+          version: number
+          worksite_id: string
+        }
+        Insert: {
+          fields: Json
+          mode: string
+          statuses: Json
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+          worksite_id: string
+        }
+        Update: {
+          fields?: Json
+          mode?: string
+          statuses?: Json
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_page_configs_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: true
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      continuous_activities: {
+        Row: {
+          created_at: string
+          data: Json
+          id: string
+          record_key: string
+          source_data: Json | null
+          source_file_name: string | null
+          source_row_number: number | null
+          test_dataset: string | null
+          updated_at: string
+          updated_by: string | null
+          updated_by_name: string | null
+          version: number
+          worksite_id: string
+        }
+        Insert: {
+          created_at?: string
+          data: Json
+          id?: string
+          record_key: string
+          source_data?: Json | null
+          source_file_name?: string | null
+          source_row_number?: number | null
+          test_dataset?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+          worksite_id: string
+        }
+        Update: {
+          created_at?: string
+          data?: Json
+          id?: string
+          record_key?: string
+          source_data?: Json | null
+          source_file_name?: string | null
+          source_row_number?: number | null
+          test_dataset?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          updated_by_name?: string | null
+          version?: number
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "continuous_activities_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "activity_page_configs"
+            referencedColumns: ["worksite_id"]
+          },
+        ]
+      }
+      continuous_activity_history: {
+        Row: {
+          actor: string | null
+          actor_name: string | null
+          changed_at: string
+          id: string
+          kind: string
+          new_data: Json | null
+          previous_data: Json | null
+          record_id: string | null
+          worksite_id: string
+        }
+        Insert: {
+          actor?: string | null
+          actor_name?: string | null
+          changed_at?: string
+          id?: string
+          kind: string
+          new_data?: Json | null
+          previous_data?: Json | null
+          record_id?: string | null
+          worksite_id: string
+        }
+        Update: {
+          actor?: string | null
+          actor_name?: string | null
+          changed_at?: string
+          id?: string
+          kind?: string
+          new_data?: Json | null
+          previous_data?: Json | null
+          record_id?: string | null
+          worksite_id?: string
+        }
+        Relationships: []
+      }
       employee_days_off: {
         Row: {
           created_at: string
@@ -367,6 +500,7 @@ export type Database = {
           badge: string
           city: string | null
           created_at: string
+          deleted_at: string | null
           employee_id: string
           full_name: string
           id: string
@@ -387,6 +521,7 @@ export type Database = {
           badge: string
           city?: string | null
           created_at?: string
+          deleted_at?: string | null
           employee_id: string
           full_name: string
           id?: string
@@ -407,6 +542,7 @@ export type Database = {
           badge?: string
           city?: string | null
           created_at?: string
+          deleted_at?: string | null
           employee_id?: string
           full_name?: string
           id?: string
@@ -424,6 +560,199 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "employees_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nexo_backup_capture_queue: {
+        Row: {
+          attempts: number
+          basis_version: number
+          completed_at: string | null
+          last_error: string | null
+          next_attempt_at: string
+          requested_at: string
+          week_id: string
+        }
+        Insert: {
+          attempts?: number
+          basis_version: number
+          completed_at?: string | null
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          week_id: string
+        }
+        Update: {
+          attempts?: number
+          basis_version?: number
+          completed_at?: string | null
+          last_error?: string | null
+          next_attempt_at?: string
+          requested_at?: string
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nexo_backup_capture_queue_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nexo_backup_chunks: {
+        Row: {
+          payload: string
+          sha256: string
+          worksite_id: string
+        }
+        Insert: {
+          payload: string
+          sha256: string
+          worksite_id: string
+        }
+        Update: {
+          payload?: string
+          sha256?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nexo_backup_chunks_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nexo_backup_devices: {
+        Row: {
+          created_at: string
+          id: string
+          last_seen_at: string | null
+          name: string
+          revoked_at: string | null
+          token_hash: string
+          worksite_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          name: string
+          revoked_at?: string | null
+          token_hash: string
+          worksite_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_seen_at?: string | null
+          name?: string
+          revoked_at?: string | null
+          token_hash?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nexo_backup_devices_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nexo_backup_job_chunks: {
+        Row: {
+          job_id: string
+          sha256: string
+          worksite_id: string
+        }
+        Insert: {
+          job_id: string
+          sha256: string
+          worksite_id: string
+        }
+        Update: {
+          job_id?: string
+          sha256?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nexo_backup_job_chunks_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "nexo_backup_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nexo_backup_job_chunks_worksite_id_sha256_fkey"
+            columns: ["worksite_id", "sha256"]
+            isOneToOne: false
+            referencedRelation: "nexo_backup_chunks"
+            referencedColumns: ["worksite_id", "sha256"]
+          },
+        ]
+      }
+      nexo_backup_jobs: {
+        Row: {
+          basis_version: number
+          captured_at: string
+          delivered_at: string | null
+          delivered_device: string | null
+          id: string
+          manifest: string
+          manifest_sha256: string
+          week_id: string | null
+          worksite_id: string
+        }
+        Insert: {
+          basis_version: number
+          captured_at?: string
+          delivered_at?: string | null
+          delivered_device?: string | null
+          id?: string
+          manifest: string
+          manifest_sha256: string
+          week_id?: string | null
+          worksite_id: string
+        }
+        Update: {
+          basis_version?: number
+          captured_at?: string
+          delivered_at?: string | null
+          delivered_device?: string | null
+          id?: string
+          manifest?: string
+          manifest_sha256?: string
+          week_id?: string | null
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nexo_backup_jobs_delivered_device_fkey"
+            columns: ["delivered_device"]
+            isOneToOne: false
+            referencedRelation: "nexo_backup_devices"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nexo_backup_jobs_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nexo_backup_jobs_worksite_id_fkey"
             columns: ["worksite_id"]
             isOneToOne: false
             referencedRelation: "worksites"
@@ -526,6 +855,39 @@ export type Database = {
           },
         ]
       }
+      overtime_pt_history: {
+        Row: {
+          changed_at: string
+          changed_by: string | null
+          changed_by_name: string | null
+          id: string
+          new_pt: string | null
+          previous_pt: string | null
+          request_id: string
+          worksite_id: string
+        }
+        Insert: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          id?: string
+          new_pt?: string | null
+          previous_pt?: string | null
+          request_id: string
+          worksite_id: string
+        }
+        Update: {
+          changed_at?: string
+          changed_by?: string | null
+          changed_by_name?: string | null
+          id?: string
+          new_pt?: string | null
+          previous_pt?: string | null
+          request_id?: string
+          worksite_id?: string
+        }
+        Relationships: []
+      }
       overtime_requests: {
         Row: {
           activity_id: string | null
@@ -549,6 +911,10 @@ export type Database = {
           needs_transport: boolean
           order_number: string | null
           overtime_date: string
+          pt_number: string | null
+          pt_updated_at: string | null
+          pt_updated_by: string | null
+          pt_updated_by_name: string | null
           request_number: number
           requester_email: string
           requester_name: string
@@ -584,6 +950,10 @@ export type Database = {
           needs_transport?: boolean
           order_number?: string | null
           overtime_date: string
+          pt_number?: string | null
+          pt_updated_at?: string | null
+          pt_updated_by?: string | null
+          pt_updated_by_name?: string | null
           request_number?: number
           requester_email?: string
           requester_name?: string
@@ -619,6 +989,10 @@ export type Database = {
           needs_transport?: boolean
           order_number?: string | null
           overtime_date?: string
+          pt_number?: string | null
+          pt_updated_at?: string | null
+          pt_updated_by?: string | null
+          pt_updated_by_name?: string | null
           request_number?: number
           requester_email?: string
           requester_name?: string
@@ -669,6 +1043,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      password_reset_audit: {
+        Row: {
+          actor_id: string
+          actor_name: string | null
+          event: string
+          happened_at: string
+          id: string
+          reset_id: string
+          user_id: string
+        }
+        Insert: {
+          actor_id: string
+          actor_name?: string | null
+          event: string
+          happened_at?: string
+          id?: string
+          reset_id: string
+          user_id: string
+        }
+        Update: {
+          actor_id?: string
+          actor_name?: string | null
+          event?: string
+          happened_at?: string
+          id?: string
+          reset_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      password_reset_write_proofs: {
+        Row: {
+          reset_id: string
+          transaction_id: number
+          user_id: string
+        }
+        Insert: {
+          reset_id: string
+          transaction_id: number
+          user_id: string
+        }
+        Update: {
+          reset_id?: string
+          transaction_id?: number
+          user_id?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -1251,6 +1673,68 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_capacity_journey: {
+        Row: {
+          days: Json
+          updated_at: string
+          updated_by: string
+          version: number
+          week_id: string
+        }
+        Insert: {
+          days: Json
+          updated_at?: string
+          updated_by?: string
+          version?: number
+          week_id: string
+        }
+        Update: {
+          days?: Json
+          updated_at?: string
+          updated_by?: string
+          version?: number
+          week_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_capacity_journey_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: true
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_capacity_journey_history: {
+        Row: {
+          days: Json
+          id: string
+          updated_at: string
+          updated_by: string
+          updated_by_name: string | null
+          version: number
+          week_id: string
+        }
+        Insert: {
+          days: Json
+          id?: string
+          updated_at: string
+          updated_by: string
+          updated_by_name?: string | null
+          version: number
+          week_id: string
+        }
+        Update: {
+          days?: Json
+          id?: string
+          updated_at?: string
+          updated_by?: string
+          updated_by_name?: string | null
+          version?: number
+          week_id?: string
+        }
+        Relationships: []
+      }
       weekly_rs_availability: {
         Row: {
           rows: Json
@@ -1334,6 +1818,240 @@ export type Database = {
           },
           {
             foreignKeyName: "weekly_rs_availability_history_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_closure_items: {
+        Row: {
+          closure_id: string
+          evidence: Json | null
+          id: number
+          kind: string
+          local: string | null
+          payload: Json
+          record_date: string | null
+          source_id: string
+        }
+        Insert: {
+          closure_id: string
+          evidence?: Json | null
+          id?: never
+          kind: string
+          local?: string | null
+          payload: Json
+          record_date?: string | null
+          source_id: string
+        }
+        Update: {
+          closure_id?: string
+          evidence?: Json | null
+          id?: never
+          kind?: string
+          local?: string | null
+          payload?: Json
+          record_date?: string | null
+          source_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_closure_items_closure_id_fkey"
+            columns: ["closure_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_rs_closures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_closure_scopes: {
+        Row: {
+          closure_id: string
+          data: Json
+          scope: string
+        }
+        Insert: {
+          closure_id: string
+          data: Json
+          scope: string
+        }
+        Update: {
+          closure_id?: string
+          data?: Json
+          scope?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_closure_scopes_closure_id_fkey"
+            columns: ["closure_id"]
+            isOneToOne: false
+            referencedRelation: "weekly_rs_closures"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_closures: {
+        Row: {
+          closed_at: string
+          closed_by: string
+          closed_by_name: string
+          id: string
+          reason: string
+          rule_version: string
+          rules: Json
+          summary: Json
+          version: number
+          week_id: string
+          week_info: Json
+          worksite_id: string
+        }
+        Insert: {
+          closed_at?: string
+          closed_by: string
+          closed_by_name: string
+          id?: string
+          reason: string
+          rule_version: string
+          rules: Json
+          summary: Json
+          version: number
+          week_id: string
+          week_info: Json
+          worksite_id: string
+        }
+        Update: {
+          closed_at?: string
+          closed_by?: string
+          closed_by_name?: string
+          id?: string
+          reason?: string
+          rule_version?: string
+          rules?: Json
+          summary?: Json
+          version?: number
+          week_id?: string
+          week_info?: Json
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_closures_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_rs_closures_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_program_base_history: {
+        Row: {
+          row_count: number
+          rows: Json
+          sheet_name: string
+          source_file_name: string
+          total_work: number
+          updated_at: string
+          updated_by: string
+          updated_by_name: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Insert: {
+          row_count: number
+          rows: Json
+          sheet_name: string
+          source_file_name: string
+          total_work: number
+          updated_at?: string
+          updated_by: string
+          updated_by_name: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Update: {
+          row_count?: number
+          rows?: Json
+          sheet_name?: string
+          source_file_name?: string
+          total_work?: number
+          updated_at?: string
+          updated_by?: string
+          updated_by_name?: string
+          version?: number
+          week_id?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_program_base_history_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: false
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      weekly_rs_program_bases: {
+        Row: {
+          row_count: number
+          rows: Json
+          sheet_name: string
+          source_file_name: string
+          total_work: number
+          updated_at: string
+          updated_by: string
+          updated_by_name: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Insert: {
+          row_count: number
+          rows: Json
+          sheet_name: string
+          source_file_name: string
+          total_work: number
+          updated_at?: string
+          updated_by: string
+          updated_by_name: string
+          version: number
+          week_id: string
+          worksite_id: string
+        }
+        Update: {
+          row_count?: number
+          rows?: Json
+          sheet_name?: string
+          source_file_name?: string
+          total_work?: number
+          updated_at?: string
+          updated_by?: string
+          updated_by_name?: string
+          version?: number
+          week_id?: string
+          worksite_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "weekly_rs_program_bases_week_id_fkey"
+            columns: ["week_id"]
+            isOneToOne: true
+            referencedRelation: "weeks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "weekly_rs_program_bases_worksite_id_fkey"
             columns: ["worksite_id"]
             isOneToOne: false
             referencedRelation: "worksites"
@@ -1524,12 +2242,30 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      password_reset_latest: {
+        Row: {
+          actor_name: string | null
+          event: string | null
+          happened_at: string | null
+          user_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       activate_operational_week: {
         Args: { p_week_id: string }
         Returns: undefined
+      }
+      activity_sap_earned: {
+        Args: { p_week_id: string }
+        Returns: {
+          activity_id: string
+          earned: number
+          has_source: boolean
+          planned: number
+          progress_date: string
+        }[]
       }
       assert_sap_closure_admin: {
         Args: { p_week_id: string }
@@ -1601,12 +2337,68 @@ export type Database = {
         Args: { _user_id: string }
         Returns: boolean
       }
+      can_view_activity_sap: { Args: { _user_id: string }; Returns: boolean }
+      capture_nexo_backup: {
+        Args: { p_version: number; p_week: string }
+        Returns: string
+      }
+      capture_weekly_rs_closure: {
+        Args: { p_reason: string; p_week_id: string }
+        Returns: string
+      }
       close_sap_week: {
         Args: { p_reason: string; p_week_id: string }
         Returns: undefined
       }
+      complete_overtime_pt: {
+        Args: {
+          p_apply_batch?: boolean
+          p_expected_version: number
+          p_id: string
+          p_pt: string
+        }
+        Returns: Json
+      }
+      continuous_activity_facets: {
+        Args: {
+          p_filters?: Json
+          p_from?: string
+          p_search?: string
+          p_to?: string
+          p_worksite: string
+        }
+        Returns: Json
+      }
+      continuous_activity_options: {
+        Args: { p_worksite: string }
+        Returns: Json
+      }
+      continuous_activity_status_counts: {
+        Args: {
+          p_filters?: Json
+          p_from?: string
+          p_search?: string
+          p_to?: string
+          p_worksite: string
+        }
+        Returns: Json
+      }
+      continuous_filter_matches: {
+        Args: { p_data: Json; p_exclude?: string; p_filters: Json }
+        Returns: boolean
+      }
       current_role_label: { Args: { _user_id: string }; Returns: string }
       current_worksite_id: { Args: { _user_id: string }; Returns: string }
+      decide_overtime_batch: {
+        Args: {
+          p_comment?: string
+          p_decision: string
+          p_expected_version: number
+          p_request_id: string
+          p_snapshot: Json
+        }
+        Returns: Json
+      }
       extend_sap_week_deadline: {
         Args: { p_deadline: string; p_reason: string; p_week_id: string }
         Returns: undefined
@@ -1627,6 +2419,16 @@ export type Database = {
         }
         Returns: Json
       }
+      get_activity_daily_capacity: {
+        Args: { p_week_id: string }
+        Returns: Json
+      }
+      get_activity_sap_progress: { Args: { p_week_id: string }; Returns: Json }
+      get_monthly_rs_weeks: {
+        Args: { p_local?: string; p_week_ids: string[]; p_worksite_id: string }
+        Returns: Json
+      }
+      get_nexo_backup_status: { Args: { p_worksite: string }; Returns: Json }
       get_overtime_export_metadata: {
         Args: {
           p_date_from?: string
@@ -1639,10 +2441,58 @@ export type Database = {
         }
         Returns: Json
       }
+      get_overtime_export_metadata_pt: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_departure_time?: string
+          p_employee_search?: string
+          p_entry_time?: string
+          p_pt_search?: string
+          p_transport?: string
+          p_worksite_id: string
+        }
+        Returns: Json
+      }
+      get_overtime_export_pt_options: {
+        Args: {
+          p_date_from?: string
+          p_date_to?: string
+          p_departure_time?: string
+          p_employee_search?: string
+          p_entry_time?: string
+          p_pt_number?: string
+          p_pt_search?: string
+          p_transport?: string
+          p_worksite_id: string
+        }
+        Returns: Json
+      }
+      get_rs_center_immediate_tasks: {
+        Args: {
+          p_center: string
+          p_limit?: number
+          p_local?: string
+          p_offset?: number
+          p_sources: Json
+        }
+        Returns: Json
+      }
+      get_rs_center_pending_tasks: {
+        Args: {
+          p_center: string
+          p_limit?: number
+          p_local?: string
+          p_offset?: number
+          p_sources: Json
+        }
+        Returns: Json
+      }
       get_sap_confirmation_overview: {
         Args: { p_week_id: string }
         Returns: Json
       }
+      get_sap_outside_schedule: { Args: { p_week_id: string }; Returns: Json }
       get_scheduled_transport_metadata: {
         Args: {
           p_date_from: string
@@ -1662,6 +2512,41 @@ export type Database = {
         Args: { p_local?: string; p_week_id: string }
         Returns: Json
       }
+      get_weekly_rs_availability_changes: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_version: number
+          p_week_id: string
+        }
+        Returns: Json
+      }
+      get_weekly_rs_closure_items: {
+        Args: {
+          p_closure_id: string
+          p_kind: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: Json
+      }
+      get_weekly_rs_closure_pending: {
+        Args: {
+          p_closure_id: string
+          p_include_monitoring?: boolean
+          p_justification?: string
+          p_limit?: number
+          p_local?: string
+          p_offset?: number
+          p_only_missing_justification?: boolean
+          p_query?: string
+        }
+        Returns: Json
+      }
+      get_weekly_rs_official_analysis: {
+        Args: { p_local?: string; p_week_id: string }
+        Returns: Json
+      }
       get_weekly_rs_pending: {
         Args: {
           p_include_monitoring?: boolean
@@ -1675,6 +2560,14 @@ export type Database = {
         }
         Returns: Json
       }
+      get_weekly_rs_report: {
+        Args: { p_local?: string; p_version?: number; p_week_id: string }
+        Returns: Json
+      }
+      get_weekly_sap_load_rows: {
+        Args: { p_import_id: string; p_limit?: number; p_offset?: number }
+        Returns: Json
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -1685,6 +2578,10 @@ export type Database = {
       has_worksite_membership: {
         Args: { _user_id: string; _worksite_id: string }
         Returns: boolean
+      }
+      import_continuous_activities: {
+        Args: { p_rows: Json; p_worksite: string }
+        Returns: Json
       }
       import_sap_confirmations: {
         Args: { p_rows: Json; p_source_file_name: string; p_week_id: string }
@@ -1700,10 +2597,46 @@ export type Database = {
         Args: { p_before_version?: number; p_limit?: number; p_week_id: string }
         Returns: Json
       }
+      list_weekly_rs_closures: { Args: { p_week_id: string }; Returns: Json }
+      list_weekly_sap_loads: {
+        Args: { p_limit?: number; p_offset?: number; p_week_id: string }
+        Returns: Json
+      }
+      nexo_backup_ack: {
+        Args: { p_job: string; p_manifest_sha256: string; p_token: string }
+        Returns: boolean
+      }
+      nexo_backup_chunk: {
+        Args: { p_job: string; p_sha256: string; p_token: string }
+        Returns: Json
+      }
+      nexo_backup_device: {
+        Args: { p_token: string }
+        Returns: {
+          created_at: string
+          id: string
+          last_seen_at: string | null
+          name: string
+          revoked_at: string | null
+          token_hash: string
+          worksite_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "nexo_backup_devices"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      nexo_backup_poll: { Args: { p_token: string }; Returns: Json }
+      normalize_sap_identifier: { Args: { value: string }; Returns: string }
       operational_history_cutoff: {
         Args: { _reference_date?: string }
         Returns: string
       }
+      password_access_allowed: { Args: never; Returns: boolean }
+      password_reset_state: { Args: never; Returns: Json }
+      patch_activity_planning_fields: { Args: { p_rows: Json }; Returns: Json }
       prepare_operational_archive: {
         Args: { _cutoff_date?: string; _worksite_id: string }
         Returns: {
@@ -1712,9 +2645,43 @@ export type Database = {
           scale_change_count: number
         }[]
       }
+      process_nexo_backup_queue: { Args: never; Returns: undefined }
       reopen_sap_week: {
         Args: { p_reason: string; p_week_id: string }
         Returns: undefined
+      }
+      rs_archive_calculation: {
+        Args: { d: Json; selected_local?: string }
+        Returns: Json
+      }
+      rs_archive_key: { Args: { value: string }; Returns: string }
+      rs_center_local: {
+        Args: { p_center: string; p_fallback: string }
+        Returns: string
+      }
+      rs_external_sap_counts: {
+        Args: { p_code: string; p_local: string; p_worksite: string }
+        Returns: boolean
+      }
+      rs_program_center: { Args: { p_center: string }; Returns: string }
+      save_activity_page_config: {
+        Args: {
+          p_fields: Json
+          p_statuses: Json
+          p_version: number
+          p_worksite: string
+        }
+        Returns: undefined
+      }
+      save_continuous_activity: {
+        Args: {
+          p_data: Json
+          p_id?: string
+          p_key: string
+          p_version?: number
+          p_worksite: string
+        }
+        Returns: Json
       }
       save_weekly_rs_availability: {
         Args: {
@@ -1724,6 +2691,16 @@ export type Database = {
           p_week_id: string
         }
         Returns: undefined
+      }
+      save_weekly_rs_program_base: {
+        Args: {
+          p_expected_version?: number
+          p_rows: Json
+          p_sheet_name?: string
+          p_source_file_name: string
+          p_week_id: string
+        }
+        Returns: Json
       }
       sync_overtime_from_scale_row: {
         Args: {
@@ -1751,6 +2728,10 @@ export type Database = {
           status: string
           suboperation: string
         }[]
+      }
+      weekly_rs_included: {
+        Args: { p_center: string; p_specialty: string }
+        Returns: boolean
       }
     }
     Enums: {
