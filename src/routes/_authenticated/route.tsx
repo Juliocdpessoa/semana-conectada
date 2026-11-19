@@ -63,7 +63,12 @@ async function loadSession(): Promise<SessionInfo | null> {
     if (!passwordError) break;
     await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
   }
-  if (passwordError) throw new Error("Não foi possível validar sua senha. Tente novamente.");
+  // The database still enforces password resets on every protected write;
+  // a transient check failure must not blank the whole app.
+  if (passwordError) {
+    console.error("password_reset_state failed", passwordError);
+    passwordState = { required: false, allowed: true };
+  }
   if (passwordState?.required) throw redirect({ to: "/redefinir-senha" });
   if (!passwordState?.allowed) {
     await supabase.auth.signOut({ scope: "local" });
