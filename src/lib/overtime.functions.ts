@@ -1100,7 +1100,7 @@ export const decideOvertimeRequest = createServerFn({ method: "POST" })
       p_snapshot: snapshot, p_decision: data.decision, p_comment: data.comment?.trim() || null,
     });
     if (error) {
-      if (error.code === "40001") return { ok: false, conflict: true, reason: "changed", error: "O lote foi alterado. Confira a lista atualizada e tente novamente." };
+      if (error.code === "PT409" || error.code === "40001") return { ok: false, conflict: true, reason: "changed", error: "O lote foi alterado. Confira a lista atualizada e tente novamente." };
       return { ok: false, error: error.message };
     }
     if (!result || typeof result.ok !== "boolean")

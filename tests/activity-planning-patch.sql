@@ -1,3 +1,4 @@
+-- Run inside BEGIN; apply the migration, run this fixture test, then ROLLBACK.
 DO $test$
 DECLARE fixture uuid:=gen_random_uuid(); a public.activities%ROWTYPE; original_version int; result jsonb; previous_history int;
 BEGIN
@@ -11,12 +12,12 @@ BEGIN
  BEGIN
   PERFORM public.patch_activity_planning_fields(jsonb_build_array(jsonb_build_object('id',fixture,'expected_version',original_version,'fields',jsonb_build_array('pt_number'),'expected_values',jsonb_build_object('pt_number','22.526.522'),'pt_number','22.526.522')));
   RAISE EXCEPTION 'Stale version accepted';
- EXCEPTION WHEN serialization_failure THEN NULL; END;
+ EXCEPTION WHEN SQLSTATE 'PT409' THEN NULL; END;
  SELECT * INTO a FROM public.activities WHERE id=fixture;
  BEGIN
   PERFORM public.patch_activity_planning_fields(jsonb_build_array(jsonb_build_object('id',fixture,'expected_version',a.version,'fields',jsonb_build_array('pt_number'),'expected_values',jsonb_build_object('pt_number','22.526.522'),'pt_number','22.526.522')));
   RAISE EXCEPTION 'Stale field baseline accepted';
- EXCEPTION WHEN serialization_failure THEN NULL; END;
+ EXCEPTION WHEN SQLSTATE 'PT409' THEN NULL; END;
  result:=public.patch_activity_planning_fields(jsonb_build_array(jsonb_build_object('id',fixture,'expected_version',a.version,'fields',jsonb_build_array('pt_color'),'expected_values',jsonb_build_object('pt_color',a.pt_color),'pt_color','red')));
  SELECT * INTO a FROM public.activities WHERE id=fixture;
  IF a.pt_number<>'22.535.986' THEN RAISE EXCEPTION 'Colour update overwrote PT'; END IF;
@@ -56,3 +57,4 @@ BEGIN
  IF (SELECT planning_data->>'LIBRA' FROM public.activities WHERE id=fixture) IS DISTINCT FROM a.planning_data->>'LIBRA' THEN RAISE EXCEPTION 'Batch was partially applied'; END IF;
 END $test$;
 SELECT 'PASS: PT saved, stale version and stale baseline blocked, colour preserves PT, unchanged edit creates no history, legacy tab must refresh' result;
+
