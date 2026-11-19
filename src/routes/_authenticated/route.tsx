@@ -24,6 +24,7 @@ import {
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
+import { isNetworkError, withNetworkRetry } from "@/lib/network-retry";
 
 export type AppRole =
   | "admin"
@@ -49,17 +50,23 @@ export type SessionInfo = {
 };
 
 async function loadSession(): Promise<SessionInfo | null> {
-  const { data, error: authError } = await supabase.auth.getUser();
-  if (authError) {
-    const { data: sessionState } = await supabase.auth.getSession();
-    if (!sessionState.session) return null;
-    throw new Error("Não foi possível validar sua sessão. Verifique a conexão e tente novamente.");
+  const { data: sessionState } = await supabase.auth.getSession();
+  if (!sessionState.session) return null;
+  const userResult = await withNetworkRetry(() => supabase.auth.getUser());
+  let data = userResult.data;
+  if (userResult.error) {
+    // Conexão oscilando: segue com a sessão salva no aparelho; o servidor
+    // continua validando o acesso em cada consulta.
+    if (!isNetworkError(userResult.error)) return null;
+    data = { user: sessionState.session.user };
   }
   if (!data.user) return null;
   let passwordState: any = null;
   let passwordError: any = null;
   for (let attempt = 0; attempt < 4; attempt += 1) {
-    ({ data: passwordState, error: passwordError } = await (supabase as any).rpc("password_reset_state"));
+    ({ data: passwordState, error: passwordError } = await withNetworkRetry<any>(() =>
+      (supabase as any).rpc("password_reset_state"),
+    ));
     if (!passwordError) break;
     await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
   }
@@ -76,7 +83,7 @@ async function loadSession(): Promise<SessionInfo | null> {
   }
   let profile: any = null;
   let roles: any = null;
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
     [profile, roles] = await Promise.all([
       (supabase as any)
         .from("profiles")
@@ -86,7 +93,7 @@ async function loadSession(): Promise<SessionInfo | null> {
       supabase.from("user_roles").select("role").eq("user_id", data.user.id),
     ]);
     if (!profile.error && profile.data && !roles.error) break;
-    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 350 * (attempt + 1)));
+    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
   }
   if (profile?.error || roles?.error || !profile?.data) {
     throw new Error(
@@ -140,6 +147,8 @@ async function loadSession(): Promise<SessionInfo | null> {
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
+  pendingMs: 0,
+  pendingComponent: AuthPending,
   beforeLoad: async () => {
     const session = await loadSession();
     if (!session) throw redirect({ to: "/auth" });
@@ -148,6 +157,17 @@ export const Route = createFileRoute("/_authenticated")({
   },
   component: AuthedLayout,
 });
+
+function AuthPending() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
+      <div className="text-center">
+        <div className="mx-auto h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="mt-3 text-sm text-muted-foreground">Conectando ao NEXO…</p>
+      </div>
+    </div>
+  );
+}
 
 function AuthedLayout() {
   const { session } = Route.useRouteContext();

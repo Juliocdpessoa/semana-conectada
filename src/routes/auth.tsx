@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
+import { isNetworkError, NETWORK_ERROR_MESSAGE, withNetworkRetry } from "@/lib/network-retry";
 import {
   ShieldCheck,
   ClipboardCheck,
@@ -102,12 +103,16 @@ function AuthPage() {
         toast.success("Cadastro enviado. Aguarde a aprovação de um administrador.");
         navigate({ to: "/aguardando-aprovacao" });
       } else {
-        const { error } = await supabase.auth.signInWithPassword({
-          email: parsedEmail.data,
-          password: parsedPw.data,
-        });
-        if (error) return toast.error(error.message);
-        const { data: state, error: stateError } = await (supabase as any).rpc("password_reset_state");
+        const { error } = await withNetworkRetry<any>(() =>
+          supabase.auth.signInWithPassword({
+            email: parsedEmail.data,
+            password: parsedPw.data,
+          }),
+        );
+        if (error) return toast.error(isNetworkError(error) ? NETWORK_ERROR_MESSAGE : error.message);
+        const { data: state, error: stateError } = await withNetworkRetry<any>(() =>
+          (supabase as any).rpc("password_reset_state"),
+        );
         if (stateError) { await supabase.auth.signOut({ scope: "local" }); return toast.error("Não foi possível validar o acesso. Tente novamente."); }
         if (state?.required) navigate({ to: "/redefinir-senha" });
         else if (!state?.allowed) { await supabase.auth.signOut({ scope: "local" }); toast.error("Entre novamente com sua senha atual."); }
