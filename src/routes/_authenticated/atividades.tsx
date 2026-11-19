@@ -1,4 +1,4 @@
-import { buildPlanningPatch, clearSavedPlanningDraft, type PlanningSnapshot } from "@/lib/activity-planning-patch";
+import { buildPlanningPatch, clearSavedPlanningDraft, visiblePlanningValue, confirmedPlanningSnapshot, type PlanningSnapshot } from "@/lib/activity-planning-patch";
 import { ContinuousActivities } from "@/components/continuous-activities";
 import type { ContinuousConfig } from "@/lib/continuous-activities";
 import { hasConfinedSpacePbs, readConfinedSpaceFilter, type ConfinedSpaceFilter } from "@/lib/confined-space";
@@ -1516,11 +1516,7 @@ function WeeklyActivitiesPage() {
   }
 
   function planningValue(row: ActivityRow, field: PlanningField | "pt_color"): string {
-    const draft = planningDrafts[row.id];
-    if (draft && Object.prototype.hasOwnProperty.call(draft, field)) return draft[field] ?? "";
-    if (field === "libra") return String(row.planning_data?.LIBRA ?? "");
-    const value = row[field];
-    return value == null ? "" : String(value);
+    return visiblePlanningValue(row, planningSavedRef.current.get(row.id), field, planningDrafts[row.id]);
   }
 
   function effectivePtColor(row: ActivityRow): PtColor | null {
@@ -1566,7 +1562,7 @@ function WeeklyActivitiesPage() {
 
   function planningPayload(row: ActivityRow, overrides: Partial<PlanningDraft> = {}) {
     const saved = planningSavedRef.current.get(row.id);
-    return buildPlanningPatch(saved && saved.version > row.version ? saved : row, overrides);
+    return buildPlanningPatch(confirmedPlanningSnapshot(row, saved), overrides);
   }
 
   async function persistPlanningRows(
@@ -1597,7 +1593,7 @@ function WeeklyActivitiesPage() {
         notifyActivityCapacity(result);
         qc.invalidateQueries({ queryKey: ["activities"] });
       } catch (error: any) {
-        for (const row of payload) planningSavedRef.current.delete(row.id);
+        // Preserve our last confirmed save until a newer remote version arrives.
         const failedIds = new Set(payload.map((row) => row.id));
         setPlanningDrafts((previous) =>
           Object.fromEntries(Object.entries(previous).filter(([id]) => !failedIds.has(id))),

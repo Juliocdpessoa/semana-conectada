@@ -19,3 +19,14 @@ export function clearSavedPlanningDraft(drafts:Record<string,Partial<Record<Plan
  if(Object.keys(draft).length)next[patch.id]=draft;else delete next[patch.id];}
  return next;
 }
+
+/** Prefer a confirmed save over an older list response, never over newer remote data. */
+export function confirmedPlanningSnapshot<T extends PlanningSnapshot>(row:T,saved:PlanningSnapshot|undefined):PlanningSnapshot {
+ return saved && saved.id===row.id && saved.version>row.version ? saved : row;
+}
+export function visiblePlanningValue(row:PlanningSnapshot,saved:PlanningSnapshot|undefined,field:PlanningPatchField,draft?:Partial<Record<PlanningPatchField,string>>):string {
+ if(draft && Object.hasOwn(draft,field))return draft[field]??"";
+ const confirmed=confirmedPlanningSnapshot(row,saved);
+ if(field==="libra")return String(confirmed.planning_data?.LIBRA??"");
+ return confirmed[field]??"";
+}
