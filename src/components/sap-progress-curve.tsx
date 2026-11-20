@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import { Panel } from "@/components/ui-kit";
 import { sapProgressSeries, type SapEarnedProgress } from "@/lib/sap-progress-series";
 import {

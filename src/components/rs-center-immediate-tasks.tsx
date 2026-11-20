@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {useQuery} from "@tanstack/react-query";
-import {supabase} from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import type {RsPendingSource} from "@/lib/rs-center-pending";
 const hh=(n:unknown)=>Number(n??0).toLocaleString("pt-BR",{minimumFractionDigits:2,maximumFractionDigits:2});
 const date=(s:string|null)=>s?s.split("-").reverse().join("/"):"—";

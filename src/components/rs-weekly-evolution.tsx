@@ -15,7 +15,7 @@ import {
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Panel } from "@/components/ui-kit";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
-import { supabase } from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import type { MonthlyRsWeek } from "@/lib/monthly-realization";
 import {
   evolutionColor,

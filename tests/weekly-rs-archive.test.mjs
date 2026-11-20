@@ -55,7 +55,8 @@ test("client reads frozen calculation and does not recompute official versions",
   assert.match(panel, /data.isFrozen && data.frozenCalculation\s*\? data.frozenCalculation/);
   assert.match(panel, /data.isFrozen(?:\s*\|\|\s*data.consolidated)?\s*\? calculation.result/);
   assert.match(panel, /p_version: version/);
-  assert.match(panel, /\.limit\(600\)/);
+  assert.match(panel, /supabase\.weeks\(worksiteId\)/);
+  assert.match(read("src/lib/rs-transport.functions.ts"), /\.limit\(600\)/);
   const history = read("src/components/weekly-sap-load-history.tsx");
   assert.match(history, /enabled: open/);
   assert.match(history, /p_limit: 10/);

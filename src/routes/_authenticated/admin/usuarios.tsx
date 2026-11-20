@@ -2,7 +2,7 @@ import { ActivityPageConfiguration } from "@/components/activity-page-configurat
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { supabase } from "@/integrations/supabase/client";
+import { getAdminDirectory } from "@/lib/protected-page-reads.functions";
 import { setUserApproval } from "@/lib/activities.functions";
 import { createWorksite, setWorksiteMembership } from "@/lib/worksites.functions";
 import { resetUserPassword } from "@/lib/password-reset.functions";
@@ -120,47 +120,17 @@ function AdminUsers() {
   const [worksiteCode, setWorksiteCode] = useState("");
   const [worksiteName, setWorksiteName] = useState("");
   const [creatingWorksite, setCreatingWorksite] = useState(false);
-  const [allWorksites, setAllWorksites] = useState<Worksite[]>([]);
   const [savingMembership, setSavingMembership] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  useEffect(() => {
-    if (!isGlobalAdmin) return;
-    void (supabase as any).from("worksites").select("id,code,name").eq("is_active", true).order("code")
-      .then(({ data }: { data: Worksite[] | null }) => setAllWorksites(data ?? []));
-  }, [isGlobalAdmin]);
-  const users = useQuery({
-    queryKey: ["admin-users", session.worksiteId],
-    queryFn: async () => {
-      const [pRes, rRes, mRes, auditRes] = await Promise.all([
-        (supabase as any)
-          .from("profiles")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase.from("user_roles").select("*"),
-        (supabase as any).from("worksite_memberships").select("user_id,worksite_id,is_worksite_admin"),
-        (supabase as any).from("password_reset_latest").select("user_id,event,happened_at,actor_name"),
-      ]);
-      const rolesByUser = new Map<string, string[]>();
-      (rRes.data ?? []).forEach((r) => {
-        const arr = rolesByUser.get(r.user_id) ?? [];
-        arr.push(r.role);
-        rolesByUser.set(r.user_id, arr);
-      });
-      const visibleProfiles = isGlobalAdmin
-        ? (pRes.data ?? [])
-        : (pRes.data ?? []).filter((p: any) => (mRes.data ?? []).some((m: any) =>
-            m.user_id === p.id && m.worksite_id === session.worksiteId));
-      return visibleProfiles.map((p: any) => ({
-        id: p.id,
-        email: p.email,
-        full_name: p.full_name,
-        approval_status: p.approval_status,
-        roles: rolesByUser.get(p.id) ?? [],
-        resetAudit: (auditRes.data ?? []).find((event: any) => event.user_id === p.id),
-        memberships: (mRes.data ?? []).filter((m: any) => m.user_id === p.id),
-      })) as Row[];
-    },
+  const loadDirectory = useServerFn(getAdminDirectory);
+  const directory = useQuery({
+    queryKey: ["admin-users", session.userId, session.worksiteId],
+    queryFn: ({ signal }) => loadDirectory({ signal }),
+    retry: false,
+    staleTime: 30_000,
   });
+  const users = { ...directory, data: directory.data?.users as Row[] | undefined };
+  const allWorksites = (directory.data?.worksites ?? []) as Worksite[];
 
   async function confirmPasswordReset() {
     if (!resetTarget || resettingPassword) return;
@@ -228,7 +198,7 @@ function AdminUsers() {
         description="Aprove cadastros, defina perfis e controle o acesso às obras."
         meta={
           <>
-            <span>{total} usuários</span>
+            <span>{users.data ? total : '—'} usuários</span>
             {pending > 0 && <span className="text-warning-foreground">{pending} aguardando aprovação</span>}
           </>
         }
@@ -293,10 +263,10 @@ function AdminUsers() {
           </div>
           {search && <button type="button" onClick={() => setSearch("")} className="btn-ghost h-9 text-xs">Limpar busca</button>}
           <span role="status" className="pb-2 text-xs text-muted-foreground">
-            {users.isLoading ? "Carregando usuários…" : `${filteredUsers.length} de ${total} usuários`}
+            {users.isError ? 'Falha ao carregar usuários' : users.isLoading ? "Carregando usuários…" : `${filteredUsers.length} de ${total} usuários`}
           </span>
         </div>
-        {filteredUsers.length > 0 ? (
+        {users.isError ? <div role="alert" className="rounded border border-destructive p-4 text-sm">Não foi possível carregar os usuários. Isso não significa que os cadastros foram apagados. <button type="button" className="btn-primary ml-2" onClick={() => void directory.refetch()} disabled={directory.isFetching}>Tentar novamente</button></div> : users.isLoading ? <p role="status" className="p-4 text-sm">Carregando usuários…</p> : filteredUsers.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">

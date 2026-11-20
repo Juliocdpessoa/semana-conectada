@@ -2,6 +2,8 @@ import { ContinuousActivities } from "@/components/continuous-activities";
 import type { ContinuousConfig } from "@/lib/continuous-activities";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
+import { getVisibleWeeks, getPanelActivityRows } from "@/lib/protected-page-reads.functions";
 import { lazy, Suspense, useCallback, useMemo, useState, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -220,34 +222,11 @@ type Row = {
 function OverviewPanel({ tabs }: { tabs: ReactNode }) {
   const { session } = Route.useRouteContext() as { session: SessionInfo };
   const [selectedJustification, setSelectedJustification] = useState<string | null>(null);
-  const activeWeek = useQuery({
-    queryKey: ["active-week", session.userId, session.worksiteId],
-    queryFn: async () =>
-      (await supabase.from("weeks").select("*").eq("is_active", true).maybeSingle()).data,
-  });
-
-  const activities = useQuery({
-    queryKey: ["panel-activities", session.userId, session.worksiteId, activeWeek.data?.id],
-    enabled: !!activeWeek.data?.id,
-    queryFn: async () => {
-      const chunk = 1000;
-      const all: Row[] = [];
-      for (let from = 0; ; from += chunk) {
-        const { data, error } = await supabase
-          .from("activities")
-          .select(
-            "id,order_number,note_number,description,area,specialty,scheduled_date,status,justification,observation,reported_by_name,reported_by_email,reported_at,is_immediate,planning_data",
-          )
-          .eq("week_id", activeWeek.data!.id)
-          .range(from, from + chunk - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        all.push(...(data as Row[]));
-        if (data.length < chunk) break;
-      }
-      return all;
-    },
-  });
+  const loadWeeks = useServerFn(getVisibleWeeks), loadRows = useServerFn(getPanelActivityRows);
+  const activeWeek = useQuery({ queryKey: ["active-week", session.userId, session.worksiteId],
+    queryFn: async ({signal}) => (await loadWeeks({signal})).find((week:any)=>week.is_active) ?? null,retry:false });
+  const activities = useQuery({ queryKey: ["panel-activities", session.userId, session.worksiteId, activeWeek.data?.id],
+    enabled: !!activeWeek.data?.id, queryFn: ({signal}) => loadRows({data:{weekId:activeWeek.data!.id},signal}) as Promise<Row[]>,retry:false });
 
   const rows = useMemo(() => activities.data ?? [], [activities.data]);
   const sapProgress = useSapProgress(activeWeek.data?.id, session.userId, session.worksiteId);
@@ -340,6 +319,7 @@ function OverviewPanel({ tabs }: { tabs: ReactNode }) {
       </main>
     );
   }
+  if (activeWeek.isError || activities.isError) return <main className="mx-auto px-4 py-6"><PageHeader title="Gestão Operacional" />{tabs}<p role="alert" className="rounded border border-destructive p-4">Não foi possível carregar a visão geral. <button className="btn-primary" onClick={()=>{void activeWeek.refetch();if(activeWeek.data?.id)void activities.refetch();}}>Tentar novamente</button></p></main>;
   if (!activeWeek.data) {
     return (
       <main className="mx-auto max-w-none px-4 py-6 sm:px-6">
@@ -788,18 +768,11 @@ function NonExecutionDashboard({
   mode: "non-executed" | "unjustified";
   tabs: ReactNode;
 }) {
+  const {session}=Route.useRouteContext() as {session:SessionInfo};
+  const loadWeeks=useServerFn(getVisibleWeeks), loadRows=useServerFn(getPanelActivityRows);
   const isUnjustifiedMode = mode === "unjustified";
-  const weeks = useQuery({
-    queryKey: ["non-execution-weeks"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weeks")
-        .select("id,code,label,start_date,end_date,is_active")
-        .order("start_date", { ascending: false });
-      if (error) throw error;
-      return (data ?? []) as WeekRow[];
-    },
-  });
+  const weeks = useQuery({ queryKey: ["non-execution-weeks",session.userId,session.worksiteId],
+    queryFn: ({signal}) => loadWeeks({signal}) as Promise<WeekRow[]>, retry:false });
   const [selectedWeekId, setSelectedWeekId] = useState("");
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [specialtySearch, setSpecialtySearch] = useState("");
@@ -808,30 +781,8 @@ function NonExecutionDashboard({
     selectedWeekId || weeks.data?.find((week) => week.is_active)?.id || weeks.data?.[0]?.id || "";
   const selectedWeek = weeks.data?.find((week) => week.id === effectiveWeekId);
 
-  const activities = useQuery({
-    // Chave exclusiva/versionada: evita reaproveitar uma resposta antiga sem planning_data/Trab.
-    queryKey: ["non-execution-activities-with-hours-v2", effectiveWeekId],
-    enabled: !!effectiveWeekId,
-    queryFn: async () => {
-      const all: ActivityRow[] = [];
-      const pageSize = 1000;
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await supabase
-          .from("activities")
-          .select(
-            "id,order_number,note_number,description,area,specialty,scheduled_date,status,justification,observation,reported_by_name,reported_by_email,reported_at,is_immediate,planning_data",
-          )
-          .eq("week_id", effectiveWeekId)
-          .order("scheduled_date", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        const batch = (data ?? []) as ActivityRow[];
-        all.push(...batch);
-        if (batch.length < pageSize) break;
-      }
-      return all;
-    },
-  });
+  const activities = useQuery({ queryKey: ["non-execution-activities-with-hours-v2",session.userId,session.worksiteId,effectiveWeekId],
+    enabled: !!effectiveWeekId, queryFn: ({signal}) => loadRows({data:{weekId:effectiveWeekId},signal}) as Promise<ActivityRow[]>,retry:false });
 
   const rows = useMemo(() => activities.data ?? [], [activities.data]);
   const nonExecuted = useMemo(
@@ -1409,7 +1360,7 @@ function NonExecutionDashboard({
         <KpiCard label="Imediatas" value={kpis.immediate} icon={<Zap className="h-4 w-4" />} />
       </div>
 
-      {activities.isLoading ? (
+      {weeks.isError ? <p role="alert" className="rounded border border-destructive p-4">Não foi possível carregar as semanas. <button className="btn-primary" onClick={()=>void weeks.refetch()}>Tentar novamente</button></p> : activities.isLoading ? (
         <DashboardLoading />
       ) : activities.isError ? (
         <Panel>

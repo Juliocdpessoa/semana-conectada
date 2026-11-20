@@ -3,6 +3,7 @@ import { overtimeDraftKey, readOvertimeDraft, restoreOvertimeForm, persistOverti
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { getVisibleWeeks, searchOvertimeActivities, getWeeklyActivityExportRows } from "@/lib/protected-page-reads.functions";
 import { Fragment, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
@@ -828,44 +829,13 @@ function TabBtn({
 
 /* ---------- Weekly activity export ---------- */
 function WeeklyActivityExport() {
+  const {session}=Route.useRouteContext() as {session:SessionInfo};
+  const loadWeeks=useServerFn(getVisibleWeeks), loadExportRows=useServerFn(getWeeklyActivityExportRows);
   const [selectedWeekId, setSelectedWeekId] = useState("");
-  const weeks = useQuery({
-    queryKey: ["measurement-weeks"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weeks")
-        .select("id,code,label,start_date,end_date,is_active")
-        .order("start_date", { ascending: false });
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const weeks = useQuery({queryKey:["measurement-weeks",session.userId,session.worksiteId],queryFn:({signal})=>loadWeeks({signal}),retry:false});
   const effectiveWeekId = selectedWeekId || weeks.data?.[0]?.id || "";
-  const selectedWeek = (weeks.data ?? []).find((week) => week.id === effectiveWeekId);
-  const activities = useQuery({
-    queryKey: ["measurement-weekly-export", effectiveWeekId],
-    enabled: Boolean(effectiveWeekId),
-    queryFn: async () => {
-      const all: any[] = [];
-      const pageSize = 1000;
-      for (let from = 0; ; from += pageSize) {
-        const { data, error } = await supabase
-          .from("activities")
-          .select(
-            "id,status,justification,observation,reported_by_name,reported_by_email,reported_at,planning_data,source_row_number",
-          )
-          .eq("week_id", effectiveWeekId)
-          .in("status", ["EXECUTADO", "NÃO EXECUTADO"])
-          .order("source_row_number", { ascending: true })
-          .range(from, from + pageSize - 1);
-        if (error) throw error;
-        if (!data?.length) break;
-        all.push(...data);
-        if (data.length < pageSize) break;
-      }
-      return all;
-    },
-  });
+  const selectedWeek = (weeks.data ?? []).find((week:any) => week.id === effectiveWeekId);
+  const activities = useQuery({queryKey:["measurement-weekly-export",session.userId,session.worksiteId,effectiveWeekId],enabled:Boolean(effectiveWeekId),queryFn:({signal})=>loadExportRows({data:{weekId:effectiveWeekId},signal}),retry:false});
 
   async function exportWeeklyExcel() {
     const XLSX = await import("xlsx");
@@ -931,7 +901,7 @@ function WeeklyActivityExport() {
         <button
           type="button"
           onClick={exportWeeklyExcel}
-          disabled={!selectedWeek || activities.isLoading || !activities.data?.length}
+          disabled={!selectedWeek || weeks.isError || activities.isError || activities.isLoading || !activities.data?.length}
           className="btn-primary min-h-10 w-full justify-center text-[12px] disabled:opacity-50 sm:w-auto"
         >
           <Download className="h-4 w-4" />{" "}
@@ -939,7 +909,7 @@ function WeeklyActivityExport() {
         </button>
       </div>
       <div className="border-t border-border p-3 text-[12px] text-muted-foreground">
-        {activities.isLoading
+        {weeks.isError || activities.isError ? <span role="alert">Não foi possível carregar a exportação. <button className="btn-primary" onClick={()=>{void weeks.refetch();if(effectiveWeekId)void activities.refetch();}}>Tentar novamente</button></span> : activities.isLoading
           ? "Carregando atividades apontadas…"
           : (activities.data?.length ?? 0) +
             " atividade(s) com apontamento EXECUTADO ou NÃO EXECUTADO."}
@@ -3622,36 +3592,12 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       .slice(0, 30);
   }, [employees.data, employeeSearch]);
 
-  const activeWeek = useQuery({
-    queryKey: ["active-week"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weeks")
-        .select("id")
-        .eq("is_active", true)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-  });
-  const activities = useQuery({
-    queryKey: ["overtime-activity-search", activeWeek.data?.id, search],
-    enabled: !!activeWeek.data?.id && search.trim().length >= 2,
-    queryFn: async () => {
-      const t = search
-        .trim()
-        .replace(/[,%()]/g, " ")
-        .replace(/\s+/g, " ");
-      const { data, error } = await supabase
-        .from("activities")
-        .select("id, week_id, order_number, description")
-        .eq("week_id", activeWeek.data!.id)
-        .or(`order_number.ilike.%${t}%,description.ilike.%${t}%`)
-        .limit(20);
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
+  const [activitySearchTerm,setActivitySearchTerm]=useState(search);
+  useEffect(()=>{const timer=setTimeout(()=>setActivitySearchTerm(search),300);return()=>clearTimeout(timer);},[search]);
+  const loadActiveWeeks=useServerFn(getVisibleWeeks), searchActivities=useServerFn(searchOvertimeActivities);
+  const activeWeek = useQuery({queryKey:["active-week",session.userId,session.worksiteId,"overtime"],queryFn:async({signal})=>(await loadActiveWeeks({signal})).find((week:any)=>week.is_active)??null,retry:false});
+  const activities = useQuery({queryKey:["overtime-activity-search",session.userId,session.worksiteId,activeWeek.data?.id,activitySearchTerm],enabled:!!activeWeek.data?.id&&activitySearchTerm.trim().length>=2,
+    queryFn:({signal})=>searchActivities({data:{weekId:activeWeek.data!.id,search:activitySearchTerm.slice(0,200)},signal}),retry:false});
 
   function toggleEmployee(id: string) {
     setSelectedEmployeeIds((current) =>
@@ -3951,7 +3897,8 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        {activities.data && activities.data.length > 0 && (
+        {(activeWeek.isError || activities.isError) && <p role="alert" className="mt-2 text-sm text-destructive">Não foi possível consultar as atividades da semana. <button type="button" className="underline" onClick={()=>{void activeWeek.refetch();if(activeWeek.data?.id)void activities.refetch();}}>Tentar novamente</button></p>}
+        {activities.data && activities.data.length > 0 && !activities.isError && (
           <div className="mt-2 max-h-40 divide-y divide-border overflow-auto rounded border border-border bg-card">
             {activities.data.map((a: any) => (
               <button

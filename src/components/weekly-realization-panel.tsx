@@ -13,7 +13,7 @@ import {
   type MonthlyRsWeek,
 } from "@/lib/monthly-realization";
 import type { RsProgramBasis } from "@/lib/rs-program-base";
-import { supabase } from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import { calculateWeeklyRealization, parseServiceHours } from "@/lib/weekly-realization";
 import { hasRsDisplayLoad } from "@/lib/rs-center-display";
 import {
@@ -116,12 +116,7 @@ export function WeeklyRealizationPanel({
   const weeks = useQuery({
     queryKey: ["weekly-rs-weeks", userId, worksiteId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("weeks")
-        .select("id,label,code,start_date,end_date,is_active,sap_closure_status")
-        .eq("worksite_id", worksiteId)
-        .order("start_date", { ascending: false })
-        .limit(600);
+      const { data, error } = await supabase.weeks(worksiteId);
       if (error) throw error;
       return (data ?? []) as Week[];
     },

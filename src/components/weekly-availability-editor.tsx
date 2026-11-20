@@ -2,7 +2,7 @@ import { AvailabilityCapacity } from "@/components/availability-capacity";
 import { useMemo, useRef, useState } from "react";
 import { Plus, Save, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import { Modal, Panel } from "@/components/ui-kit";
 import { availabilityWeekDates, createAvailabilityCenter } from "@/lib/new-availability-center";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";

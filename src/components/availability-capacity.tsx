@@ -1,5 +1,5 @@
 import {useEffect,useState} from "react";
-import {supabase} from "@/integrations/supabase/client";
+import { rsTransport as supabase } from "@/lib/rs-transport";
 import {availabilityWeekDates} from "@/lib/new-availability-center";
 import type {AvailabilityRow,AvailabilityWeek} from "@/lib/weekly-availability";
 import {toast} from "sonner";
@@ -10,16 +10,17 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  const defaults=Object.fromEntries(dates.map(d=>[d,[0,6].includes(new Date(d+"T12:00:00").getDay())?0:8.8]));
  const [days,setDays]=useState<Record<string,number>>(defaults);
  const [version,setVersion]=useState(0),[saved,setSaved]=useState(""),[busy,setBusy]=useState(false),[loaded,setLoaded]=useState(false);
+ const [loadError,setLoadError]=useState(false),[reload,setReload]=useState(0);
  const [mode,setMode]=useState("week"),[metric,setMetric]=useState("hh");
  const [specialty,setSpecialty]=useState("");
  const [local,setLocal]=useState("");
  const key=(value:string)=>value.trim().toUpperCase();
  const specialties=[...new Set(rows.map(r=>r.specialty.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"pt-BR"));
- useEffect(()=>{let active=true;setLoaded(false);
- (async()=>{const {data,error}=await (supabase as any).from("weekly_capacity_journey").select("*").eq("week_id",week.id).maybeSingle();
- if(!active)return;if(error){toast.error("Não foi possível carregar a jornada.");return;}
+ useEffect(()=>{let active=true;setLoaded(false);setLoadError(false);
+ (async()=>{const {data,error}=await supabase.journey(week.id);
+ if(!active)return;if(error){setLoadError(true);toast.error("Não foi possível carregar a jornada.");return;}
  setDays(data?.days??defaults);setVersion(data?.version??0);setSaved(data?new Date(data.updated_at).toLocaleString("pt-BR"):"");setLoaded(true);
- })();return()=>{active=false};},[week.id]);
+ })();return()=>{active=false};},[week.id,reload]);
  const denominator=mode==="week"?Object.values(days).reduce((a,b)=>a+b,0):(days[mode]??0);
  const groups=new Map<string,{center:string;local:string;hours:number}>();
  for(const r of rows){if((specialty&&key(r.specialty)!==key(specialty))||(local&&key(r.local)!==local)||(mode!=="week"&&r.date!==mode))continue;const k=JSON.stringify([r.center,r.local]);const g=groups.get(k)??{center:r.center,local:r.local,hours:0};g.hours+=r.hours;groups.set(k,g);}
@@ -27,12 +28,13 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  const max=Math.max(1,...bars.map(([,g])=>metric==="hh"?g.hours:denominator?g.hours/denominator:0));
  const weekly=Object.values(days).reduce((a,b)=>a+b,0);
  async function save(){if(readOnly||busy||!loaded)return;setBusy(true);
- try{const db=supabase as any;const result=version?await db.from("weekly_capacity_journey").update({days}).eq("week_id",week.id).eq("version",version).select().maybeSingle():await db.from("weekly_capacity_journey").insert({week_id:week.id,days}).select().single();
+ try{const result=await supabase.saveJourney(week.id,version,days);
  if(result.error||!result.data)throw Error("Jornada alterada por outra pessoa ou sem permissão. Atualize a tela.");
  setVersion(result.data.version);setSaved(new Date(result.data.updated_at).toLocaleString("pt-BR"));toast.success("Jornada semanal salva com histórico.");
  }catch(e){toast.error(e instanceof Error?e.message:"Erro ao salvar");}finally{setBusy(false);}}
  return <section className="mb-4 space-y-3 rounded-lg border border-border bg-card p-4">
  <h3 className="text-sm font-semibold">Capacidade por centro de trabalho</h3>
+ {loadError&&<p role="alert" className="rounded border border-destructive p-3 text-sm">Não foi possível carregar a jornada. O cálculo de pessoas equivalentes está indisponível. <button type="button" className="btn-primary" onClick={()=>setReload(value=>value+1)}>Tentar novamente</button></p>}
  <p className="text-xs text-muted-foreground">Pessoas equivalentes = HH disponível ÷ jornada por pessoa do período. Não representa a contagem de colaboradores únicos. A jornada não altera o cálculo do RS.</p>
  <div className="flex flex-wrap items-end gap-2">
  {dates.map(d=><label key={d} className="text-xs">{d.slice(8)}/{d.slice(5,7)}<input aria-label={"Jornada "+d} type="number" min="0" max="24" step="0.1" disabled={readOnly||!loaded} value={days[d]??0} onChange={e=>setDays({...days,[d]:Math.min(24,Math.max(0,Number(e.target.value)))})} className="input-base block w-20"/></label>)}
@@ -49,9 +51,9 @@ export function AvailabilityCapacity({week,rows,readOnly,onDistribute}:Props){
  {!bars.length&&<p className="text-xs text-muted-foreground">Nenhum centro de trabalho neste recorte.</p>}
  <div className="overflow-x-auto pb-2">
  <div role="img" aria-label={metric==="hh"?"HH disponível por centro de trabalho":"Pessoas equivalentes por centro de trabalho"} className="flex min-w-full items-end gap-3 border-b border-border px-2 pt-8" style={{height:340,width:Math.max(600,bars.length*105)}}>
- {bars.map(([k,g])=>{const v=metric==="hh"?g.hours:denominator?g.hours/denominator:0;return <div key={k} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={g.center+" · "+g.local+" | "+fmt(g.hours)+" HH | "+(denominator?fmt(g.hours/denominator)+" pessoas equivalentes":"sem referência")}>
+ {bars.map(([k,g])=>{const v=metric==="hh"?g.hours:loaded&&denominator?g.hours/denominator:0;return <div key={k} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end" title={g.center+" · "+g.local+" | "+fmt(g.hours)+" HH | "+(loaded&&denominator?fmt(g.hours/denominator)+" pessoas equivalentes":"sem referência carregada")}>
  <div className="flex w-full flex-1 flex-col justify-end items-center">
- <span className="mb-1 whitespace-nowrap text-xs font-semibold">{fmt(v)}</span>
+ <span className="mb-1 whitespace-nowrap text-xs font-semibold">{metric==="people"&&!loaded?"—":fmt(v)}</span>
  <div className="w-10 rounded-t bg-primary transition-all hover:brightness-110 sm:w-14" style={{height:(v/max*230)+"px",minHeight:v>0?2:0}}/>
  </div>
  <div className="h-16 w-full pt-2 text-center text-[10px]"><div className="break-words font-semibold">{g.center}</div><div className="text-muted-foreground">{g.local}</div></div>

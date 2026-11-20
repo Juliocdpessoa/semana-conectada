@@ -1,6 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import { useServerFn } from "@tanstack/react-start";
+import { getVisibleWeeks, getAuditHistory } from "@/lib/protected-page-reads.functions";
 import type { SessionInfo } from "./route";
 import { PageHeader, Panel, EmptyState } from "@/components/ui-kit";
 import { History } from "lucide-react";
@@ -14,42 +15,10 @@ export const Route = createFileRoute("/_authenticated/historico")({
 });
 
 function HistoricoPage() {
-  const weeks = useQuery({
-    queryKey: ["all-weeks"],
-    queryFn: async () =>
-      (await supabase.from("weeks").select("*").order("start_date", { ascending: false })).data ?? [],
-  });
-  const history = useQuery({
-    queryKey: ["history"],
-    queryFn: async () => {
-      const { data: rows } = await supabase
-        .from("activity_history")
-        .select("*")
-        .order("changed_at", { ascending: false })
-        .limit(200);
-      const list = rows ?? [];
-      const ids = Array.from(new Set(list.map((r: any) => r.activity_id).filter(Boolean)));
-      let map: Record<string, any> = {};
-      if (ids.length > 0) {
-        const { data: acts } = await supabase
-          .from("activities")
-          .select("id, order_number, planning_data")
-          .in("id", ids);
-        map = Object.fromEntries((acts ?? []).map((a: any) => [a.id, a]));
-      }
-      return list.map((h: any) => {
-        const a = map[h.activity_id] ?? {};
-        const pd = (a.planning_data ?? {}) as Record<string, any>;
-        return {
-          ...h,
-          order_number: a.order_number ?? null,
-          operacao: pd["Operação"] ?? pd["Operacao"] ?? pd["OPERAÇÃO"] ?? null,
-          sub_operacao:
-            pd["Sub operação"] ?? pd["Sub Operação"] ?? pd["Subop"] ?? pd["SUB OPERAÇÃO"] ?? pd["Sub operacao"] ?? null,
-        };
-      });
-    },
-  });
+  const { session } = Route.useRouteContext() as { session: SessionInfo };
+  const loadWeeks=useServerFn(getVisibleWeeks), loadHistory=useServerFn(getAuditHistory);
+  const weeks = useQuery({ queryKey: ["all-weeks",session.userId,session.worksiteId], queryFn: ({signal})=>loadWeeks({signal}), retry:false });
+  const history = useQuery({ queryKey: ["history",session.userId,session.worksiteId], queryFn: ({signal})=>loadHistory({signal}), retry:false });
 
   return (
     <main className="mx-auto w-full max-w-none min-w-0 px-4 py-6 sm:px-6">
@@ -61,7 +30,7 @@ function HistoricoPage() {
 
       <div className="grid min-w-0 gap-4">
         <Panel title="Semanas" description={`${weeks.data?.length ?? 0} registros`} padded={false}>
-          {weeks.data && weeks.data.length > 0 ? (
+          {weeks.isError ? <p role="alert" className="p-4">Não foi possível carregar as semanas. <button className="btn-primary" onClick={()=>void weeks.refetch()}>Tentar novamente</button></p> : weeks.isPending ? <p role="status" className="p-4">Carregando semanas…</p> : weeks.data && weeks.data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
@@ -94,7 +63,7 @@ function HistoricoPage() {
         </Panel>
 
         <Panel title="Últimas alterações" description="200 registros mais recentes" padded={false}>
-          {history.data && history.data.length > 0 ? (
+          {history.isError ? <p role="alert" className="p-4">Não foi possível carregar o histórico. <button className="btn-primary" onClick={()=>void history.refetch()}>Tentar novamente</button></p> : history.isPending ? <p role="status" className="p-4">Carregando histórico…</p> : history.data && history.data.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="w-full text-[12px]">
                 <thead className="border-b border-border bg-muted text-[10px] uppercase tracking-wider text-muted-foreground">
