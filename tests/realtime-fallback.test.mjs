@@ -7,7 +7,8 @@ test('the fallback remains connected but its technical status is not shown to en
   const source=readFileSync(new URL('../src/routes/_authenticated/atividades.tsx',import.meta.url),'utf8');
   assert.doesNotMatch(source,/Conexão em tempo real indisponível|liveSyncFallback/);
   assert.match(source,/createRealtimeFallback\(\{/);
-  assert.match(source,/\.subscribe\(status => fallback.status\(status\)\)/);
+  assert.match(source,/fallback.status\(status\)/);
+  assert.match(source,/diagnostics.status\(status,error\)/);
 });
 function fixture(refresh = async () => {}, random = () => 0) {
   let now = 0, id = 0, visible = true; const jobs = new Map(); const flags = [];

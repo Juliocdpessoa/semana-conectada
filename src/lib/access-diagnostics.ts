@@ -1,7 +1,9 @@
-export const ACCESS_STAGES=["session","identity","password","profile","roles","worksite","membership","runtime"] as const;
+import { isRealtimeReason, type RealtimeReason } from './realtime-diagnostics.ts';
+export const ACCESS_STAGES=["session","identity","password","profile","roles","worksite","membership","runtime","realtime"] as const;
 export type AccessStage=typeof ACCESS_STAGES[number];
 export type DiagnosticCategory="network"|"timeout"|"auth"|"server"|"missing"|"runtime";
-export const DIAGNOSTIC_BUILD="access-diag-20261119-v1";
+export const DIAGNOSTIC_BUILD="access-diag-20261120-v2";
+export const isDiagnosticBuild=(value:unknown)=>value===DIAGNOSTIC_BUILD||value==='access-diag-20261119-v1';
 export function diagnosticCategory(error:unknown):DiagnosticCategory{
  const e=error as {name?:string;message?:string;status?:number;code?:string}|null;
  if(e?.name==="AccessTimeout")return "timeout";
@@ -13,9 +15,11 @@ export function diagnosticCategory(error:unknown):DiagnosticCategory{
 export class AccessLoadError extends Error{
  readonly reportId=crypto.randomUUID();
  readonly stage:AccessStage; readonly category:DiagnosticCategory; readonly attempts:number; readonly elapsedMs:number;
- constructor(stage:AccessStage,category:DiagnosticCategory,attempts:number,elapsedMs:number){
+ readonly reason?:RealtimeReason;
+ constructor(stage:AccessStage,category:DiagnosticCategory,attempts:number,elapsedMs:number,reason?:RealtimeReason){
  super("Não foi possível concluir a verificação de acesso.");this.name="AccessLoadError";
  this.stage=stage;this.category=category;this.attempts=attempts;this.elapsedMs=elapsedMs;
+ if(stage==='realtime'&&isRealtimeReason(reason))this.reason=reason;
  }
 }
 export async function accessStep<T extends {error?:unknown}>(stage:AccessStage,fn:(signal:AbortSignal)=>PromiseLike<T>,deadline:number,timeoutMs=8000):Promise<T>{
@@ -57,7 +61,8 @@ export function safeQueuedDiagnostic(value:unknown):boolean{
  const v=value as Record<string,unknown>;const uuid=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
  return typeof v.id==="string"&&uuid.test(v.id)&&typeof v.clientId==="string"&&uuid.test(v.clientId)
  &&ACCESS_STAGES.includes(v.stage as AccessStage)&&["network","timeout","auth","server","missing","runtime"].includes(v.category as string)
- &&["login","password","home","activities","other"].includes(v.route as string)&&v.build===DIAGNOSTIC_BUILD
+ &&["login","password","home","activities","other"].includes(v.route as string)&&isDiagnosticBuild(v.build)
+ &&(v.reason===undefined||(v.stage==='realtime'&&isRealtimeReason(v.reason)))
  &&Number.isInteger(v.attempts)&&Number(v.attempts)>=1&&Number(v.attempts)<=2
  &&Number.isInteger(v.elapsedMs)&&Number(v.elapsedMs)>=0&&Number(v.elapsedMs)<=60000
  &&typeof v.queuedAt==="number"&&Number.isFinite(v.queuedAt)

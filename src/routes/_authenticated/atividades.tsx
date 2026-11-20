@@ -10,6 +10,9 @@ import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { readAllPages } from "@/lib/read-query-policy";
 import { createRealtimeFallback } from "@/lib/realtime-fallback";
+import { createRealtimeDiagnostics } from '@/lib/realtime-diagnostics';
+import { AccessLoadError } from '@/lib/access-diagnostics';
+import { reportCentralDiagnostic } from '@/lib/access-diagnostics-client';
 import {
   updateActivity,
   bulkUpdateActivities,
@@ -1126,6 +1129,10 @@ function WeeklyActivitiesPage() {
   useEffect(() => {
     const weekId = activeWeek.data?.id;
     if (!weekId) return;
+    let disposed = false;
+    const diagnostics = createRealtimeDiagnostics(failure => {
+      if (!disposed) reportCentralDiagnostic(new AccessLoadError('realtime',failure.category,1,failure.elapsedMs,failure.reason),'/atividades');
+    });
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const changedIds = new Set<string>();
     const fallback = createRealtimeFallback({
@@ -1148,6 +1155,7 @@ function WeeklyActivitiesPage() {
         "postgres_changes",
         { event: "UPDATE", schema: "public", table: "activities", filter: `week_id=eq.${weekId}` },
         (payload) => {
+          if (disposed) return;
           const activityId = String((payload.new as { id?: string } | null)?.id ?? "");
           if (activityId) changedIds.add(activityId);
           if (refreshTimer) return;
@@ -1161,9 +1169,10 @@ function WeeklyActivitiesPage() {
           }, 2_000);
         },
       )
-      .subscribe(status => fallback.status(status));
+      .subscribe((status,error) => { if (!disposed) { fallback.status(status); diagnostics.status(status,error); } });
 
     return () => {
+      disposed = true;
       fallback.dispose();
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);

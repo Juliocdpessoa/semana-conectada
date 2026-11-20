@@ -1,6 +1,8 @@
 import {recordAccessDiagnostic} from "./access-diagnostics.functions";
 import {AccessLoadError,diagnosticCategory,diagnosticFrames,diagnosticRoute,DIAGNOSTIC_BUILD,safeQueuedDiagnostic} from "./access-diagnostics";
-type Item={id:string;clientId:string;stage:"session"|"identity"|"password"|"profile"|"roles"|"worksite"|"membership"|"runtime";category:"network"|"timeout"|"auth"|"server"|"missing"|"runtime";route:"login"|"password"|"home"|"activities"|"other";build:typeof DIAGNOSTIC_BUILD;attempts:number;elapsedMs:number;frames:string[];queuedAt:number};
+import type { AccessStage } from './access-diagnostics';
+import type { RealtimeReason } from './realtime-diagnostics';
+type Item={id:string;clientId:string;stage:AccessStage;reason?:RealtimeReason;category:"network"|"timeout"|"auth"|"server"|"missing"|"runtime";route:"login"|"password"|"home"|"activities"|"other";build:typeof DIAGNOSTIC_BUILD|'access-diag-20261119-v1';attempts:number;elapsedMs:number;frames:string[];queuedAt:number};
 let identityToken:string|undefined;
 export function setAccessDiagnosticIdentity(token:string|undefined){identityToken=token;}
 const ids=new WeakMap<object,string>();const memory=new Map<string,Item>();const reportAuth=new Map<string,string>();
@@ -21,7 +23,7 @@ export function reportCentralDiagnostic(error:unknown,path:string){
  const access=error instanceof AccessLoadError?error:null;
  memory.set(id,{id,clientId:browserId(),stage:access?.stage??"runtime",category:access?.category??diagnosticCategory(error),
  route:diagnosticRoute(path),build:DIAGNOSTIC_BUILD,attempts:Math.min(2,Math.max(1,access?.attempts??1)),
- elapsedMs:Math.min(60000,Math.max(0,Math.round(access?.elapsedMs??0))),frames:diagnosticFrames(error),queuedAt:Date.now()});
+ elapsedMs:Math.min(60000,Math.max(0,Math.round(access?.elapsedMs??0))),frames:diagnosticFrames(error),queuedAt:Date.now(),...(access?.reason?{reason:access.reason}:{})});
  while(memory.size>5){const oldest=memory.keys().next().value!;memory.delete(oldest);reportAuth.delete(oldest);}
  persist();retriesRemaining=2;void flushCentralDiagnostics();return id;
 }
@@ -32,7 +34,7 @@ export async function flushCentralDiagnostics(){
  try{
   for(const [id,item] of [...memory]){
    if(Date.now()-item.queuedAt>86400000){memory.delete(id);reportAuth.delete(id);continue;}
-   const data={id:item.id,clientId:item.clientId,stage:item.stage,category:item.category,route:item.route,build:item.build,attempts:item.attempts,elapsedMs:item.elapsedMs,frames:item.frames};let timer:ReturnType<typeof setTimeout>|undefined;
+   const data={id:item.id,clientId:item.clientId,stage:item.stage,category:item.category,route:item.route,build:item.build,attempts:item.attempts,elapsedMs:item.elapsedMs,frames:item.frames,...(item.reason?{reason:item.reason}:{})};let timer:ReturnType<typeof setTimeout>|undefined;
    try{
     const result=await Promise.race([recordAccessDiagnostic({data,headers:reportAuth.has(id)?{Authorization:"Bearer "+reportAuth.get(id)}:undefined}),new Promise<null>(resolve=>{timer=setTimeout(()=>resolve(null),6000);})]);
     if(result?.accepted){memory.delete(id);reportAuth.delete(id);}else break;

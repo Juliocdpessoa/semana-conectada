@@ -142,11 +142,14 @@ function RootComponent() {
     let active = true;
     const pending = new Set<ReturnType<typeof setTimeout>>();
     const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      // Keep the diagnostic header in sync with routine token refresh, without
+      // refetching the app or persisting credentials in the diagnostic queue.
+      if (event === "SIGNED_OUT") setAccessDiagnosticIdentity(undefined);
+      else if (session?.access_token) setAccessDiagnosticIdentity(session.access_token);
       const nextUser = session?.user.id ?? null;
       const action = authCacheAction(event, previousUser, nextUser);
       previousUser = nextUser;
       if (action === "none") return;
-      if(event==="SIGNED_OUT")setAccessDiagnosticIdentity(undefined);
       // Run outside GoTrue's auth lock. Never reuse a previous user's queries,
       // and do not refetch the whole application on a same-user tab focus.
       const timer = setTimeout(() => {

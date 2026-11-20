@@ -1,5 +1,7 @@
 import { test, expect, spyOn } from "bun:test";
-import { createClient } from "@supabase/supabase-js";
+const {createClient}=await import(process.env.NEXO_TEST_LOCKED_SDK==='1'
+ ? '../.audit-tmp/realtime-runtime/node_modules/@supabase/supabase-js/dist/index.mjs'
+ : '@supabase/supabase-js');
 import { matchAccessOperation, accessBodyAllowed, ACCESS_RELAY_PREFIX } from "../src/lib/access-transport-policy";
 import { relayAccessRequest, isPublicClientKey } from "../src/lib/access-relay";
 import { createAccessFetch, createAccessRouteHint, createAmbiguityGuard, NOT_REPEATED_TTL_MS, ACCESS_ROUTE_HINT_KEY } from "../src/lib/access-transport";
