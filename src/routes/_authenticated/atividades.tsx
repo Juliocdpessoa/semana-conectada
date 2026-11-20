@@ -13,6 +13,8 @@ import { createRealtimeFallback } from "@/lib/realtime-fallback";
 import { createRealtimeDiagnostics } from '@/lib/realtime-diagnostics';
 import { AccessLoadError } from '@/lib/access-diagnostics';
 import { reportCentralDiagnostic } from '@/lib/access-diagnostics-client';
+import { reportPerformance } from '@/lib/performance-client';
+import { performanceOperation } from '@/lib/performance-policy';
 import {
   updateActivity,
   bulkUpdateActivities,
@@ -1082,7 +1084,16 @@ function WeeklyActivitiesPage() {
       p_page_size: size,
     });
     if (signal) request = request.abortSignal(signal);
-    const { data, error } = await request;
+    const measuredAt = performance.now();
+    let response;
+    try {
+      response = await request;
+      if (size === pageSize && !signal?.aborted) reportPerformance(performanceOperation(filters), performance.now() - measuredAt, !response.error);
+    } catch (error) {
+      if (size === pageSize && !signal?.aborted) reportPerformance(performanceOperation(filters), performance.now() - measuredAt, false);
+      throw error;
+    }
+    const { data, error } = response;
     if (error) throw error;
     return data as {
       rows: ActivityRow[];

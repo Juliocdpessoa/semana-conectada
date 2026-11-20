@@ -1,5 +1,5 @@
 import { ActivityPageConfiguration } from "@/components/activity-page-configuration";
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
@@ -233,6 +233,8 @@ function AdminUsers() {
           </>
         }
       />
+
+      {session.roles.includes('admin') && <nav aria-label="Administração" className="mb-4 flex flex-wrap gap-2"><span className="btn-primary" aria-current="page">Usuários e configurações</span><Link to="/admin/desempenho" className="btn-ghost border border-border">Desempenho</Link></nav>}
 
       {isGlobalAdmin && (
         <Panel

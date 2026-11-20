@@ -22,6 +22,7 @@ import { Route as AuthenticatedMudancaDeEscalaRouteImport } from './routes/_auth
 import { Route as AuthenticatedPainelRouteImport } from './routes/_authenticated/painel'
 import { Route as AuthenticatedPlanejamentoRouteImport } from './routes/_authenticated/planejamento'
 import { Route as AuthenticatedTransporteProgramadoRouteImport } from './routes/_authenticated/transporte-programado'
+import { Route as AuthenticatedAdminDesempenhoRouteImport } from './routes/_authenticated/admin/desempenho'
 import { Route as AuthenticatedAdminUsuariosRouteImport } from './routes/_authenticated/admin/usuarios'
 import { Route as ApiPublicNexoAccessSplatRouteImport } from './routes/api/public/nexo-access/$'
 
@@ -92,6 +93,12 @@ const AuthenticatedTransporteProgramadoRoute =
     path: '/transporte-programado',
     getParentRoute: () => AuthenticatedRouteRoute,
   } as any)
+const AuthenticatedAdminDesempenhoRoute =
+  AuthenticatedAdminDesempenhoRouteImport.update({
+    id: '/admin/desempenho',
+    path: '/admin/desempenho',
+    getParentRoute: () => AuthenticatedRouteRoute,
+  } as any)
 const AuthenticatedAdminUsuariosRoute =
   AuthenticatedAdminUsuariosRouteImport.update({
     id: '/admin/usuarios',
@@ -118,6 +125,7 @@ export interface FileRoutesByFullPath {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
+  '/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
@@ -134,6 +142,7 @@ export interface FileRoutesByTo {
   '/painel': typeof AuthenticatedPainelRoute
   '/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
+  '/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
@@ -152,6 +161,7 @@ export interface FileRoutesById {
   '/_authenticated/painel': typeof AuthenticatedPainelRoute
   '/_authenticated/planejamento': typeof AuthenticatedPlanejamentoRoute
   '/_authenticated/transporte-programado': typeof AuthenticatedTransporteProgramadoRoute
+  '/_authenticated/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
@@ -170,6 +180,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/transporte-programado'
+    | '/admin/desempenho'
     | '/admin/usuarios'
     | '/api/public/nexo-access/$'
   fileRoutesByTo: FileRoutesByTo
@@ -186,6 +197,7 @@ export interface FileRouteTypes {
     | '/painel'
     | '/planejamento'
     | '/transporte-programado'
+    | '/admin/desempenho'
     | '/admin/usuarios'
     | '/api/public/nexo-access/$'
   id:
@@ -203,6 +215,7 @@ export interface FileRouteTypes {
     | '/_authenticated/painel'
     | '/_authenticated/planejamento'
     | '/_authenticated/transporte-programado'
+    | '/_authenticated/admin/desempenho'
     | '/_authenticated/admin/usuarios'
     | '/api/public/nexo-access/$'
   fileRoutesById: FileRoutesById
@@ -310,6 +323,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedTransporteProgramadoRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/admin/desempenho': {
+      id: '/_authenticated/admin/desempenho'
+      path: '/admin/desempenho'
+      fullPath: '/admin/desempenho'
+      preLoaderRoute: typeof AuthenticatedAdminDesempenhoRouteImport
+      parentRoute: typeof AuthenticatedRouteRoute
+    }
     '/_authenticated/admin/usuarios': {
       id: '/_authenticated/admin/usuarios'
       path: '/admin/usuarios'
@@ -335,6 +355,7 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedPainelRoute: typeof AuthenticatedPainelRoute
   AuthenticatedPlanejamentoRoute: typeof AuthenticatedPlanejamentoRoute
   AuthenticatedTransporteProgramadoRoute: typeof AuthenticatedTransporteProgramadoRoute
+  AuthenticatedAdminDesempenhoRoute: typeof AuthenticatedAdminDesempenhoRoute
   AuthenticatedAdminUsuariosRoute: typeof AuthenticatedAdminUsuariosRoute
 }
 
@@ -347,6 +368,7 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedPlanejamentoRoute: AuthenticatedPlanejamentoRoute,
   AuthenticatedTransporteProgramadoRoute:
     AuthenticatedTransporteProgramadoRoute,
+  AuthenticatedAdminDesempenhoRoute: AuthenticatedAdminDesempenhoRoute,
   AuthenticatedAdminUsuariosRoute: AuthenticatedAdminUsuariosRoute,
 }
 
