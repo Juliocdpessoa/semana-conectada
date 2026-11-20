@@ -258,9 +258,10 @@ function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, di
     return upstream({ url, init: i });
   }) as typeof fetch;
   const store = new Map<string, string>();
-  const f = createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint: createAccessRouteHint(memStorage()) });
+  const hint = createAccessRouteHint(memStorage());
+  const f = createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint });
   const sb = createClient(UP, KEY, { global: { fetch: f }, auth: { storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v), removeItem: (k) => void store.delete(k) }, autoRefreshToken: false, persistSession: true } });
-  return { sb, up, browserCalls, browserInits, store, f };
+  return { sb, up, browserCalls, browserInits, store, f, hint };
 }
 
 test("sign-in through the gate's bounded retry: one direct failure, one relay call, wrong password stays wrong", async () => {
@@ -441,6 +442,27 @@ test("real SDK: the Atividades page reads work through the relay with the user's
 // Ambiguous outcomes: no repetition of non-idempotent calls
 // ======================================================================
 const STORAGE_KEY = "sb-ref123-auth-token";
+test("logout preserves a legitimate 204 instead of manufacturing an ambiguous 502", async () => {
+  const up = fakeUpstream(() => new Response(null, { status: 204 }));
+  const res = await relay(new Request(`${APP}${ACCESS_RELAY_PREFIX}/auth/v1/logout?scope=global`, {
+    method: "POST", headers: { authorization: `Bearer ${TOKEN}` },
+  }), up.f);
+  expect(res.status).toBe(204);
+  expect(await res.text()).toBe("");
+  expect(res.headers.get("x-nexo-access-outcome")).toBeNull();
+  expect(up.calls.length).toBe(1);
+});
+
+test("a lost DIRECT refresh response is ambiguous too: never resend the rotating token", async () => {
+  const b = browser(async () => { throw new TypeError("Failed to fetch"); });
+  const init = { method: "POST", body: JSON.stringify({ refresh_token: "r1" }) };
+  await expect(b.fetch(`${UP}/auth/v1/token?grant_type=refresh_token`, init)).rejects.toThrow();
+  const again = await b.fetch(`${UP}/auth/v1/token?grant_type=refresh_token`, init);
+  expect(again.status).toBe(503);
+  expect(b.calls.length).toBe(1);
+  expect(b.hint.useRelay()).toBe(true);
+});
+
 function expiredSession(refresh = "r1") {
   return JSON.stringify({ access_token: TOKEN, refresh_token: refresh, token_type: "bearer", expires_in: 3600, expires_at: Math.floor(Date.now() / 1000) - 60, user: { id: UID, aud: "authenticated" } });
 }
@@ -451,10 +473,11 @@ test("real SDK refresh: an ambiguous relay result is sent upstream once, never r
     if (new URL(c.url).pathname === "/auth/v1/token") { tokenCalls++; throw new TypeError("fetch failed"); } // upstream lost mid-request
     return json({}, 404);
   });
+  e.hint.markDirectFailed();
   e.store.set(STORAGE_KEY, expiredSession());
   const { error } = await e.sb.auth.getSession(); // SDK refreshes and retries with backoff by itself
   expect(error?.name).toBe("AuthRetryableFetchError");
-  expect(tokenCalls).toBe(1); // one direct refusal + one relay call; every SDK retry stayed local
+  expect(tokenCalls).toBe(1); // one relay call; every SDK retry stayed local
   expect(e.browserCalls.filter((u) => u.startsWith(APP)).length).toBe(1);
   expect(JSON.parse(e.store.get(STORAGE_KEY)!).refresh_token).toBe("r1"); // transient: session not deleted
   // Even a caller bypassing the SDK cooldown gets a local answer for the same token.
@@ -478,6 +501,7 @@ test("real SDK refresh: a definite answer is relayed once and saved normally", a
     }
     return json({}, 404);
   });
+  e.hint.markDirectFailed();
   e.store.set(STORAGE_KEY, expiredSession());
   const { data } = await e.sb.auth.getSession();
   expect(data.session?.refresh_token).toBe("r2");

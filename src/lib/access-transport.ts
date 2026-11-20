@@ -155,10 +155,11 @@ export function createAccessFetch(
       return response;
     } catch (error) {
       if (!viaRelay && isConnectionFailure(error, init?.signal, now() - started)) options.hint.markDirectFailed();
-      // A direct "failed to fetch" is the browser failing to reach the backend
-      // domain, treated as not delivered. Anything else on a write (relay
-      // failure, hung or aborted connection) may have reached the server.
-      const directRefused = !viaRelay && errorName(error) === "TypeError";
+      // Failed to fetch can also mean the response was lost after processing.
+      // A rotating refresh token must NEVER be replayed on that assumption.
+      // Password grants retain the existing bounded login retry; they do not
+      // consume a refresh token or repeat an application data mutation.
+      const directRefused = !viaRelay && errorName(error) === "TypeError" && op.kind === "auth-password";
       if (ttl && !directRefused) guard.mark(key, ttl);
       throw error; // never retried here; the caller decides with its own bounded policy
     }

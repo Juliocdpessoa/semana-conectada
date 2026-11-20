@@ -83,7 +83,7 @@ const DATA_TABLES: Record<string, TableRule> = {
     params: { select: COLUMNS, week_id: UUID_EQ, order: ORDER, limit: LIMIT },
     required: ["select", "week_id"],
   },
-  sap_confirmation_rows: { params: { select: COLUMNS, import_id: UUID_EQ, order: ORDER }, required: ["select", "import_id"] },
+  sap_confirmation_rows: { params: { select: COLUMNS, import_id: UUID_EQ, order: ORDER, offset: OFFSET, limit: LIMIT }, required: ["select", "import_id"] },
   activity_history: {
     params: { select: COLUMNS, activity_id: UUID_EQ, order: ORDER, limit: LIMIT },
     required: ["select", "activity_id"],

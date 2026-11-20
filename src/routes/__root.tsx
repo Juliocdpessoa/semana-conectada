@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
 import { COLOR_THEME_BOOTSTRAP } from "@/lib/color-theme";
 import { accessErrorMessage } from "@/lib/access-diagnostics";
+import { authCacheAction } from "@/lib/auth-cache-policy";
 import { reportCentralDiagnostic, startCentralDiagnostics, setAccessDiagnosticIdentity } from "@/lib/access-diagnostics-client";
 
 function NotFoundComponent() {
@@ -137,13 +138,33 @@ function RootComponent() {
   const router = useRouter();
 
   useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+    let previousUser: string | null | undefined;
+    let active = true;
+    const pending = new Set<ReturnType<typeof setTimeout>>();
+    const { data: sub } = supabase.auth.onAuthStateChange((event, session) => {
+      const nextUser = session?.user.id ?? null;
+      const action = authCacheAction(event, previousUser, nextUser);
+      previousUser = nextUser;
+      if (action === "none") return;
       if(event==="SIGNED_OUT")setAccessDiagnosticIdentity(undefined);
-      router.invalidate();
-      if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
+      // Run outside GoTrue's auth lock. Never reuse a previous user's queries,
+      // and do not refetch the whole application on a same-user tab focus.
+      const timer = setTimeout(() => {
+        pending.delete(timer);
+        void (async () => {
+          if (!active) return;
+          if (action === "clear") {
+            await queryClient.cancelQueries();
+            if (!active) return;
+            queryClient.clear();
+          }
+          await router.invalidate();
+          if (active && action === "refresh") await queryClient.invalidateQueries();
+        })().catch(() => { /* Route recovery presents its own access error. */ });
+      }, 0);
+      pending.add(timer);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => { active = false; for (const timer of pending) clearTimeout(timer); sub.subscription.unsubscribe(); };
   }, [router, queryClient]);
 
   return (

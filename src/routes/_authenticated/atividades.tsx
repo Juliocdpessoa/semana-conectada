@@ -8,6 +8,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { readAllPages } from "@/lib/read-query-policy";
 import {
   updateActivity,
   bulkUpdateActivities,
@@ -1200,24 +1201,26 @@ function WeeklyActivitiesPage() {
   const sapLatestRows = useQuery({
     queryKey: ["sap-confirmation-latest-rows", sapLatestImport.data?.id],
     enabled: Boolean(sapLatestImport.data?.id) && canViewSap,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => readAllPages<SapStoredRow>(async (offset, size) => {
       const { data, error } = await (supabase as any)
         .from("sap_confirmation_rows")
         .select(
           "source_row_number,order_number,operation,suboperation,actual_start_date,actual_end_date,actual_work,confirmation",
         )
         .eq("import_id", sapLatestImport.data!.id)
-        .order("source_row_number", { ascending: true });
+        .order("source_row_number", { ascending: true })
+        .range(offset, offset + size - 1)
+        .abortSignal(signal);
       if (error) throw error;
       return (data ?? []) as SapStoredRow[];
-    },
+    }, signal),
     staleTime: 5 * 60_000,
   });
 
   const sapAllocationActivities = useQuery({
     queryKey: ["sap-allocation-activities-v3", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canViewSap && Boolean(sapLatestImport.data?.id),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const pageSize = 500;
       const loadPage = async (pageIndex: number) => {
         const { data, error } = await (supabase as any).rpc("get_activities_page", {
@@ -1225,7 +1228,7 @@ function WeeklyActivitiesPage() {
           p_filters: {},
           p_page: pageIndex,
           p_page_size: pageSize,
-        });
+        }).abortSignal(signal);
         if (error) throw error;
         return data as { rows?: ActivityRow[]; totalAll?: number } | null;
       };
@@ -1235,10 +1238,15 @@ function WeeklyActivitiesPage() {
       const total = Number(firstPage?.totalAll ?? rows.length);
       const pageCount = Math.ceil(total / pageSize);
       if (pageCount > 1) {
-        const remainingPages = await Promise.all(
-          Array.from({ length: pageCount - 1 }, (_, index) => loadPage(index + 1)),
-        );
-        for (const result of remainingPages) rows.push(...(result?.rows ?? []));
+        // Do not fan out every SAP page from every user's browser at once.
+        // Cancel the remaining work when the week changes or the query is disposed.
+        for (let start = 1; start < pageCount; start += 2) {
+          signal.throwIfAborted();
+          const remainingPages = await Promise.all(
+            Array.from({ length: Math.min(2, pageCount - start) }, (_, index) => loadPage(start + index)),
+          );
+          for (const result of remainingPages) rows.push(...(result?.rows ?? []));
+        }
       }
       return rows;
     },

@@ -46,7 +46,8 @@ export function diagnosticFrames(error:unknown):string[]{
 }
 export function accessErrorMessage(error:unknown){
  if(!(error instanceof AccessLoadError))return "O NEXO não conseguiu carregar esta tela. Tente novamente; seus dados salvos não foram apagados.";
- if(error.category==="network"||error.category==="timeout")return "A comunicação com o servidor não foi concluída a tempo. Tente novamente. Sua sessão não foi apagada.";
+ if(error.category==="network")return "Não foi possível estabelecer comunicação com o servidor. Tente novamente. Sua sessão não foi apagada.";
+ if(error.category==="timeout")return "A comunicação com o servidor não foi concluída a tempo. Tente novamente. Sua sessão não foi apagada.";
  if(error.category==="auth")return "Não foi possível validar o acesso. Tente novamente ou abra a tela de entrada.";
  return "Não foi possível concluir a verificação de acesso. Tente novamente; seus dados salvos não foram apagados.";
 }

@@ -6,6 +6,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { completeRequiredPasswordChange } from "@/lib/password-reset.functions";
 import { newPasswordSchema, type PasswordResetState } from "@/lib/password-reset";
 import { BrandLogo } from "@/components/brand-logo";
+import { accessStep, accessErrorMessage } from "@/lib/access-diagnostics";
+import { reportCentralDiagnostic } from "@/lib/access-diagnostics-client";
 
 export const Route = createFileRoute("/redefinir-senha")({
   component: ResetPasswordPage,
@@ -26,16 +28,25 @@ function ResetPasswordPage() {
   useEffect(() => {
     let active = true;
     async function initialize() {
-      const { data } = await supabase.auth.getSession();
+      try {
+      const deadline = Date.now() + 30000;
+      const { data } = await accessStep("session", () => supabase.auth.getSession(), deadline);
       if (!active) return;
       if (!data.session) { setMessage("Entre com sua senha temporária ou solicite um link em Esqueci minha senha."); return; }
-      const { data: state, error } = await (supabase as any).rpc("password_reset_state");
+      const { data: state, error } = await accessStep<any>("password", signal =>
+        (supabase as any).rpc("password_reset_state").abortSignal(signal), deadline);
       if (!active) return;
       if (error) { setMessage("Não foi possível validar o acesso. Atualize a página e tente novamente."); return; }
       setResetState(state);
       setReady(Boolean(state?.required ? state.can_change : state?.allowed));
       if (state?.required && !state.can_change)
         setMessage(state.expired ? "A senha temporária expirou. Solicite um novo reset ao administrador." : "Saia e entre novamente com a senha temporária.");
+      } catch (error) {
+        if (!active) return;
+        setReady(false);
+        const code = reportCentralDiagnostic(error, "/redefinir-senha");
+        setMessage(`${accessErrorMessage(error)}${code ? ` Código de atendimento: ${code}` : ""}`);
+      }
     }
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setTimeout(() => void initialize(), 0);
@@ -46,6 +57,7 @@ function ResetPasswordPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     const parsed = passwordSchema.safeParse(password);
     if (!parsed.success) return toast.error(parsed.error.issues[0].message);
     if (password !== confirm) return toast.error("As senhas não coincidem");

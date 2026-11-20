@@ -196,7 +196,10 @@ export async function relayAccessRequest(request: Request, config: AccessRelayCo
     // A server-side failure on a write leaves its effect unknown.
     if (!op.idempotent && upstream.status >= 500) out.set(ACCESS_OUTCOME_HEADER, "ambiguous");
     // Real upstream status/body are preserved (invalid credentials and 429 stay what they are).
-    return new Response(text, { status: upstream.status, headers: out });
+    // Fetch forbids a body even when it is an empty string for these statuses.
+    // In particular GoTrue logout may legitimately answer 204.
+    const noBody = [204, 205, 304].includes(upstream.status);
+    return new Response(noBody ? null : text, { status: upstream.status, headers: out });
   } catch {
     if (!sent) return controller.signal.aborted ? notSent() : relayError(400, "nexo_access_invalid_body");
     // Outcome unknown: the client must not treat it as success, and writes are flagged.

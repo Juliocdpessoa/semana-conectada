@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { calculateCenterRealization } from "../src/lib/weekly-availability.ts";
-test("center drilldown respects specialty, local and independent weekly caps", () => {
+test("center drilldown respects local scope without applying a per-center cap", () => {
   const rows = [
     { center: "CALD_A", specialty: "Caldeiraria", local: "ROTINA", hours: 100 },
     { center: "CALD_A", specialty: "Caldeiraria", local: "IARI", hours: 50 },
@@ -38,7 +38,9 @@ test("center drilldown respects specialty, local and independent weekly caps", (
   assert.equal(result.length, 2);
   assert.equal(result[0].available, 100);
   assert.equal(result[0].occupation, 1);
-  assert.equal(result[0].rs, 100);
+  // Capacity is capped at specialty level, not independently at each center.
+  assert.equal(result[0].considered, 120);
+  assert.equal(result[0].rs, 120);
   assert.equal(result[1].rs, 25);
   assert.equal(calculateCenterRealization(rows, centers, false, "Caldeiraria", true)[0].rs, null);
 });
