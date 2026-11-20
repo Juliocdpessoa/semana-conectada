@@ -146,7 +146,7 @@ function ScheduledTransportPage() {
     refetchOnWindowFocus: false,
     enabled: newOpen || showDaysOff,
     staleTime: 5 * 60 * 1000,
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const all: EmployeeRow[] = [];
       const pageSize = 1000;
       for (let from = 0; ; from += pageSize) {
@@ -157,8 +157,11 @@ function ScheduledTransportPage() {
           )
           .eq("worksite_id", session.worksiteId)
           .eq("is_active", true)
+          .is("deleted_at", null)
           .order("full_name")
-          .range(from, from + pageSize - 1);
+          .order("id")
+          .range(from, from + pageSize - 1)
+          .abortSignal(signal);
         if (error) throw error;
         const pageRows = (data ?? []) as EmployeeRow[];
         all.push(...pageRows);

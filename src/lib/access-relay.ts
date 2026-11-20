@@ -150,6 +150,10 @@ export async function relayAccessRequest(request: Request, config: AccessRelayCo
     // Minimal, rebuilt header set. Cookies and client-supplied keys are never forwarded.
     const headers = new Headers({ apikey: key });
     const bearer = BEARER.exec(request.headers.get("authorization") ?? "")?.[1];
+    // Operational personnel data must have the caller's token, never an anonymous request.
+    // The upstream still validates that token and applies the existing RLS policies.
+    if (["employees", "overtime_requests"].includes(op.target ?? "") && (!bearer || bearer === key))
+      return relayError(401, "nexo_access_auth_required");
     const tokenGrant = op.kind === "auth-password" || op.kind === "auth-refresh";
     if (bearer && bearer !== key && !tokenGrant) headers.set("authorization", `Bearer ${bearer}`);
     if (body !== "") headers.set("content-type", "application/json");

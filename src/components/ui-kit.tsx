@@ -23,13 +23,21 @@ export function PageHeader({
             {eyebrow}
           </div>
         )}
-        <h1 className="truncate text-[19px] font-semibold leading-tight text-foreground sm:text-xl">{title}</h1>
-        {description && <p className="mt-1 max-w-2xl truncate text-[13px] text-muted-foreground">{description}</p>}
+        <h1 className="truncate text-[19px] font-semibold leading-tight text-foreground sm:text-xl">
+          {title}
+        </h1>
+        {description && (
+          <p className="mt-1 max-w-2xl truncate text-[13px] text-muted-foreground">{description}</p>
+        )}
         {meta && (
-          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">{meta}</div>
+          <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
+            {meta}
+          </div>
         )}
       </div>
-      {actions && <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2">{actions}</div>
+      )}
     </header>
   );
 }
@@ -60,11 +68,19 @@ export function KpiCard({
     <div className="surface-card px-3.5 py-3">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">{label}</div>
-          <div className="mt-1 text-[22px] font-semibold leading-none text-foreground tabular">{value}</div>
+          <div className="truncate text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+            {label}
+          </div>
+          <div className="mt-1 text-[22px] font-semibold leading-none text-foreground tabular">
+            {value}
+          </div>
           {hint && <div className="mt-1.5 truncate text-[11px] text-muted-foreground">{hint}</div>}
         </div>
-        {icon && <div className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md", iconTone)}>{icon}</div>}
+        {icon && (
+          <div className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-md", iconTone)}>
+            {icon}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -91,8 +107,12 @@ export function Panel({
       {(title || actions) && (
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            {title && <h2 className="truncate text-[13px] font-semibold text-foreground">{title}</h2>}
-            {description && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{description}</p>}
+            {title && (
+              <h2 className="truncate text-[13px] font-semibold text-foreground">{title}</h2>
+            )}
+            {description && (
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{description}</p>
+            )}
           </div>
           {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
         </header>
@@ -117,7 +137,9 @@ export function EmptyState({
   return (
     <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed border-border bg-muted/30 px-6 py-10 text-center">
       {icon && (
-        <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-muted-foreground">{icon}</div>
+        <div className="grid h-9 w-9 place-items-center rounded-full bg-muted text-muted-foreground">
+          {icon}
+        </div>
       )}
       <div className="text-sm font-medium text-foreground">{title}</div>
       {description && <div className="max-w-md text-xs text-muted-foreground">{description}</div>}
@@ -138,7 +160,8 @@ export function StatusPill({ status }: { status: string }) {
     "AGUARDANDO PRÉ-EMISSÃO DE PT": "border-warning/50 bg-warning/15 text-warning-foreground",
     "PT EM ASSINATURA": "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
     "PT PRÉ-EMITIDA": "border-cyan-500/40 bg-cyan-500/10 text-cyan-700 dark:text-cyan-300",
-    "PT ENVIADA P/ CAMPO": "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300",
+    "PT ENVIADA P/ CAMPO":
+      "border-violet-500/40 bg-violet-500/10 text-violet-700 dark:text-violet-300",
     CANCELADA: "border-warning/50 bg-warning/15 text-warning-foreground",
     "Sem apontamento": "border-border bg-muted text-muted-foreground",
   };
@@ -153,8 +176,12 @@ export function StatusPill({ status }: { status: string }) {
     "Sem apontamento": "bg-muted-foreground/50",
   };
   return (
-    <span className={cn("status-pill", map[status] ?? "border-border bg-muted text-muted-foreground")}>
-      <span className={cn("h-1.5 w-1.5 rounded-full", dotMap[status] ?? "bg-muted-foreground/50")} />
+    <span
+      className={cn("status-pill", map[status] ?? "border-border bg-muted text-muted-foreground")}
+    >
+      <span
+        className={cn("h-1.5 w-1.5 rounded-full", dotMap[status] ?? "bg-muted-foreground/50")}
+      />
       {status === "Sem apontamento" ? "Sem apontamento" : status}
     </span>
   );
@@ -173,7 +200,11 @@ export function SyncPill({ status }: { status: "synced" | "pending" | "error" })
 
 /* ---------- Toolbar container ---------- */
 export function Toolbar({ children, className }: { children: ReactNode; className?: string }) {
-  return <div className={cn("surface-card flex flex-wrap items-center gap-2 px-3 py-2.5", className)}>{children}</div>;
+  return (
+    <div className={cn("surface-card flex flex-wrap items-center gap-2 px-3 py-2.5", className)}>
+      {children}
+    </div>
+  );
 }
 
 /* ---------- Modal ---------- */
@@ -197,7 +228,7 @@ export function Modal({
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center bg-foreground/40 backdrop-blur-[2px] sm:items-center sm:p-4"
-      onClick={onClose}
+      onClick={closeOnBackdropClick ? onClose : undefined}
     >
       <div
         className={cn(
@@ -212,6 +243,7 @@ export function Modal({
             {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
           </div>
           <button
+            type="button"
             onClick={onClose}
             aria-label="Fechar"
             className="rounded-md p-1 text-muted-foreground hover:bg-muted hover:text-foreground"

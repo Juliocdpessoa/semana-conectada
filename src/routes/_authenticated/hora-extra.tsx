@@ -1,4 +1,5 @@
 import { canCompleteOvertimePt } from "@/lib/overtime-pt";
+import { overtimeDraftKey, readOvertimeDraft, restoreOvertimeForm, persistOvertimeDraft, removeOvertimeDraft } from "@/lib/overtime-draft-storage";
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
@@ -113,7 +114,7 @@ async function withExportTimeout<T>(
   }
 }
 
-async function loadEmployees(activeOnly: boolean) {
+async function loadEmployees(activeOnly: boolean, worksiteId: string, signal?: AbortSignal) {
   const all: EmployeeRow[] = [];
   const pageSize = 1000;
   for (let from = 0; ; from += pageSize) {
@@ -121,9 +122,12 @@ async function loadEmployees(activeOnly: boolean) {
       .from("employees")
       .select(EMPLOYEE_SELECT)
       .is("deleted_at", null)
+      .eq("worksite_id", worksiteId)
       .order("full_name")
+      .order("id")
       .range(from, from + pageSize - 1);
     if (activeOnly) request = request.eq("is_active", true);
+    if (signal) request = request.abortSignal(signal);
     const { data, error } = await request;
     if (error) throw error;
     const pageRows = (data ?? []) as EmployeeRow[];
@@ -236,11 +240,11 @@ function OvertimePage() {
 
   const qc = useQueryClient();
   const requests = useQuery({
-    queryKey: ["overtime-requests", s.userId, isManager, tab, period.from, period.to],
+    queryKey: ["overtime-requests", s.userId, isManager, tab, period.from, period.to, s.worksiteId],
     staleTime: 60 * 1000,
     refetchOnWindowFocus: false,
     enabled: tab === "list" || (!logisticsOnly && tab === "queue"),
-    queryFn: async () => {
+    queryFn: async ({ signal }) => {
       const pageSize = 1000;
       const allRows: OvertimeRow[] = [];
       let from = 0;
@@ -251,13 +255,14 @@ function OvertimePage() {
           .select(
             "id,batch_id,request_number,requester_user_id,requester_name,requester_email,employee_name,employee_registration,employee_external_id,employee_role,activity_id,week_id,order_number,pt_number,service_description,overtime_date,entry_time,departure_time,needs_snack,needs_transport,justification,status,manager_comment,decided_by_name,decided_at,version,created_at,source_type,source_scheduled_transport_id",
           )
+          .eq("worksite_id", s.worksiteId)
           .order("created_at", { ascending: false })
           .order("id", { ascending: false })
           .range(from, from + pageSize - 1);
         if (tab === "list") request = request.eq("requester_user_id", s.userId);
         if (period.from) request = request.gte("overtime_date", period.from);
         if (period.to) request = request.lte("overtime_date", period.to);
-        const { data, error } = await request;
+        const { data, error } = await request.abortSignal(signal);
         if (error) throw error;
 
         const page = (data ?? []) as OvertimeRow[];
@@ -471,6 +476,7 @@ function OvertimePage() {
 
       {showNew && canRequest && (
         <NewRequestModal
+          key={`${s.userId}:${s.worksiteId}`}
           onClose={() => setShowNew(false)}
           onCreated={() => {
             setShowNew(false);
@@ -2522,6 +2528,7 @@ async function exportEmployees(rows: EmployeeRow[]) {
 }
 
 function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
+  const { session } = Route.useRouteContext();
   const pageSize = 30;
   const qc = useQueryClient();
   const toggleActive = useServerFn(setEmployeeActive);
@@ -2533,10 +2540,10 @@ function EmployeeManagement({ readOnly = false }: { readOnly?: boolean }) {
   const [deleting, setDeleting] = useState<EmployeeRow | null>(null);
   const [page, setPage] = useState(1);
   const employees = useQuery({
-    queryKey: ["employees"],
+    queryKey: ["employees", session.userId, session.worksiteId],
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    queryFn: () => loadEmployees(false),
+    queryFn: ({ signal }) => loadEmployees(false, session.worksiteId, signal),
   });
   const filtered = useMemo(
     () => filterEmployees(employees.data ?? [], search),
@@ -3475,7 +3482,9 @@ function DeleteOvertimeRequestModal({
 
 /* ---------- New Request Modal ---------- */
 function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreated: () => void }) {
-  const draftStorageKey = "nexo:overtime-request-draft";
+  const { session } = Route.useRouteContext();
+  const draftStorageKey = overtimeDraftKey(session.userId, session.worksiteId);
+  const [draftPersistenceUnavailable, setDraftPersistenceUnavailable] = useState(false);
   const call = useServerFn(createOvertimeRequest);
   const [saving, setSaving] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState("");
@@ -3499,7 +3508,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     order_number: "",
     pt_number: "",
     service_description: "",
-    overtime_date: new Date().toISOString().slice(0, 10),
+    overtime_date: toIsoDate(new Date()),
     entry_time: "",
     departure_time: "18:30",
     needs_snack: false,
@@ -3510,7 +3519,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   useEffect(() => {
     try {
-      const savedDraft = sessionStorage.getItem(draftStorageKey);
+      const savedDraft = readOvertimeDraft(draftStorageKey);
       if (savedDraft) {
         const parsed = JSON.parse(savedDraft) as {
           selectedEmployeeIds?: unknown;
@@ -3528,11 +3537,11 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
           );
         }
         if (parsed.form && typeof parsed.form === "object") {
-          setForm((current) => ({ ...current, ...parsed.form }));
+          setForm((current) => restoreOvertimeForm(parsed.form, current));
         }
       }
     } catch {
-      sessionStorage.removeItem(draftStorageKey);
+      removeOvertimeDraft(draftStorageKey);
     } finally {
       draftLoaded.current = true;
     }
@@ -3540,14 +3549,15 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   useEffect(() => {
     if (!draftLoaded.current) return;
-    sessionStorage.setItem(
+    const saved = persistOvertimeDraft(
       draftStorageKey,
-      JSON.stringify({
+      {
         selectedEmployeeIds,
         transportEmployeeIds,
         form,
-      }),
+      },
     );
+    setDraftPersistenceUnavailable(!saved);
   }, [selectedEmployeeIds, transportEmployeeIds, form]);
   const [dateYear, dateMonth, dateDay] = form.overtime_date.split("-");
   const monthOptions = [
@@ -3583,10 +3593,10 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
     setForm((current) => ({ ...current, overtime_date: year + "-" + month + "-" + day }));
   }
   const employees = useQuery({
-    queryKey: ["active-employees"],
+    queryKey: ["active-employees", session.userId, session.worksiteId],
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-    queryFn: () => loadEmployees(true),
+    queryFn: ({ signal }) => loadEmployees(true, session.worksiteId, signal),
   });
   const selectedEmployees = (employees.data ?? []).filter((employee) =>
     selectedEmployeeIds.includes(employee.id),
@@ -3697,7 +3707,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
       });
       if (!res.ok) return toast.error(res.error);
       toast.success(`${res.count} solicitação(ões) enviada(s).`);
-      sessionStorage.removeItem(draftStorageKey);
+      removeOvertimeDraft(draftStorageKey);
       onCreated();
     } catch (error) {
       toast.error(
@@ -3710,6 +3720,7 @@ function NewRequestModal({ onClose, onCreated }: { onClose: () => void; onCreate
 
   return (
     <Modal onClose={onClose} title="Nova solicitação de hora extra" size="lg" closeOnBackdropClick={false}>
+      {draftPersistenceUnavailable && <p role="status" className="mb-3 text-xs text-warning-foreground">O navegador não permitiu guardar o rascunho. Mantenha esta janela aberta até concluir o envio.</p>}
       <div className="rounded-md border border-border bg-muted/30 p-3">
         <div className="mb-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">

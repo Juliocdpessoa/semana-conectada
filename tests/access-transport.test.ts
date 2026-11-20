@@ -246,7 +246,70 @@ test("route hint expires and survives a reload within its window", () => {
   expect(createAccessRouteHint(s, () => t, 1000).useRelay()).toBe(false);
 });
 
+test("long or idle sessions choose the known relay BEFORE sending a rotating token", async () => {
+  let now = 1_000_000;
+  const storage = memStorage();
+  createAccessRouteHint(storage, () => now).markDirectFailed();
+  now += 6 * 60 * 60 * 1000 + 1;
+  const hint = createAccessRouteHint(storage, () => now); // simulate a reload after expiry
+  expect(hint.useRelay()).toBe(false);
+  const calls: string[] = [];
+  const f = createAccessFetch((async u => { calls.push(String(u)); return json({ ok: true }); }) as typeof fetch,
+    { supabaseUrl: UP, relayOrigin: APP, hint, now: () => now });
+  await f(`${UP}/auth/v1/token?grant_type=refresh_token`, { method: "POST", body: JSON.stringify({ refresh_token: "r1" }) });
+  expect(calls).toEqual([`${APP}${ACCESS_RELAY_PREFIX}/auth/v1/token?grant_type=refresh_token`]);
+  expect(hint.useRelay()).toBe(true); // a successful relay keeps active sessions on the working route
+});
+
+test("successful relay use renews the route preference; unrelated clients keep their direct route", async () => {
+  let now = 1_000_000; const storage = memStorage();
+  const hint = createAccessRouteHint(storage, () => now); hint.markDirectFailed();
+  now += 5 * 60 * 60 * 1000;
+  const calls: string[] = [];
+  const base = (async u => { calls.push(String(u)); return json({}); }) as typeof fetch;
+  await createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint, now: () => now })(`${UP}/auth/v1/user`);
+  now += 2 * 60 * 60 * 1000;
+  expect(createAccessRouteHint(storage, () => now).useRelay()).toBe(true);
+  const freshHint = createAccessRouteHint(memStorage(), () => now);
+  await createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint: freshHint })(`${UP}/auth/v1/token?grant_type=refresh_token`, { method: "POST", body: JSON.stringify({ refresh_token: "another-user" }) });
+  expect(calls[1]).toBe(`${UP}/auth/v1/token?grant_type=refresh_token`);
+});
+
+test("old or tampered routing history does not pin future sessions to a relay forever", () => {
+  let now = 1_000_000; const storage = memStorage();
+  const hint = createAccessRouteHint(storage, () => now); hint.markDirectFailed();
+  now += 32 * 24 * 60 * 60 * 1000;
+  expect(hint.hasRelayHistory?.()).toBe(false);
+  storage.setItem(ACCESS_ROUTE_HINT_KEY, String(now + 10 ** 12));
+  const tampered = createAccessRouteHint(storage, () => now);
+  expect(tampered.useRelay()).toBe(false);
+  expect(tampered.hasRelayHistory?.()).toBe(false);
+});
+
 // ---------- end to end with the real SDK ----------
+test("operational list reads are scoped, authenticated and preserve both date bounds", async () => {
+  const ws = "00000000-0000-0000-0000-000000000002";
+  const up = fakeUpstream(c => {
+    expect(new Headers(c.init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
+    expect(new URL(c.url).searchParams.get("worksite_id")).toBe(`eq.${ws}`);
+    return json([]);
+  });
+  const q = `?select=id%2Cstatus&worksite_id=eq.${ws}&requester_user_id=eq.${UID}&order=created_at.desc%2Cid.desc&offset=0&limit=1000&overtime_date=gte.2026-11-01&overtime_date=lte.2026-11-30`;
+  expect(matchAccessOperation("GET", "/rest/v1/overtime_requests", q)?.kind).toBe("read-data");
+  const response = await relay(new Request(`${APP}${ACCESS_RELAY_PREFIX}/rest/v1/overtime_requests${q}`, { headers: {authorization:`Bearer ${TOKEN}`} }), up.f);
+  expect(response.status).toBe(200);
+  expect(new URL(up.calls[0]!.url).searchParams.getAll("overtime_date")).toEqual(["gte.2026-11-01","lte.2026-11-30"]);
+  const employees = `?select=id%2Cfull_name&worksite_id=eq.${ws}&is_active=eq.true&deleted_at=is.null&order=full_name.asc&offset=0&limit=1000`;
+  expect((await relay(new Request(`${APP}${ACCESS_RELAY_PREFIX}/rest/v1/employees${employees}`, {headers:{authorization:`Bearer ${TOKEN}`}}), up.f)).status).toBe(200);
+  const before = up.calls.length;
+  expect((await relay(new Request(`${APP}${ACCESS_RELAY_PREFIX}/rest/v1/employees${employees}`), up.f)).status).toBe(401);
+  expect(up.calls.length).toBe(before);
+  expect(matchAccessOperation("GET", "/rest/v1/employees", "?select=*")).toBeNull();
+  expect(matchAccessOperation("PATCH", "/rest/v1/employees", employees)).toBeNull();
+  expect(matchAccessOperation("GET", "/rest/v1/overtime_requests", q+"&overtime_date=gte.2026-11-02")).toBeNull();
+  expect(matchAccessOperation("GET", "/rest/v1/overtime_requests", q.replace("lte.2026-11-30","gte.2026-11-30"))).toBeNull();
+});
+
 function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, directWorks = false, relayExtra: object = {}) {
   const up = fakeUpstream(upstream);
   const browserCalls: string[] = [];

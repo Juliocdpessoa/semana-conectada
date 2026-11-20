@@ -6,6 +6,8 @@
 //     page configuration, weeks, get_activities_page, SAP overview/outside/
 //     imports/rows, capacity, activity history, immediate-link options,
 //     continuous rows/facets/counts/history.
+//  Employee and overtime lists additionally require an explicit worksite filter
+//  and the caller's bearer token in the relay. No writes are added.
 // Writes, imports and admin paths are never allowed here. Every allowlisted RPC
 // is STABLE in the database, so PostgREST runs it in a read-only transaction;
 // do not add a VOLATILE function to RPC_READS.
@@ -61,6 +63,7 @@ type TableRule = {
   /** Filters on the row's own JSON fields (continuous page only). */
   jsonFilters?: boolean;
   allowCount?: boolean;
+  rangeFilters?: string[];
 };
 
 const GATE_TABLES: Record<string, TableRule> = {
@@ -74,6 +77,14 @@ const GATE_TABLES: Record<string, TableRule> = {
 };
 
 const DATA_TABLES: Record<string, TableRule> = {
+  employees: {
+    params: { select: COLUMNS, worksite_id: UUID_EQ, is_active: BOOL_EQ, deleted_at: /^is\.null$/, order: ORDER, offset: OFFSET, limit: LIMIT },
+    required: ["select", "worksite_id"],
+  },
+  overtime_requests: {
+    params: { select: COLUMNS, worksite_id: UUID_EQ, requester_user_id: UUID_EQ, overtime_date: /^(gte|lte)\.\d{4}-\d{2}-\d{2}$/, order: ORDER, offset: OFFSET, limit: LIMIT },
+    required: ["select", "worksite_id"], rangeFilters: ["overtime_date"],
+  },
   activity_page_configs: { params: { select: COLUMNS, worksite_id: UUID_EQ }, required: ["select", "worksite_id"] },
   weeks: {
     params: { select: COLUMNS, id: UUID_EQ, is_active: BOOL_EQ, lifecycle_status: WORD_IN, order: ORDER, limit: LIMIT },
@@ -151,7 +162,12 @@ function queryMatches(search: string, rule: TableRule): boolean {
     if (value.length > 2100) return false;
     const fixed = rule.params[key];
     if (fixed) {
-      if (count > 1 || !fixed.test(value)) return false;
+      if (!fixed.test(value)) return false;
+      if (count > 1) {
+        if (!rule.rangeFilters?.includes(key) || count > 2) return false;
+        const values = params.getAll(key);
+        if (values[0]?.split(".")[0] === values[1]?.split(".")[0]) return false;
+      }
     } else if (rule.jsonFilters && CONT_KEY.test(key)) {
       if (count > 2 || !CONT_FILTER.test(value)) return false;
     } else return false;

@@ -9,6 +9,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type { ClipboardEvent, DragEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { readAllPages } from "@/lib/read-query-policy";
+import { createRealtimeFallback } from "@/lib/realtime-fallback";
 import {
   updateActivity,
   bulkUpdateActivities,
@@ -895,6 +896,7 @@ function WeeklyActivitiesPage() {
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canViewPlanningActivityData || isDateEditAdmin;
   const qc = useQueryClient();
+  const [liveSyncFallback, setLiveSyncFallback] = useState(false);
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
   const saveDateEditCutoff = useServerFn(updateActivityDateEditCutoff);
@@ -1125,8 +1127,24 @@ function WeeklyActivitiesPage() {
   useEffect(() => {
     const weekId = activeWeek.data?.id;
     if (!weekId) return;
+    setLiveSyncFallback(false);
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const changedIds = new Set<string>();
+    const fallback = createRealtimeFallback({
+      canRefresh: () => document.visibilityState === "visible" && navigator.onLine !== false,
+      onFallback: setLiveSyncFallback,
+      refresh: async () => {
+        // Do not cancel an existing read, overwrite drafts, or replay any save.
+        await qc.invalidateQueries({ queryKey: ["activities", weekId], refetchType: "none" });
+        await Promise.all([
+          qc.refetchQueries({ queryKey: ["activities", weekId], type: "active" }, { cancelRefetch: false }),
+          qc.refetchQueries({ queryKey: ["activity-timeline"], type: "active" }, { cancelRefetch: false }),
+        ]);
+      },
+    });
+    const resume = () => fallback.resume();
+    document.addEventListener("visibilitychange", resume);
+    window.addEventListener("online", resume);
     const channel = supabase
       .channel(`activities-live-${weekId}`)
       .on(
@@ -1146,9 +1164,12 @@ function WeeklyActivitiesPage() {
           }, 2_000);
         },
       )
-      .subscribe();
+      .subscribe(status => fallback.status(status));
 
     return () => {
+      fallback.dispose();
+      document.removeEventListener("visibilitychange", resume);
+      window.removeEventListener("online", resume);
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
@@ -2455,6 +2476,11 @@ function WeeklyActivitiesPage() {
         }
       />
 
+      {liveSyncFallback && (
+        <p role="status" className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
+          Conexão em tempo real indisponível. As tarefas serão consultadas periodicamente enquanto esta aba estiver aberta e conectada.
+        </p>
+      )}
       {/* Barra de progresso semanal */}
       <div
         className="mb-5 h-1 w-full overflow-hidden rounded-full bg-muted"

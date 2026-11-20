@@ -11,6 +11,9 @@ export const ACCESS_ROUTE_HINT_KEY = "nexo:access-route:v1";
 export const ACCESS_ROUTE_HINT_TTL_MS = 6 * 60 * 60 * 1000;
 export const ACCESS_OUTCOME_HEADER = "x-nexo-access-outcome";
 const HUNG_CONNECTION_MS = 7000;
+// Routing history is not an authentication grant. A previously necessary relay
+// remains the safer first destination for a rotating token after an idle period.
+const REFRESH_ROUTE_HISTORY_MS = 30 * 24 * 60 * 60 * 1000;
 
 /** How long an identical non-idempotent call stays blocked after an ambiguous outcome. */
 export const NOT_REPEATED_TTL_MS: Partial<Record<AccessOperationKind, number>> = {
@@ -23,7 +26,12 @@ export const NOT_REPEATED_TTL_MS: Partial<Record<AccessOperationKind, number>> =
 
 type HintStorage = Pick<Storage, "getItem" | "setItem">;
 
-export type AccessRouteHint = { useRelay(): boolean; markDirectFailed(): void };
+export type AccessRouteHint = {
+  useRelay(): boolean;
+  markDirectFailed(): void;
+  hasRelayHistory?(): boolean;
+  markRelaySuccess?(): void;
+};
 
 export function createAccessRouteHint(
   storage: HintStorage | null,
@@ -31,28 +39,25 @@ export function createAccessRouteHint(
   ttlMs = ACCESS_ROUTE_HINT_TTL_MS,
 ): AccessRouteHint {
   let until = 0;
+  function knownUntil() {
+    try {
+      const stored = Number(storage?.getItem(ACCESS_ROUTE_HINT_KEY) ?? 0);
+      if (Number.isFinite(stored) && stored > 0 && stored <= now() + ttlMs && stored > now() - REFRESH_ROUTE_HISTORY_MS)
+        until = Math.max(until, stored);
+    } catch { /* storage blocked: memory only */ }
+    return until;
+  }
+  function extend() {
+    until = now() + ttlMs;
+    try { storage?.setItem(ACCESS_ROUTE_HINT_KEY, String(until)); } catch { /* memory only */ }
+  }
   return {
     useRelay() {
-      if (until > now()) return true;
-      try {
-        const stored = Number(storage?.getItem(ACCESS_ROUTE_HINT_KEY) ?? 0);
-        if (Number.isFinite(stored) && stored > now() && stored <= now() + ttlMs) {
-          until = stored;
-          return true;
-        }
-      } catch {
-        /* storage blocked: memory only */
-      }
-      return false;
+      return knownUntil() > now();
     },
-    markDirectFailed() {
-      until = now() + ttlMs;
-      try {
-        storage?.setItem(ACCESS_ROUTE_HINT_KEY, String(until));
-      } catch {
-        /* storage blocked: memory only */
-      }
-    },
+    markDirectFailed: extend,
+    markRelaySuccess: extend,
+    hasRelayHistory: () => knownUntil() > 0 && knownUntil() > now() - REFRESH_ROUTE_HISTORY_MS,
   };
 }
 
@@ -139,7 +144,8 @@ export function createAccessFetch(
     const key = ttl ? await requestKey(op.kind, init) : "";
     if (ttl && guard.blocked(key)) return notRepeatedResponse();
 
-    const viaRelay = options.hint.useRelay();
+    const viaRelay = options.hint.useRelay() ||
+      (op.kind === "auth-refresh" && options.hint.hasRelayHistory?.() === true);
     const started = now();
     try {
       const response = viaRelay
@@ -152,6 +158,7 @@ export function createAccessFetch(
         : await base(input, init);
       if (ttl && (response.status >= 500 || response.headers.get(ACCESS_OUTCOME_HEADER) === "ambiguous"))
         guard.mark(key, ttl);
+      if (viaRelay && response.ok) options.hint.markRelaySuccess?.();
       return response;
     } catch (error) {
       if (!viaRelay && isConnectionFailure(error, init?.signal, now() - started)) options.hint.markDirectFailed();
