@@ -20,3 +20,7 @@ Isso não substitui validação na rede Petrobras nem teste de carga com todos o
 Outras consultas/fluxos não listados, recuperação por e-mail, pesquisas específicas de atividades para novas solicitações e escritas diretas da Fiocruz ainda podem depender do acesso ao backend externo. Não foram liberadas gravações genéricas no relay para contornar isso. Uma interrupção completa da hospedagem/origem do NEXO também não é resolvida por esse mecanismo.
 
 Publicação depende de autorização; nenhuma nova publicação foi iniciada nesta segunda revisão.
+
+## Ajuste posterior solicitado pelo usuário
+
+Após publicar a segunda revisão, foi removido o aviso técnico amarelo sobre a conexão em tempo real. A alternativa de atualização periódica permanece ativa silenciosamente; não houve supressão de erros de salvamento ou confirmação falsa de envio.

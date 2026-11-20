@@ -896,7 +896,6 @@ function WeeklyActivitiesPage() {
   const isDateEditAdmin = session.email.trim().toLowerCase() === "julio.pessoa@normatel.com.br";
   const canLoadDateEditSettings = canViewPlanningActivityData || isDateEditAdmin;
   const qc = useQueryClient();
-  const [liveSyncFallback, setLiveSyncFallback] = useState(false);
   const savePlanningFields = useServerFn(bulkUpdateActivityPlanningFields);
   const loadDateEditSettings = useServerFn(getActivityDateEditSettings);
   const saveDateEditCutoff = useServerFn(updateActivityDateEditCutoff);
@@ -1127,12 +1126,10 @@ function WeeklyActivitiesPage() {
   useEffect(() => {
     const weekId = activeWeek.data?.id;
     if (!weekId) return;
-    setLiveSyncFallback(false);
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const changedIds = new Set<string>();
     const fallback = createRealtimeFallback({
       canRefresh: () => document.visibilityState === "visible" && navigator.onLine !== false,
-      onFallback: setLiveSyncFallback,
       refresh: async () => {
         // Do not cancel an existing read, overwrite drafts, or replay any save.
         await qc.invalidateQueries({ queryKey: ["activities", weekId], refetchType: "none" });
@@ -2476,11 +2473,6 @@ function WeeklyActivitiesPage() {
         }
       />
 
-      {liveSyncFallback && (
-        <p role="status" className="mb-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-xs text-muted-foreground">
-          Conexão em tempo real indisponível. As tarefas serão consultadas periodicamente enquanto esta aba estiver aberta e conectada.
-        </p>
-      )}
       {/* Barra de progresso semanal */}
       <div
         className="mb-5 h-1 w-full overflow-hidden rounded-full bg-muted"

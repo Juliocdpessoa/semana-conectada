@@ -1,7 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createRealtimeFallback } from '../src/lib/realtime-fallback.ts';
 const flush = () => new Promise(resolve => setImmediate(resolve));
+test('the fallback remains connected but its technical status is not shown to end users', () => {
+  const source=readFileSync(new URL('../src/routes/_authenticated/atividades.tsx',import.meta.url),'utf8');
+  assert.doesNotMatch(source,/Conexão em tempo real indisponível|liveSyncFallback/);
+  assert.match(source,/createRealtimeFallback\(\{/);
+  assert.match(source,/\.subscribe\(status => fallback.status\(status\)\)/);
+});
 function fixture(refresh = async () => {}, random = () => 0) {
   let now = 0, id = 0, visible = true; const jobs = new Map(); const flags = [];
   const controller = createRealtimeFallback({ refresh, canRefresh: () => visible, random,
