@@ -329,6 +329,66 @@ export type Database = {
           },
         ]
       }
+      app_access_diagnostics: {
+        Row: {
+          actor_id: string | null
+          attempts: number
+          build: string
+          category: string
+          client_id: string
+          elapsed_ms: number
+          frames: string[]
+          id: string
+          received_at: string
+          route: string
+          stage: string
+          worksite_id: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          attempts: number
+          build: string
+          category: string
+          client_id: string
+          elapsed_ms: number
+          frames?: string[]
+          id: string
+          received_at?: string
+          route: string
+          stage: string
+          worksite_id?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          attempts?: number
+          build?: string
+          category?: string
+          client_id?: string
+          elapsed_ms?: number
+          frames?: string[]
+          id?: string
+          received_at?: string
+          route?: string
+          stage?: string
+          worksite_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "app_access_diagnostics_actor_id_fkey"
+            columns: ["actor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "app_access_diagnostics_worksite_id_fkey"
+            columns: ["worksite_id"]
+            isOneToOne: false
+            referencedRelation: "worksites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       continuous_activities: {
         Row: {
           created_at: string
@@ -2646,6 +2706,21 @@ export type Database = {
         }[]
       }
       process_nexo_backup_queue: { Args: never; Returns: undefined }
+      record_app_access_diagnostic: {
+        Args: {
+          p_actor?: string
+          p_attempts: number
+          p_build: string
+          p_category: string
+          p_client_id: string
+          p_elapsed_ms: number
+          p_frames: string[]
+          p_id: string
+          p_route: string
+          p_stage: string
+        }
+        Returns: boolean
+      }
       reopen_sap_week: {
         Args: { p_reason: string; p_week_id: string }
         Returns: undefined
