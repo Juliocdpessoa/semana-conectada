@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { z } from "zod";
 import { BrandLogo } from "@/components/brand-logo";
-import { isNetworkError, NETWORK_ERROR_MESSAGE, withNetworkRetry } from "@/lib/network-retry";
+import { accessStep, AccessLoadError, accessErrorMessage } from "@/lib/access-diagnostics";
+import { reportCentralDiagnostic, setAccessDiagnosticIdentity } from "@/lib/access-diagnostics-client";
 import {
   ShieldCheck,
   ClipboardCheck,
@@ -35,6 +36,7 @@ function AuthPage() {
   const [worksiteId, setWorksiteId] = useState("");
   const [worksites, setWorksites] = useState<WorksiteOption[]>([]);
   const [loading, setLoading] = useState(false);
+  const [accessFailure,setAccessFailure]=useState<{id:string|null;message:string}|null>(null);
 
   useEffect(() => {
     if (mode !== "signup" || worksites.length > 0) return;
@@ -53,6 +55,8 @@ function AuthPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if(loading)return;
+    setAccessFailure(null);
     setLoading(true);
     try {
       const parsedEmail = emailSchema.safeParse(email);
@@ -103,21 +107,21 @@ function AuthPage() {
         toast.success("Cadastro enviado. Aguarde a aprovação de um administrador.");
         navigate({ to: "/aguardando-aprovacao" });
       } else {
-        const { error } = await withNetworkRetry<any>(() =>
-          supabase.auth.signInWithPassword({
-            email: parsedEmail.data,
-            password: parsedPw.data,
-          }),
-        );
-        if (error) return toast.error(isNetworkError(error) ? NETWORK_ERROR_MESSAGE : error.message);
-        const { data: state, error: stateError } = await withNetworkRetry<any>(() =>
-          (supabase as any).rpc("password_reset_state"),
-        );
-        if (stateError) { await supabase.auth.signOut({ scope: "local" }); return toast.error("Não foi possível validar o acesso. Tente novamente."); }
-        if (state?.required) navigate({ to: "/redefinir-senha" });
-        else if (!state?.allowed) { await supabase.auth.signOut({ scope: "local" }); toast.error("Entre novamente com sua senha atual."); }
-        else navigate({ to: "/atividades" });
+        const deadline=Date.now()+30000;
+        const signIn=await accessStep("identity",()=>supabase.auth.signInWithPassword({
+          email:parsedEmail.data,password:parsedPw.data,
+        }),deadline);
+        if(signIn.data.session)setAccessDiagnosticIdentity(signIn.data.session.access_token);
+        const {data:state}=await accessStep<any>("password",signal=>(supabase as any).rpc("password_reset_state").abortSignal(signal),deadline);
+        if(state?.required)navigate({to:"/redefinir-senha"});
+        else if(!state?.allowed)throw new AccessLoadError("password","auth",1,0);
+        else navigate({to:"/atividades"});
       }
+    } catch(error) {
+      const id=reportCentralDiagnostic(error,"/auth");
+      const message=error instanceof AccessLoadError&&error.stage==="identity"&&error.category==="auth"
+        ? "Não foi possível validar e-mail e senha. Confira os dados e tente novamente." : accessErrorMessage(error);
+      setAccessFailure({id,message});
     } finally {
       setLoading(false);
     }
@@ -282,6 +286,11 @@ function AuthPage() {
             )}
 
             <form onSubmit={submit} className="mt-5 space-y-4">
+              {accessFailure&&<div role="alert" className="rounded-md border border-destructive/30 bg-destructive/5 p-3 text-sm">
+                <p>{accessFailure.message}</p>
+                {accessFailure.id&&<p className="mt-2 break-all text-xs">Código de atendimento: <span className="font-mono select-all">{accessFailure.id}</span></p>}
+                <p className="mt-1 text-xs text-muted-foreground">O diagnóstico será enviado automaticamente quando houver conexão. Não é necessário abrir o Console.</p>
+              </div>}
               {mode === "signup" && (
                 <>
                   <div>

@@ -7,13 +7,15 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
 import { COLOR_THEME_BOOTSTRAP } from "@/lib/color-theme";
+import { accessErrorMessage } from "@/lib/access-diagnostics";
+import { reportCentralDiagnostic, startCentralDiagnostics, setAccessDiagnosticIdentity } from "@/lib/access-diagnostics-client";
 
 function NotFoundComponent() {
   return (
@@ -36,10 +38,11 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: ErrorComponentProps) {
-  console.error(error);
   const router = useRouter();
+  const [reportId,setReportId]=useState<string|null>(null);
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
+    setReportId(reportCentralDiagnostic(error,window.location.pathname));
   }, [error]);
 
   return (
@@ -47,8 +50,9 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
       <div className="max-w-md text-center">
         <h1 className="text-lg font-semibold text-foreground">Não foi possível carregar a página</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Ocorreu um erro inesperado. Tente novamente ou volte ao início.
+          {accessErrorMessage(error)}
         </p>
+        {reportId&&<p className="mt-3 break-all text-xs text-muted-foreground">Código de atendimento: <span className="font-mono select-all">{reportId}</span><br/>O NEXO tentará enviar o diagnóstico automaticamente. Sem conexão, o código pode ainda não estar disponível para consulta.</p>}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -60,10 +64,10 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
             Tentar novamente
           </button>
           <a
-            href="/"
+            href="/auth"
             className="inline-flex items-center justify-center rounded-md border border-border bg-card px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
           >
-            Ir para o início
+            Abrir tela de entrada
           </a>
         </div>
       </div>
@@ -128,12 +132,14 @@ function RootShell({ children }: { children: ReactNode }) {
 }
 
 function RootComponent() {
+  useEffect(()=>startCentralDiagnostics(),[]);
   const { queryClient } = Route.useRouteContext();
   const router = useRouter();
 
   useEffect(() => {
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event !== "SIGNED_IN" && event !== "SIGNED_OUT" && event !== "USER_UPDATED") return;
+      if(event==="SIGNED_OUT")setAccessDiagnosticIdentity(undefined);
       router.invalidate();
       if (event !== "SIGNED_OUT") queryClient.invalidateQueries();
     });

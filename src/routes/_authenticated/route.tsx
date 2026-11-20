@@ -24,7 +24,8 @@ import {
 import { BrandLogo } from "@/components/brand-logo";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
-import { isNetworkError, withNetworkRetry } from "@/lib/network-retry";
+import { accessStep, AccessLoadError } from "@/lib/access-diagnostics";
+import { setAccessDiagnosticIdentity } from "@/lib/access-diagnostics-client";
 
 export type AppRole =
   | "admin"
@@ -50,72 +51,30 @@ export type SessionInfo = {
 };
 
 async function loadSession(): Promise<SessionInfo | null> {
-  const { data: sessionState } = await supabase.auth.getSession();
-  if (!sessionState.session) return null;
-  const userResult = await withNetworkRetry(() => supabase.auth.getUser());
-  let data = userResult.data;
-  if (userResult.error) {
-    // Conexão oscilando: segue com a sessão salva no aparelho; o servidor
-    // continua validando o acesso em cada consulta.
-    if (!isNetworkError(userResult.error)) return null;
-    data = { user: sessionState.session.user };
-  }
-  if (!data.user) return null;
-  let passwordState: any = null;
-  let passwordError: any = null;
-  for (let attempt = 0; attempt < 4; attempt += 1) {
-    ({ data: passwordState, error: passwordError } = await withNetworkRetry<any>(() =>
-      (supabase as any).rpc("password_reset_state"),
-    ));
-    if (!passwordError) break;
-    await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
-  }
-  // The database still enforces password resets on every protected write;
-  // a transient check failure must not blank the whole app.
-  if (passwordError) {
-    console.error("password_reset_state failed", passwordError);
-    passwordState = { required: false, allowed: true };
-  }
-  if (passwordState?.required) throw redirect({ to: "/redefinir-senha" });
-  if (!passwordState?.allowed) {
-    await supabase.auth.signOut({ scope: "local" });
-    throw redirect({ to: "/auth" });
-  }
-  let profile: any = null;
-  let roles: any = null;
-  for (let attempt = 0; attempt < 5; attempt += 1) {
-    [profile, roles] = await Promise.all([
-      (supabase as any)
-        .from("profiles")
-        .select("email, full_name, approval_status, worksite_id")
-        .eq("id", data.user.id)
-        .maybeSingle(),
-      supabase.from("user_roles").select("role").eq("user_id", data.user.id),
-    ]);
-    if (!profile.error && profile.data && !roles.error) break;
-    if (attempt < 4) await new Promise((resolve) => setTimeout(resolve, 600 * (attempt + 1)));
-  }
-  if (profile?.error || roles?.error || !profile?.data) {
-    throw new Error(
-      "Não foi possível carregar seu perfil. Verifique a conexão e atualize a página.",
-    );
-  }
-  const worksiteId = String(profile.data?.worksite_id ?? "");
-  const { data: worksite } = worksiteId
-    ? await (supabase as any)
-        .from("worksites")
-        .select("code,name")
-        .eq("id", worksiteId)
-        .maybeSingle()
-    : { data: null };
-  const { data: activeMembership } = worksiteId
-    ? await (supabase as any)
-        .from("worksite_memberships")
-        .select("is_worksite_admin")
-        .eq("user_id", data.user.id)
-        .eq("worksite_id", worksiteId)
-        .maybeSingle()
-    : { data: null };
+  const deadline=Date.now()+30000;
+  const {data:sessionState}=await accessStep("session",()=>supabase.auth.getSession(),deadline);
+  if(!sessionState.session){setAccessDiagnosticIdentity(undefined);return null;}
+  setAccessDiagnosticIdentity(sessionState.session.access_token);
+  let userResult;
+  try { userResult=await accessStep("identity",()=>supabase.auth.getUser(),deadline); }
+  catch(error){if(error instanceof AccessLoadError&&error.category==="auth")return null;throw error;}
+  const data=userResult.data;
+  if(!data.user)return null;
+  const {data:passwordState}=await accessStep<any>("password",signal=>(supabase as any).rpc("password_reset_state").abortSignal(signal),deadline);
+  if(passwordState?.required)throw redirect({to:"/redefinir-senha"});
+  if(!passwordState?.allowed)throw new AccessLoadError("password","auth",1,0);
+  const [profile,roles]=await Promise.all([
+    accessStep<any>("profile",signal=>(supabase as any).from("profiles").select("email, full_name, approval_status, worksite_id").eq("id",data.user.id).maybeSingle().abortSignal(signal),deadline),
+    accessStep<any>("roles",signal=>supabase.from("user_roles").select("role").eq("user_id",data.user.id).abortSignal(signal),deadline)
+  ]);
+  if(!profile.data)throw new AccessLoadError("profile","missing",1,0);
+  const worksiteId=String(profile.data.worksite_id??"");
+  const [worksiteResult,membershipResult]=worksiteId?await Promise.all([
+    accessStep<any>("worksite",signal=>(supabase as any).from("worksites").select("code,name").eq("id",worksiteId).maybeSingle().abortSignal(signal),deadline),
+    accessStep<any>("membership",signal=>(supabase as any).from("worksite_memberships").select("is_worksite_admin").eq("user_id",data.user.id).eq("worksite_id",worksiteId).maybeSingle().abortSignal(signal),deadline)
+  ]):[{data:null},{data:null}];
+  const worksite=worksiteResult.data;
+  const activeMembership=membershipResult.data;
   const rolesRows = (roles?.data ?? []) as { role: string }[];
   const priority: SessionInfo["role"][] = [
     "admin",
