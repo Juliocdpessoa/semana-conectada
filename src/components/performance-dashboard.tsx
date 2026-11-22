@@ -72,6 +72,8 @@ export function PerformanceDashboardView({
   worksiteName: string;
   query: { isError: boolean; isPending: boolean; isFetching: boolean; refetch: () => unknown };
 }) {
+  const activityMetrics=data?.metrics.filter(row=>['activities_list','activities_filter'].includes(row.operation))??[];
+  const healthMetrics=data?.metrics.filter(row=>row.operation.startsWith('realtime_'))??[];
   return (
     <div className="space-y-4">
       <PageHeader
@@ -200,7 +202,7 @@ export function PerformanceDashboardView({
                 incluem a renderização da tela. P95: 95% das consultas bem-sucedidas medidas ficaram
                 nesse tempo ou abaixo.
               </p>
-              {!data.metrics.length ? (
+              {!activityMetrics.length ? (
                 <p className="rounded border border-dashed border-border p-6 text-sm text-muted-foreground">
                   Ainda sem amostras. Os tempos aparecerão conforme os usuários consultarem
                   Atividades.
@@ -218,7 +220,7 @@ export function PerformanceDashboardView({
                       </tr>
                     </thead>
                     <tbody>
-                      {data.metrics.map((row) => (
+                      {activityMetrics.map((row) => (
                         <tr key={row.operation} className="border-b">
                           <td className="p-2">
                             {row.operation === "activities_filter"
@@ -240,6 +242,10 @@ export function PerformanceDashboardView({
               </p>
             </Panel>
           </div>
+          <Panel title="Recuperação da conexão em tempo real">
+            <p className="mb-3 text-xs text-muted-foreground">Eventos medidos a partir desta versão. Recuperação mede o intervalo entre a falha detectada e a reinscrição no canal; não comprova entrega de uma tarefa. Coleta limitada, sem percentual de disponibilidade.</p>
+            {!healthMetrics.length?<p className="text-sm text-muted-foreground">Ainda sem eventos de conexão medidos neste período.</p>:<div className="grid gap-3 sm:grid-cols-3">{healthMetrics.map(row=><Metric key={row.operation} label={row.operation==='realtime_connect'?'Conexões iniciais':row.operation==='realtime_disconnect'?'Interrupções detectadas':'Reconexões confirmadas'} value={row.samples} detail={row.operation==='realtime_recovery'?`Mediana: ${ms(row.median_ms)} · P95: ${ms(row.p95_ms)}`:row.operation==='realtime_connect'?`P95 para entrar no canal: ${ms(row.p95_ms)}`:'Um evento por interrupção observada, não por tarefa.'} attention={row.operation==='realtime_disconnect'}/>)}</div>}
+          </Panel>
           <Panel title="Ocorrências por etapa">
             <div className="flex flex-wrap gap-2">
               {data.groups.length ? (

@@ -4,10 +4,10 @@ export function isRealtimeReason(value: unknown): value is RealtimeReason {
   return typeof value === 'string' && REALTIME_REASONS.includes(value as RealtimeReason);
 }
 export function classifyRealtimeFailure(status: string, error: unknown) {
-  const message=String((error as {message?:unknown}|null)?.message??'');
+  const message=String((error as {message?:unknown}|null)?.message??'').replace(/[_-]/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2');
   if (/jwt|token.*expir|expired.*token/i.test(message)) return {reason:'jwt',category:'auth'} as const;
   if (/unauthoriz|permission|forbidden|not allowed|row.level.security/i.test(message)) return {reason:'authorization',category:'auth'} as const;
-  if (/quota|too many|limit.*(connect|channel)|max.*(connect|channel)/i.test(message)) return {reason:'quota',category:'server'} as const;
+  if (/quota|too many|tenant events|limit.*(connect|channel)|max.*(connect|channel)|(?:connect|channel|join|message).*rate limit reached/i.test(message)) return {reason:'quota',category:'server'} as const;
   if (/replication|wal|database.*(unavailable|error)/i.test(message)) return {reason:'replication',category:'server'} as const;
   if (status==='TIMED_OUT'||/timed?\s*out|timeout/i.test(message)) return {reason:'timeout',category:'timeout'} as const;
   if(status==='CLOSED')return {reason:'closed',category:'network'} as const;

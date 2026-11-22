@@ -7,8 +7,8 @@ export const recordPerformanceSample = createServerFn({ method: "POST" })
   .validator((data: unknown) =>
     z
       .object({
-        operation: z.enum(["activities_list", "activities_filter"]),
-        durationMs: z.number().int().min(0).max(120000),
+        operation: z.enum(["activities_list", "activities_filter", "realtime_connect", "realtime_disconnect", "realtime_recovery"]),
+        durationMs: z.number().int().min(0).max(86400000),
         success: z.boolean(),
       })
       .strict()

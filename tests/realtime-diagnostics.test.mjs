@@ -6,7 +6,7 @@ import {AccessLoadError,DIAGNOSTIC_BUILD,safeQueuedDiagnostic} from '../src/lib/
 test('realtime errors become fixed categories without retaining raw secrets or payloads',()=>{
  for(const [message,reason,category] of [
   ['JWT expired secret=TOKEN','jwt','auth'],['Unauthorized private_url','authorization','auth'],
-  ['Too many connections','quota','server'],['Replication error','replication','server'],
+  ['Too many connections','quota','server'],['too_many_channels','quota','server'],['ChannelRateLimitReached','quota','server'],['tenant_events','quota','server'],['Replication error','replication','server'],
   ['socket timeout','timeout','timeout'],['Failed to fetch URL?apikey=SECRET','transport','network']]){
   const result=classifyRealtimeFailure('CHANNEL_ERROR',{message});
   assert.deepEqual(result,{reason,category});

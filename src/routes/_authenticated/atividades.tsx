@@ -13,7 +13,9 @@ import { createRealtimeFallback } from "@/lib/realtime-fallback";
 import { createRealtimeDiagnostics } from '@/lib/realtime-diagnostics';
 import { AccessLoadError } from '@/lib/access-diagnostics';
 import { reportCentralDiagnostic } from '@/lib/access-diagnostics-client';
-import { reportPerformance } from '@/lib/performance-client';
+import { reportPerformance, reportRealtimeHealth } from '@/lib/performance-client';
+import {createRealtimeHealth} from '@/lib/realtime-health';
+import {getActivityRevision} from '@/lib/realtime-recovery.functions';
 import { performanceOperation } from '@/lib/performance-policy';
 import {
   updateActivity,
@@ -1137,10 +1139,14 @@ function WeeklyActivitiesPage() {
     return (data?.rows ?? []) as ActivityRow[];
   }
 
+  const readActivityRevision=useServerFn(getActivityRevision);
   useEffect(() => {
     const weekId = activeWeek.data?.id;
     if (!weekId) return;
     let disposed = false;
+    let channelHealthy=false,revision:string|undefined,pendingRevision:string|undefined;
+    let probeController:AbortController|undefined;
+    const health=createRealtimeHealth(reportRealtimeHealth);
     const diagnostics = createRealtimeDiagnostics(failure => {
       if (!disposed) reportCentralDiagnostic(new AccessLoadError('realtime',failure.category,1,failure.elapsedMs,failure.reason),'/atividades');
     });
@@ -1148,18 +1154,41 @@ function WeeklyActivitiesPage() {
     const changedIds = new Set<string>();
     const fallback = createRealtimeFallback({
       canRefresh: () => document.visibilityState === "visible" && navigator.onLine !== false,
+      hasChanges:async()=>{
+        const controller=new AbortController();probeController=controller;
+        const timer=setTimeout(()=>controller.abort(),6000);
+        try{
+          const next=await readActivityRevision({data:{weekId},signal:controller.signal});
+          pendingRevision=next;
+          return revision===undefined||next!==revision;
+        }finally{clearTimeout(timer);if(probeController===controller)probeController=undefined;}
+      },
       refresh: async () => {
         // Do not cancel an existing read, overwrite drafts, or replay any save.
+        const pendingActivityRead=qc.isFetching({queryKey:['activities',weekId]})>0;
         await qc.invalidateQueries({ queryKey: ["activities", weekId], refetchType: "none" });
         await Promise.all([
-          qc.refetchQueries({ queryKey: ["activities", weekId], type: "active" }, { cancelRefetch: false }),
-          qc.refetchQueries({ queryKey: ["activity-timeline"], type: "active" }, { cancelRefetch: false }),
+          qc.refetchQueries({ queryKey: ["activities", weekId], type: "active" }, { cancelRefetch: false, throwOnError:true }),
+          qc.refetchQueries({ queryKey: ["activity-timeline"], type: "active" }, { cancelRefetch: false, throwOnError:true }),
         ]);
+        // An already-running request may predate the revision probe. Join it
+        // first, then read once more rather than certifying an older snapshot.
+        if(pendingActivityRead&&!disposed)await qc.refetchQueries({queryKey:['activities',weekId],type:'active'},{cancelRefetch:false,throwOnError:true});
+        if(!disposed)revision=pendingRevision;
       },
     });
     const resume = () => fallback.resume();
     document.addEventListener("visibilitychange", resume);
     window.addEventListener("online", resume);
+    let authTimer:ReturnType<typeof setTimeout>|undefined;
+    const authWatch=supabase.auth.onAuthStateChange(event=>{
+      // The SDK already propagates tokens. Only recover missed reads outside
+      // GoTrue's lock; do not refresh a token or rebuild a healthy channel here.
+      if(!disposed&&!channelHealthy&&['TOKEN_REFRESHED','SIGNED_IN'].includes(event)){
+        if(authTimer)clearTimeout(authTimer);
+        authTimer=setTimeout(()=>{if(!disposed)fallback.resume();},0);
+      }
+    });
     const channel = supabase
       .channel(`activities-live-${weekId}`)
       .on(
@@ -1180,17 +1209,20 @@ function WeeklyActivitiesPage() {
           }, 2_000);
         },
       )
-      .subscribe((status,error) => { if (!disposed) { fallback.status(status); diagnostics.status(status,error); } });
+      .subscribe((status,error) => { if (!disposed) { channelHealthy=status==='SUBSCRIBED'; health.status(status); fallback.status(status); diagnostics.status(status,error); } });
 
     return () => {
       disposed = true;
       fallback.dispose();
+      probeController?.abort();
+      authWatch.data.subscription.unsubscribe();
+      if(authTimer)clearTimeout(authTimer);
       document.removeEventListener("visibilitychange", resume);
       window.removeEventListener("online", resume);
       if (refreshTimer) clearTimeout(refreshTimer);
       void supabase.removeChannel(channel);
     };
-  }, [activeWeek.data?.id, qc]);
+  }, [activeWeek.data?.id, qc, readActivityRevision,session.userId,session.worksiteId]);
 
   const sapOverview = useQuery({
     queryKey: ["sap-confirmation-overview", activeWeek.data?.id],
