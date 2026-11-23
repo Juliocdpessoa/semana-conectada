@@ -8,5 +8,6 @@ export const accessDiagnosticSchema=z.object({
  frames:z.array(z.string().max(150).regex(/^\/assets\/[a-zA-Z0-9_.-]+\.js:\d+:\d+$/)).max(4),
  occurredAt:z.string().datetime().optional(),release:z.string().regex(/^(?:[a-f0-9]{40}|unavailable)$/).optional(),
  visibility:z.enum(['visible','hidden','unknown']).optional(),online:z.boolean().optional(),
-}).strict();
+ closeCode:z.number().int().min(1000).max(4999).optional(),
+}).strict().refine(data=>data.closeCode===undefined||data.stage==='realtime',{message:'Close codes are only valid for realtime diagnostics'});
 export type AccessDiagnosticInput=z.infer<typeof accessDiagnosticSchema>;

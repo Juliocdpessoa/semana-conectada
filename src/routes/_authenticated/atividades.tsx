@@ -1154,7 +1154,7 @@ function WeeklyActivitiesPage() {
     let probeController:AbortController|undefined;
     const health=createRealtimeHealth(reportRealtimeHealth);
     const diagnostics = createRealtimeDiagnostics(failure => {
-      if (!disposed) reportCentralDiagnostic(new AccessLoadError('realtime',failure.category,1,failure.elapsedMs,failure.reason),'/atividades');
+      if (!disposed) reportCentralDiagnostic(new AccessLoadError('realtime',failure.category,1,failure.elapsedMs,failure.reason,failure.closeCode),'/atividades');
     });
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const changedIds = new Set<string>();

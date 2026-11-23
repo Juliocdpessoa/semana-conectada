@@ -8,7 +8,7 @@ let identityToken:string|undefined;
 export function setAccessDiagnosticIdentity(token:string|undefined){identityToken=token;}
 // In-memory only; telemetry must never refresh/read persisted auth storage.
 export function currentTelemetryToken(){return identityToken;}
-const ids=new WeakMap<object,string>();const memory=new Map<string,Item>();const reportAuth=new Map<string,string>();
+const ids=new WeakMap<object,string>();const memory=new Map<string,Item&{closeCode?:number}>();const reportAuth=new Map<string,string>();
 const storageKey="nexo:access-diagnostics:v1";let running=false;let clientId:string|undefined;let lastFlush=0;let retriesRemaining=2;let retryTimer:ReturnType<typeof setTimeout>|undefined;
 function scheduleRetry(){if(memory.size&&retriesRemaining>0&&!retryTimer){retriesRemaining--;retryTimer=setTimeout(()=>{retryTimer=undefined;void flushCentralDiagnostics();},Math.max(1000,10000-(Date.now()-lastFlush)));}}
 function browserId(){
@@ -27,7 +27,7 @@ export function reportCentralDiagnostic(error:unknown,path:string){
  memory.set(id,{id,clientId:browserId(),stage:access?.stage??"runtime",category:access?.category??diagnosticCategory(error),
  route:diagnosticRoute(path),build:DIAGNOSTIC_BUILD,attempts:Math.min(2,Math.max(1,access?.attempts??1)),
  elapsedMs:Math.min(60000,Math.max(0,Math.round(access?.elapsedMs??0))),frames:diagnosticFrames(error),queuedAt:Date.now(),release:APP_RELEASE,
- visibility:document.visibilityState==='visible'?'visible':document.visibilityState==='hidden'?'hidden':'unknown',online:navigator.onLine,...(access?.reason?{reason:access.reason}:{})});
+ visibility:document.visibilityState==='visible'?'visible':document.visibilityState==='hidden'?'hidden':'unknown',online:navigator.onLine,...(access?.reason?{reason:access.reason}:{}),...(access?.closeCode!==undefined?{closeCode:access.closeCode}:{})});
  while(memory.size>5){const oldest=memory.keys().next().value!;memory.delete(oldest);reportAuth.delete(oldest);}
  persist();retriesRemaining=2;void flushCentralDiagnostics();return id;
 }
@@ -39,7 +39,7 @@ export async function flushCentralDiagnostics(){
   for(const [id,item] of [...memory]){
    if(Date.now()-item.queuedAt>86400000){memory.delete(id);reportAuth.delete(id);continue;}
    const data={id:item.id,clientId:item.clientId,stage:item.stage,category:item.category,route:item.route,build:item.build,attempts:item.attempts,elapsedMs:item.elapsedMs,frames:item.frames,
-    occurredAt:new Date(item.queuedAt).toISOString(),release:item.release??'unavailable',visibility:item.visibility??'unknown',...(item.online!==undefined?{online:item.online}:{}),...(item.reason?{reason:item.reason}:{})};
+    occurredAt:new Date(item.queuedAt).toISOString(),release:item.release??'unavailable',visibility:item.visibility??'unknown',...(item.online!==undefined?{online:item.online}:{}),...(item.reason?{reason:item.reason}:{}),...(item.closeCode!==undefined?{closeCode:item.closeCode}:{})};
    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),6000);
    try{
     const result=await sendDiagnostic(data,reportAuth.get(id),controller.signal);

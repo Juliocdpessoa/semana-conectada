@@ -1,4 +1,4 @@
-import { isRealtimeReason, type RealtimeReason } from './realtime-diagnostics.ts';
+import { isRealtimeReason, isRealtimeCloseCode, type RealtimeReason } from './realtime-diagnostics.ts';
 export const ACCESS_STAGES=["session","identity","password","profile","roles","worksite","membership","runtime","realtime"] as const;
 export type AccessStage=typeof ACCESS_STAGES[number];
 export type DiagnosticCategory="network"|"timeout"|"auth"|"server"|"missing"|"runtime";
@@ -16,10 +16,12 @@ export class AccessLoadError extends Error{
  readonly reportId=crypto.randomUUID();
  readonly stage:AccessStage; readonly category:DiagnosticCategory; readonly attempts:number; readonly elapsedMs:number;
  readonly reason?:RealtimeReason;
- constructor(stage:AccessStage,category:DiagnosticCategory,attempts:number,elapsedMs:number,reason?:RealtimeReason){
+ readonly closeCode?:number;
+ constructor(stage:AccessStage,category:DiagnosticCategory,attempts:number,elapsedMs:number,reason?:RealtimeReason,closeCode?:number){
  super("Não foi possível concluir a verificação de acesso.");this.name="AccessLoadError";
  this.stage=stage;this.category=category;this.attempts=attempts;this.elapsedMs=elapsedMs;
  if(stage==='realtime'&&isRealtimeReason(reason))this.reason=reason;
+ if(stage==='realtime'&&isRealtimeCloseCode(closeCode))this.closeCode=closeCode;
  }
 }
 // Relay access requests have a 10s upstream deadline; the route must let that
@@ -66,6 +68,7 @@ export function safeQueuedDiagnostic(value:unknown):boolean{
  &&ACCESS_STAGES.includes(v.stage as AccessStage)&&["network","timeout","auth","server","missing","runtime"].includes(v.category as string)
  &&["login","password","home","activities","other"].includes(v.route as string)&&isDiagnosticBuild(v.build)
  &&(v.reason===undefined||(v.stage==='realtime'&&isRealtimeReason(v.reason)))
+ &&(v.closeCode===undefined||(v.stage==='realtime'&&isRealtimeCloseCode(v.closeCode)))
  &&Number.isInteger(v.attempts)&&Number(v.attempts)>=1&&Number(v.attempts)<=2
  &&Number.isInteger(v.elapsedMs)&&Number(v.elapsedMs)>=0&&Number(v.elapsedMs)<=60000
  &&typeof v.queuedAt==="number"&&Number.isFinite(v.queuedAt)&&v.queuedAt>=0&&v.queuedAt<=Date.now()+300000

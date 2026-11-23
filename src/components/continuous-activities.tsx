@@ -48,7 +48,7 @@ export function ContinuousActivities({session,cfg,importsOnly=false}:{session:Se
   const refresh=()=>reconciler.request();
   const fallback=createRealtimeFallback({refresh,reconcileMs:60000,canRefresh:()=>document.visibilityState==='visible'&&navigator.onLine!==false});
   const health=createRealtimeHealth(reportRealtimeHealth);
-  const diagnostics=createRealtimeDiagnostics(f=>{if(!disposed)reportCentralDiagnostic(new AccessLoadError('realtime',f.category,1,f.elapsedMs,f.reason),'/atividades');});
+  const diagnostics=createRealtimeDiagnostics(f=>{if(!disposed)reportCentralDiagnostic(new AccessLoadError('realtime',f.category,1,f.elapsedMs,f.reason,f.closeCode),'/atividades');});
   const channel=db.channel(`continuous-live-${session.worksiteId}`).on('postgres_changes',
    {event:'*',schema:'public',table:'continuous_activities',filter:`worksite_id=eq.${session.worksiteId}`},()=>{
     if(disposed||changedTimer)return;

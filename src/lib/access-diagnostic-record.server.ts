@@ -25,6 +25,7 @@ export async function storeAccessDiagnostic(data:AccessDiagnosticInput,bearer:st
   if(data.occurredAt||data.release)await db.from('app_access_diagnostics').update({
    client_occurred_at:Number.isFinite(occurred)&&occurred>=now-2*86400000&&occurred<=now+300000?new Date(occurred).toISOString():null,
    app_release:data.release??null,tab_visibility:data.visibility??null,client_online:data.online??null,
+   realtime_close_code:data.stage==='realtime'?data.closeCode??null:null,
   }).eq('id',data.id).eq('client_id',data.clientId).is('app_release',null).abortSignal(AbortSignal.timeout(1000));
   return {accepted:true};
  }catch{return {accepted:false};}

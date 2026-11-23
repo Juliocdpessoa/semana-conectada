@@ -5,6 +5,16 @@ import {diagnosticHttp} from '../src/lib/diagnostic-http';
 import {sendDiagnostic} from '../src/lib/diagnostic-send';
 import {accessDiagnosticSchema} from '../src/lib/access-diagnostic-schema';
 const event=()=>({id:crypto.randomUUID(),clientId:crypto.randomUUID(),stage:'session',category:'timeout',route:'activities',build:'access-diag-20261120-v2',attempts:1,elapsedMs:8000,frames:[],occurredAt:new Date().toISOString(),release:'a'.repeat(40),visibility:'visible',online:true});
+
+test('collector retains bounded close code only on realtime, never free text',async()=>{
+ const data={...event(),stage:'realtime',category:'network',reason:'transport',closeCode:1006};
+ const request=(value:unknown)=>new Request('https://nexo.invalid/api/public/nexo-diagnostics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(value)});
+ let calls=0;const store=async(e:any)=>{calls++;expect(e.closeCode).toBe(1006);return {accepted:true};};
+ expect((await diagnosticHttp(request(data),store)).status).toBe(200);
+ for(const value of [{...data,closeCode:'1006'},{...data,closeCode:5000},{...data,closeCode:999},{...data,stage:'identity'},{...data,closeReason:'SECRET'}])expect((await diagnosticHttp(request(value),store)).status).toBe(400);
+ expect(calls).toBe(1);
+ expect(accessDiagnosticSchema.safeParse(event()).success).toBe(true);
+});
 test('network errors never authorize or instruct password reset',()=>{
  expect(()=>assertPasswordGate(null,{message:'offline'})).toThrow('não é necessário resetar');
  expect(()=>assertPasswordGate({allowed:true},{status:503})).toThrow();
