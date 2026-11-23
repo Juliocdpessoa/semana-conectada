@@ -13,6 +13,16 @@ const APP = "https://www.nexoprog.com.br";
 const UID = "00000000-0000-0000-0000-000000000001";
 const TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.signature-user-one";
 
+test('SAP allocation read has a fixed bounded body; no filters, actor or mutation allowed',()=>{
+ const path='/rest/v1/rpc/get_activity_sap_allocation_page';
+ const op=matchAccessOperation('POST',path,'');expect(op?.kind).toBe('rpc-read');
+ const b={p_week_id:UID,p_page:0,p_page_size:500};
+ expect(accessBodyAllowed('rpc-read',JSON.stringify(b),'get_activity_sap_allocation_page')).toBe(true);
+ for(const bad of [{...b,p_page:-1},{...b,p_page_size:5001},{...b,actor:UID},{...b,p_filters:{}},{...b,p_week_id:'invalid'}])
+  expect(accessBodyAllowed('rpc-read',JSON.stringify(bad),'get_activity_sap_allocation_page')).toBe(false);
+ expect(matchAccessOperation('DELETE',path,'')).toBeNull();
+});
+
 test('hung operational reads cancel once and select relay only for the next call',async()=>{
  let calls=0,failed=false,aborted=false;
  const hint={useRelay:()=>failed,markDirectFailed:()=>{failed=true;}};
@@ -376,6 +386,17 @@ function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, di
   const sb = createClient(UP, KEY, { global: { fetch: f }, auth: { storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v), removeItem: (k) => void store.delete(k) }, autoRefreshToken: false, persistSession: true } });
   return { sb, up, browserCalls, browserInits, store, f, hint };
 }
+
+test('SDK auxiliary SAP allocation read works on the restricted relay',async()=>{
+ const e=sdkThroughRelay(c=>{
+  expect(new URL(c.url).pathname).toBe('/rest/v1/rpc/get_activity_sap_allocation_page');
+  return json({rows:[],totalAll:0});
+ });
+ e.hint.markDirectFailed();
+ const result=await (e.sb as any).rpc('get_activity_sap_allocation_page',{p_week_id:UID,p_page:0,p_page_size:500});
+ expect(result.error).toBeNull();expect(result.data).toEqual({rows:[],totalAll:0});
+ expect(e.up.calls.length).toBe(1);
+});
 
 test("sign-in through the gate's bounded retry: one direct failure, one relay call, wrong password stays wrong", async () => {
   const e = sdkThroughRelay(() => json({ code: "invalid_credentials", message: "Invalid login credentials" }, 400, { "x-supabase-api-version": "2024-01-01" }));

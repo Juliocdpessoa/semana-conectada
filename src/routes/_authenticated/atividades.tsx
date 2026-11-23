@@ -88,6 +88,8 @@ type ActivityRow = {
   release_type: "PT" | "PTT" | "ATRE" | "OFICINAS" | null;
 };
 
+type ActivitySapAllocationRow=Pick<ActivityRow,'id'|'order_number'|'planning_data'|'scheduled_date'|'source_row_number'>;
+
 type SapConfirmationOverview = {
   deadline: string;
   hasImport: boolean;
@@ -485,7 +487,7 @@ function normalizeSapCode(input: unknown) {
     .replace(/^0+/, "");
 }
 
-function activitySapKey(row: ActivityRow) {
+function activitySapKey(row: Pick<ActivityRow,'order_number'|'planning_data'>) {
   const operation = normalizeSapCode(row.planning_data?.["Op"] ?? row.planning_data?.["Operação"]);
   const suboperation = normalizeSapCode(
     row.planning_data?.["Subop"] ?? row.planning_data?.["Suboperação"],
@@ -1294,19 +1296,18 @@ function WeeklyActivitiesPage() {
   });
 
   const sapAllocationActivities = useQuery({
-    queryKey: ["sap-allocation-activities-v3", activeWeek.data?.id],
+    queryKey: ["sap-allocation-activities-v4", activeWeek.data?.id],
     enabled: Boolean(activeWeek.data?.id) && canViewSap && Boolean(sapLatestImport.data?.id),
     queryFn: async ({ signal }) => {
       const pageSize = 500;
       const loadPage = async (pageIndex: number) => {
-        const { data, error } = await (supabase as any).rpc("get_activities_page", {
+        const { data, error } = await (supabase as any).rpc("get_activity_sap_allocation_page", {
           p_week_id: activeWeek.data!.id,
-          p_filters: {},
           p_page: pageIndex,
           p_page_size: pageSize,
         }).abortSignal(signal);
         if (error) throw error;
-        return data as { rows?: ActivityRow[]; totalAll?: number } | null;
+        return data as { rows?: ActivitySapAllocationRow[]; totalAll?: number } | null;
       };
 
       const firstPage = await loadPage(0);
@@ -1331,7 +1332,7 @@ function WeeklyActivitiesPage() {
 
   const sapHoursByActivity = useMemo(() => {
     const allocation = new Map<string, number>();
-    const activitiesByKey = new Map<string, ActivityRow[]>();
+    const activitiesByKey = new Map<string, ActivitySapAllocationRow[]>();
     for (const activity of sapAllocationActivities.data ?? []) {
       const key = activitySapKey(activity);
       const group = activitiesByKey.get(key) ?? [];
@@ -1513,7 +1514,7 @@ function WeeklyActivitiesPage() {
     (row) => row.classification === sapUnprogrammedOpen,
   );
 
-  function activityConfirmation(row: ActivityRow) {
+  function activityConfirmation(row: Pick<ActivityRow,'planning_data'>) {
     return String(
       row.planning_data?.["Confirmação"] ?? row.planning_data?.["Confirmacao"] ?? "",
     ).trim();

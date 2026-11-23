@@ -3,7 +3,7 @@
 //  1. access: sign in, keep the session and pass the access gate
 //     (user, password state, profile, roles, worksite, membership);
 //  2. Atividades page reads (weekly RPBC page and continuous Fiocruz page):
-//     page configuration, weeks, get_activities_page, SAP overview/outside/
+//     page configuration, weeks, get_activities_page, lightweight SAP allocation, SAP overview/outside/
 //     imports/rows, capacity, activity history, immediate-link options,
 //     continuous rows/facets/counts/history.
 //  Employee and overtime lists additionally require an explicit worksite filter
@@ -135,6 +135,9 @@ const continuousFacets: BodyCheck = (b) =>
 
 /** Read-only (STABLE) RPCs used by the Atividades page, with their exact argument shape. */
 export const RPC_READS: Record<string, BodyCheck> = {
+  get_activity_sap_allocation_page: (b) =>
+    hasExactly(b,["p_week_id","p_page","p_page_size"]) && isUuid(b["p_week_id"]) &&
+    isInt(b["p_page"],0,10000) && isInt(b["p_page_size"],1,5000),
   get_activities_page: (b) =>
     hasExactly(b, ["p_week_id", "p_filters", "p_page", "p_page_size"]) &&
     isUuid(b["p_week_id"]) &&
