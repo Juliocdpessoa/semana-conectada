@@ -10,9 +10,9 @@ test('the fallback remains connected but its technical status is not shown to en
   assert.match(source,/fallback.status\(status\)/);
   assert.match(source,/diagnostics.status\(status,error\)/);
 });
-function fixture(refresh = async () => {}, random = () => 0, hasChanges) {
+function fixture(refresh = async () => {}, random = () => 0, hasChanges, reconcileMs) {
   let now = 0, id = 0, visible = true; const jobs = new Map(); const flags = [];
-  const controller = createRealtimeFallback({ refresh, hasChanges, canRefresh: () => visible, random,
+  const controller = createRealtimeFallback({ refresh, hasChanges,reconcileMs, canRefresh: () => visible, random,
     now: () => now,
     onFallback: state => flags.push(state),
     setTimer: (fn, delay) => { const key = ++id; jobs.set(key, { at: now + delay, fn }); return key; },
@@ -36,6 +36,20 @@ test('a channel that never connects falls back, but a healthy channel never poll
   await f.advance(1); assert.equal(calls, 1);
   f.controller.status('SUBSCRIBED'); await f.advance(600_000);
   assert.equal(calls, 1); assert.equal(f.jobs.size, 0); f.controller.dispose();
+});
+
+test('opt-in healthy reconciliation catches missed deletions, bounded and visible only',async()=>{
+ let calls=0;const f=fixture(async()=>{calls++;},()=>0,undefined,60000);
+ f.controller.status('SUBSCRIBED');await f.advance(59999);assert.equal(calls,0);
+ await f.advance(1);assert.equal(calls,1);
+ f.visible(false);await f.advance(120000);assert.equal(calls,1);
+ f.visible(true);f.controller.resume();await flush();assert.equal(calls,2);
+ f.controller.dispose();await f.advance(120000);assert.equal(calls,2);
+});
+test('losing a healthy channel replaces its minute reconciliation timer with prompt fallback',async()=>{
+ let calls=0;const f=fixture(async()=>{calls++;},()=>0,undefined,60000);
+ f.controller.status('SUBSCRIBED');await f.advance(20000);f.controller.status('CHANNEL_ERROR');
+ await f.advance(4999);assert.equal(calls,0);await f.advance(1);assert.equal(calls,1);f.controller.dispose();
 });
 test('hidden/offline tabs skip work; coming back refreshes and reconnect stops polling', async () => {
   let calls = 0; const f = fixture(async () => { calls++; });

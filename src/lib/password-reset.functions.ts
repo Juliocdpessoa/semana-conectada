@@ -1,7 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "./password-auth";
-import { requireSupabaseAuth as requireIdentity } from "@/integrations/supabase/auth-middleware";
+import { requireIdentity } from "./identity-auth";
 import { canResetPassword, newPasswordSchema, TEMPORARY_PASSWORD, type PasswordResetState } from "./password-reset";
 
 export const resetUserPassword = createServerFn({ method: "POST" })

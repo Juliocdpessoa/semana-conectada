@@ -1,0 +1,708 @@
+{
+  "capturedAt": "2026-11-23 11:35:54.936317+00",
+  "window": "2026-11-21T00:00:00-03:00 to snapshot on 2026-11-23",
+  "warning": "received_at is receipt, client IDs are not distinct PCs, performance is sampled, statement stats cumulative",
+  "backupQueueSnapshot": {"rows":[{"max_attempts":8,"pending":0,"pending_with_error":0,"total":4}]},
+  "diagnostics": {
+    "rows": [
+      {
+        "category": "auth",
+        "dia": "2026-11-21",
+        "eventos": 5,
+        "eventos_prestserv": 0,
+        "max_ms": 617,
+        "media_ms": "401",
+        "motivo": "-",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "identity",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-21",
+        "eventos": 1,
+        "eventos_prestserv": 0,
+        "max_ms": 8004,
+        "media_ms": "8004",
+        "motivo": "-",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "identity",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "auth",
+        "dia": "2026-11-21",
+        "eventos": 1,
+        "eventos_prestserv": 0,
+        "max_ms": 60000,
+        "media_ms": "60000",
+        "motivo": "jwt",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "realtime",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-21",
+        "eventos": 29,
+        "eventos_prestserv": 18,
+        "max_ms": 60000,
+        "media_ms": "12414",
+        "motivo": "transport",
+        "navegadores": 14,
+        "sem_identidade": 0,
+        "stage": "realtime",
+        "usuarios_identificados": 11
+      },
+      {
+        "category": "server",
+        "dia": "2026-11-21",
+        "eventos": 6,
+        "eventos_prestserv": 0,
+        "max_ms": 8948,
+        "media_ms": "1829",
+        "motivo": "-",
+        "navegadores": 3,
+        "sem_identidade": 6,
+        "stage": "session",
+        "usuarios_identificados": 0
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-21",
+        "eventos": 6,
+        "eventos_prestserv": 0,
+        "max_ms": 8273,
+        "media_ms": "8053",
+        "motivo": "-",
+        "navegadores": 5,
+        "sem_identidade": 4,
+        "stage": "session",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-22",
+        "eventos": 1,
+        "eventos_prestserv": 0,
+        "max_ms": 8002,
+        "media_ms": "8002",
+        "motivo": "-",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "profile",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-22",
+        "eventos": 3,
+        "eventos_prestserv": 0,
+        "max_ms": 4504,
+        "media_ms": "1560",
+        "motivo": "transport",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "realtime",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "auth",
+        "dia": "2026-11-23",
+        "eventos": 3,
+        "eventos_prestserv": 2,
+        "max_ms": 582,
+        "media_ms": "448",
+        "motivo": "-",
+        "navegadores": 3,
+        "sem_identidade": 1,
+        "stage": "identity",
+        "usuarios_identificados": 2
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-23",
+        "eventos": 1,
+        "eventos_prestserv": 1,
+        "max_ms": 35903,
+        "media_ms": "35903",
+        "motivo": "-",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "identity",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-23",
+        "eventos": 1,
+        "eventos_prestserv": 1,
+        "max_ms": 8002,
+        "media_ms": "8002",
+        "motivo": "-",
+        "navegadores": 1,
+        "sem_identidade": 0,
+        "stage": "password",
+        "usuarios_identificados": 1
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-23",
+        "eventos": 2,
+        "eventos_prestserv": 0,
+        "max_ms": 16174,
+        "media_ms": "12088",
+        "motivo": "-",
+        "navegadores": 2,
+        "sem_identidade": 0,
+        "stage": "profile",
+        "usuarios_identificados": 2
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-23",
+        "eventos": 38,
+        "eventos_prestserv": 29,
+        "max_ms": 60000,
+        "media_ms": "5466",
+        "motivo": "transport",
+        "navegadores": 28,
+        "sem_identidade": 0,
+        "stage": "realtime",
+        "usuarios_identificados": 21
+      },
+      {
+        "category": "server",
+        "dia": "2026-11-23",
+        "eventos": 12,
+        "eventos_prestserv": 0,
+        "max_ms": 21255,
+        "media_ms": "3841",
+        "motivo": "-",
+        "navegadores": 2,
+        "sem_identidade": 12,
+        "stage": "session",
+        "usuarios_identificados": 0
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-23",
+        "eventos": 14,
+        "eventos_prestserv": 2,
+        "max_ms": 8458,
+        "media_ms": "8044",
+        "motivo": "-",
+        "navegadores": 7,
+        "sem_identidade": 10,
+        "stage": "session",
+        "usuarios_identificados": 3
+      }
+    ]
+  },
+  "performance": {
+    "rows": [
+      {
+        "amostras": 96,
+        "dia": "2026-11-21",
+        "falhas": 0,
+        "max_ms": 2965,
+        "operation": "activities_filter",
+        "p50_ms": 417,
+        "p95_ms": 1148,
+        "usuarios": 19
+      },
+      {
+        "amostras": 27,
+        "dia": "2026-11-21",
+        "falhas": 0,
+        "max_ms": 2187,
+        "operation": "activities_list",
+        "p50_ms": 559,
+        "p95_ms": 1312,
+        "usuarios": 9
+      },
+      {
+        "amostras": 2,
+        "dia": "2026-11-21",
+        "falhas": 0,
+        "max_ms": 1119,
+        "operation": "realtime_connect",
+        "p50_ms": 789,
+        "p95_ms": 1119,
+        "usuarios": 1
+      },
+      {
+        "amostras": 22,
+        "dia": "2026-11-22",
+        "falhas": 0,
+        "max_ms": 700,
+        "operation": "activities_filter",
+        "p50_ms": 355,
+        "p95_ms": 648,
+        "usuarios": 12
+      },
+      {
+        "amostras": 7,
+        "dia": "2026-11-22",
+        "falhas": 0,
+        "max_ms": 937,
+        "operation": "activities_list",
+        "p50_ms": 476,
+        "p95_ms": 937,
+        "usuarios": 4
+      },
+      {
+        "amostras": 30,
+        "dia": "2026-11-22",
+        "falhas": 0,
+        "max_ms": 2271,
+        "operation": "realtime_connect",
+        "p50_ms": 206,
+        "p95_ms": 1621,
+        "usuarios": 13
+      },
+      {
+        "amostras": 3,
+        "dia": "2026-11-22",
+        "falhas": 3,
+        "max_ms": 0,
+        "operation": "realtime_disconnect",
+        "p50_ms": 0,
+        "p95_ms": 0,
+        "usuarios": 1
+      },
+      {
+        "amostras": 1,
+        "dia": "2026-11-22",
+        "falhas": 0,
+        "max_ms": 24016,
+        "operation": "realtime_recovery",
+        "p50_ms": 24016,
+        "p95_ms": 24016,
+        "usuarios": 1
+      },
+      {
+        "amostras": 128,
+        "dia": "2026-11-23",
+        "falhas": 0,
+        "max_ms": 5425,
+        "operation": "activities_filter",
+        "p50_ms": 364,
+        "p95_ms": 781,
+        "usuarios": 29
+      },
+      {
+        "amostras": 20,
+        "dia": "2026-11-23",
+        "falhas": 0,
+        "max_ms": 754,
+        "operation": "activities_list",
+        "p50_ms": 401,
+        "p95_ms": 736,
+        "usuarios": 13
+      },
+      {
+        "amostras": 24,
+        "dia": "2026-11-23",
+        "falhas": 0,
+        "max_ms": 1120,
+        "operation": "realtime_connect",
+        "p50_ms": 388,
+        "p95_ms": 999,
+        "usuarios": 15
+      },
+      {
+        "amostras": 36,
+        "dia": "2026-11-23",
+        "falhas": 36,
+        "max_ms": 0,
+        "operation": "realtime_disconnect",
+        "p50_ms": 0,
+        "p95_ms": 0,
+        "usuarios": 20
+      },
+      {
+        "amostras": 4,
+        "dia": "2026-11-23",
+        "falhas": 0,
+        "max_ms": 173032,
+        "operation": "realtime_recovery",
+        "p50_ms": 48692,
+        "p95_ms": 173032,
+        "usuarios": 4
+      }
+    ]
+  },
+  "coverage": {
+    "rows": [
+      {
+        "eventos": 123,
+        "ids_unicos": 123,
+        "navegadores": 53,
+        "primeiro": "2026-11-21 05:52:54.829486+00",
+        "sem_identidade": 33,
+        "ultimo": "2026-11-23 11:27:24.27292+00",
+        "usuarios_identificados": 34
+      }
+    ]
+  },
+  "history": {
+    "rows": [
+      {
+        "category": "auth",
+        "dia": "2026-11-19",
+        "eventos": 1,
+        "stage": "identity"
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-19",
+        "eventos": 1,
+        "stage": "session"
+      },
+      {
+        "category": "auth",
+        "dia": "2026-11-20",
+        "eventos": 5,
+        "stage": "identity"
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-20",
+        "eventos": 14,
+        "stage": "identity"
+      },
+      {
+        "category": "runtime",
+        "dia": "2026-11-20",
+        "eventos": 3,
+        "stage": "identity"
+      },
+      {
+        "category": "auth",
+        "dia": "2026-11-20",
+        "eventos": 3,
+        "stage": "realtime"
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-20",
+        "eventos": 28,
+        "stage": "realtime"
+      },
+      {
+        "category": "network",
+        "dia": "2026-11-20",
+        "eventos": 2,
+        "stage": "session"
+      },
+      {
+        "category": "timeout",
+        "dia": "2026-11-20",
+        "eventos": 6,
+        "stage": "session"
+      }
+    ]
+  },
+  "health": {
+    "rows": [
+      {
+        "active_slots": 2,
+        "api_over_5s": 0,
+        "captured_at": "2026-11-23 11:35:54.936317+00",
+        "lock_waits": 0,
+        "subscriptions": 1
+      }
+    ]
+  },
+  "replication": {
+    "rows": [
+      {
+        "active": true,
+        "pending_bytes": "0",
+        "slot_name": "supabase_realtime_replication_slot_2_174_2_a640b93"
+      },
+      {
+        "active": true,
+        "pending_bytes": "-1",
+        "slot_name": "supabase_realtime_messages_replication_slot_2_174_2_a640b93"
+      }
+    ]
+  },
+  "businessErrors": {
+    "rows": [
+      {
+        "has_40001": false,
+        "has_pt409": true,
+        "proname": "save_weekly_rs_availability"
+      },
+      {
+        "has_40001": false,
+        "has_pt409": true,
+        "proname": "save_weekly_rs_program_base"
+      },
+      {
+        "has_40001": false,
+        "has_pt409": true,
+        "proname": "decide_overtime_batch"
+      },
+      {
+        "has_40001": false,
+        "has_pt409": true,
+        "proname": "patch_activity_planning_fields"
+      },
+      {
+        "has_40001": false,
+        "has_pt409": true,
+        "proname": "save_continuous_activity"
+      }
+    ]
+  },
+  "backupRuns": {
+    "rows": [
+      {
+        "first_run": "2026-11-21 03:00:00.024753+00",
+        "last_run": "2026-11-23 11:38:00.03139+00",
+        "max_seconds": "0.06",
+        "runs": 3399,
+        "status": "succeeded"
+      }
+    ]
+  },
+  "recoveries": {
+    "rows": [
+      {
+        "duration_ms": 24016,
+        "recebido": "2026-11-22 08:03:31.778682"
+      },
+      {
+        "duration_ms": 3064,
+        "recebido": "2026-11-23 08:00:42.426013"
+      },
+      {
+        "duration_ms": 48692,
+        "recebido": "2026-11-23 08:01:30.285662"
+      },
+      {
+        "duration_ms": 173032,
+        "recebido": "2026-11-23 08:17:10.089846"
+      },
+      {
+        "duration_ms": 83366,
+        "recebido": "2026-11-23 08:22:33.597931"
+      }
+    ]
+  },
+  "statementStatsReset": {
+    "rows": [
+      {
+        "stats_reset": "2026-11-18 16:47:45.126251+00"
+      }
+    ]
+  },
+  "slowQueries": {
+    "rows": [
+      {
+        "calls": 25541,
+        "family": "get_activities_page",
+        "max_ms": "3928.8",
+        "mean_ms": "447.1",
+        "queryid": "-8757826424326125475",
+        "total_ms": "11419402.3"
+      },
+      {
+        "calls": 342116,
+        "family": "other",
+        "max_ms": "11739.7",
+        "mean_ms": "29.7",
+        "queryid": "2104060019563274571",
+        "total_ms": "10175022.3"
+      },
+      {
+        "calls": 1035,
+        "family": "other",
+        "max_ms": "7992.7",
+        "mean_ms": "1972.4",
+        "queryid": "-8795060391133088212",
+        "total_ms": "2041384.3"
+      },
+      {
+        "calls": 3435,
+        "family": "other",
+        "max_ms": "3550.9",
+        "mean_ms": "395.6",
+        "queryid": "2666560903368831138",
+        "total_ms": "1358753.5"
+      },
+      {
+        "calls": 20252,
+        "family": "other",
+        "max_ms": "2565.6",
+        "mean_ms": "66.8",
+        "queryid": "5442671390678816326",
+        "total_ms": "1353242.7"
+      },
+      {
+        "calls": 1606,
+        "family": "other",
+        "max_ms": "5326.2",
+        "mean_ms": "635.1",
+        "queryid": "-2097825419542815611",
+        "total_ms": "1019899.5"
+      },
+      {
+        "calls": 6889,
+        "family": "other",
+        "max_ms": "120911.9",
+        "mean_ms": "115.9",
+        "queryid": "-8451307956603652680",
+        "total_ms": "798516.2"
+      },
+      {
+        "calls": 28223013,
+        "family": "other",
+        "max_ms": "209.9",
+        "mean_ms": "0.0",
+        "queryid": "5360251647081715348",
+        "total_ms": "646544.6"
+      },
+      {
+        "calls": 3298,
+        "family": "other",
+        "max_ms": "2320.7",
+        "mean_ms": "153.7",
+        "queryid": "-3120295878353896897",
+        "total_ms": "506983.9"
+      },
+      {
+        "calls": 288,
+        "family": "other",
+        "max_ms": "7725.2",
+        "mean_ms": "1106.2",
+        "queryid": "-2570351979093960938",
+        "total_ms": "318575.8"
+      },
+      {
+        "calls": 801,
+        "family": "other",
+        "max_ms": "3184.5",
+        "mean_ms": "318.4",
+        "queryid": "-8308889016427752227",
+        "total_ms": "255065.2"
+      },
+      {
+        "calls": 964,
+        "family": "activity_update",
+        "max_ms": "1420.7",
+        "mean_ms": "203.9",
+        "queryid": "8850808499068719884",
+        "total_ms": "196593.8"
+      }
+    ]
+  },
+  "slowIdentifiers": {
+    "rows": [
+      {
+        "identifiers": [
+          "import_id",
+          "confirmation",
+          "actual_end_date",
+          "order_number",
+          "public",
+          "source_row_number",
+          "actual_work",
+          "actual_start_date",
+          "suboperation",
+          "sap_confirmation_rows",
+          "operation"
+        ],
+        "mean_ms": "1972.4",
+        "queryid": "-8795060391133088212"
+      },
+      {
+        "identifiers": [
+          "deleted_at",
+          "id",
+          "employees",
+          "is_active",
+          "city",
+          "admission_date",
+          "transport_line",
+          "address",
+          "message_contact",
+          "public",
+          "job_title",
+          "neighborhood",
+          "employee_id",
+          "badge",
+          "phone",
+          "full_name"
+        ],
+        "mean_ms": "1106.2",
+        "queryid": "-2570351979093960938"
+      },
+      {
+        "identifiers": [
+          "get_sap_outside_schedule",
+          "public",
+          "p_week_id"
+        ],
+        "mean_ms": "635.1",
+        "queryid": "-2097825419542815611"
+      },
+      {
+        "identifiers": [
+          "id",
+          "name",
+          "public",
+          "code",
+          "worksites"
+        ],
+        "mean_ms": "395.6",
+        "queryid": "2666560903368831138"
+      }
+    ]
+  },
+  "eventVersions": {
+    "rows": [
+      {
+        "build": "access-diag-20261119-v1",
+        "registros": 1,
+        "stage": "profile"
+      },
+      {
+        "build": "access-diag-20261119-v1",
+        "registros": 2,
+        "stage": "session"
+      },
+      {
+        "build": "access-diag-20261120-v2",
+        "registros": 10,
+        "stage": "identity"
+      },
+      {
+        "build": "access-diag-20261120-v2",
+        "registros": 1,
+        "stage": "password"
+      },
+      {
+        "build": "access-diag-20261120-v2",
+        "registros": 2,
+        "stage": "profile"
+      },
+      {
+        "build": "access-diag-20261120-v2",
+        "registros": 71,
+        "stage": "realtime"
+      },
+      {
+        "build": "access-diag-20261120-v2",
+        "registros": 36,
+        "stage": "session"
+      }
+    ]
+  }
+}

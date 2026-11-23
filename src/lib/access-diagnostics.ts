@@ -68,6 +68,9 @@ export function safeQueuedDiagnostic(value:unknown):boolean{
  &&(v.reason===undefined||(v.stage==='realtime'&&isRealtimeReason(v.reason)))
  &&Number.isInteger(v.attempts)&&Number(v.attempts)>=1&&Number(v.attempts)<=2
  &&Number.isInteger(v.elapsedMs)&&Number(v.elapsedMs)>=0&&Number(v.elapsedMs)<=60000
- &&typeof v.queuedAt==="number"&&Number.isFinite(v.queuedAt)
+ &&typeof v.queuedAt==="number"&&Number.isFinite(v.queuedAt)&&v.queuedAt>=0&&v.queuedAt<=Date.now()+300000
+ &&(v.release===undefined||(typeof v.release==='string'&&/^(?:[a-f0-9]{40}|unavailable)$/.test(v.release)))
+ &&(v.visibility===undefined||['visible','hidden','unknown'].includes(v.visibility as string))
+ &&(v.online===undefined||typeof v.online==='boolean')
  &&Array.isArray(v.frames)&&v.frames.length<=4&&v.frames.every(f=>typeof f==="string"&&f.length<=150&&/^\/assets\/[a-zA-Z0-9_.-]+\.js:\d+:\d+$/.test(f));
 }

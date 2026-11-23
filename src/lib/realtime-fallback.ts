@@ -3,6 +3,8 @@ type Options = {
  onFallback?:(active:boolean)=>void;
  setTimer?:(callback:()=>void,delay:number)=>ReturnType<typeof setTimeout>;
  clearTimer?:(timer:ReturnType<typeof setTimeout>)=>void; random?:()=>number; now?:()=>number;
+ /** Reconcile missed INSERT/DELETE events even when the socket reports healthy. */
+ reconcileMs?:number;
 };
 /** Only probes a failed/unfinished channel. Full reads happen on change or
  * periodic reconciliation; SDK reconnect/auth remain the source of channel state. */
@@ -13,9 +15,9 @@ export function createRealtimeFallback(options:Options){
  let lastStarted:number|undefined,lastFull:number|undefined,failures=0,pendingForce=false;
  const cancel=()=>{if(timer!==undefined)clearTimer(timer);timer=undefined;};
  function schedule(delay?:number){
-  if(disposed||healthy||timer!==undefined||running)return;
+  if(disposed||(healthy&&!options.reconcileMs)||timer!==undefined||running)return;
   const regular=failures?Math.min(60000,15000*2**Math.min(failures-1,2))+jitter(5000):(options.hasChanges?10000+jitter(5000):20000+jitter(10000));
-  timer=setTimer(()=>{timer=undefined;void run(false);},delay??regular);
+  timer=setTimer(()=>{timer=undefined;void run(healthy);},delay??(healthy?options.reconcileMs!+jitter(5000):regular));
  }
  async function run(force:boolean){
   if(disposed)return;
@@ -38,9 +40,12 @@ export function createRealtimeFallback(options:Options){
   status(status:string){
    if(disposed)return;
    if(status==='SUBSCRIBED'){
+    if(healthy)return;
     healthy=true;cancel();options.onFallback?.(false);
     if(disconnected){disconnected=false;void run(true);}
+    else schedule();
    }else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(status)){
+    if(healthy)cancel();
     healthy=false;disconnected=true;options.onFallback?.(true);schedule(5000+jitter(3000));
    }
   },

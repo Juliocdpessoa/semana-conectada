@@ -1153,6 +1153,7 @@ function WeeklyActivitiesPage() {
     let refreshTimer: ReturnType<typeof setTimeout> | null = null;
     const changedIds = new Set<string>();
     const fallback = createRealtimeFallback({
+      reconcileMs:60000,
       canRefresh: () => document.visibilityState === "visible" && navigator.onLine !== false,
       hasChanges:async()=>{
         const controller=new AbortController();probeController=controller;
@@ -1193,17 +1194,17 @@ function WeeklyActivitiesPage() {
       .channel(`activities-live-${weekId}`)
       .on(
         "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "activities", filter: `week_id=eq.${weekId}` },
+        { event: "*", schema: "public", table: "activities", filter: `week_id=eq.${weekId}` },
         (payload) => {
           if (disposed) return;
-          const activityId = String((payload.new as { id?: string } | null)?.id ?? "");
+          const activityId = String((payload.new as { id?: string } | null)?.id ?? (payload.old as {id?:string}|null)?.id ?? "");
           if (activityId) changedIds.add(activityId);
           if (refreshTimer) return;
           refreshTimer = setTimeout(() => {
             refreshTimer = null;
-            void qc.invalidateQueries({ queryKey: ["activities", weekId] });
+            void qc.invalidateQueries({ queryKey: ["activities", weekId],refetchType:document.visibilityState==='visible'&&navigator.onLine!==false?'active':'none' });
             for (const id of changedIds) {
-              void qc.invalidateQueries({ queryKey: ["activity-timeline", id] });
+              void qc.invalidateQueries({ queryKey: ["activity-timeline", id],refetchType:document.visibilityState==='visible'&&navigator.onLine!==false?'active':'none' });
             }
             changedIds.clear();
           }, 2_000);
