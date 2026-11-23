@@ -1,7 +1,7 @@
 // Browser transport for the access flow and the Atividades page reads.
-// Requests start on the direct backend address; after a direct connection
-// failure on an allowlisted request, this browser uses the restricted
-// same-origin relay for those requests for a limited time. The transport itself
+// Installed access-gate requests start on the restricted same-origin relay.
+// Operational reads retain the bounded direct/relay routing preference.
+// The transport itself
 // never retries: one network attempt per call. A non-idempotent call (password
 // sign-in, refresh, logout) whose outcome was ambiguous is never sent again with
 // the same credentials; repeats get a local "not repeated" answer instead.
@@ -123,6 +123,10 @@ export function createAccessFetch(
     hint: AccessRouteHint;
     guard?: AmbiguityGuard;
     now?: () => number;
+    /** Access gate uses the existing fixed-origin relay before consuming a token. */
+    preferAccessRelay?: boolean;
+    /** Bounds SDK auth fetches, which do not receive the route's abort signal. */
+    authTimeoutMs?: number;
   },
 ): typeof fetch {
   const supabaseOrigin = new URL(options.supabaseUrl).origin;
@@ -144,24 +148,34 @@ export function createAccessFetch(
     const key = ttl ? await requestKey(op.kind, init) : "";
     if (ttl && guard.blocked(key)) return notRepeatedResponse();
 
-    const viaRelay = options.hint.useRelay() ||
+    const accessGate = op.kind.startsWith("auth-") || op.kind === "read-gate" || op.kind === "rpc-password-state";
+    const relayPreferred = options.hint.useRelay() ||
       (op.kind === "auth-refresh" && options.hint.hasRelayHistory?.() === true);
+    const viaRelay = (options.preferAccessRelay === true && accessGate) || relayPreferred;
     const started = now();
+    const authController = op.kind.startsWith("auth-") ? new AbortController() : undefined;
+    const forwardAbort = () => authController?.abort();
+    if (init?.signal?.aborted) forwardAbort();
+    else init?.signal?.addEventListener("abort", forwardAbort, { once: true });
+    const authTimer = authController ? setTimeout(() => authController.abort(), options.authTimeoutMs ?? 12_000) : undefined;
+    const requestInit = authController ? { ...init, signal: authController.signal } : init;
     try {
       const response = viaRelay
         ? await base(`${options.relayOrigin}${ACCESS_RELAY_PREFIX}${url.pathname}${url.search}`, {
-            ...init,
+            ...requestInit,
             credentials: "omit",
             cache: "no-store",
             redirect: "error",
           })
-        : await base(input, init);
+        : await base(input, requestInit);
       if (ttl && (response.status >= 500 || response.headers.get(ACCESS_OUTCOME_HEADER) === "ambiguous"))
         guard.mark(key, ttl);
-      if (viaRelay && response.ok) options.hint.markRelaySuccess?.();
+      // A fixed gate route alone is not evidence operational direct reads fail.
+      // Do not move every healthy client's large activity queries onto the relay.
+      if (viaRelay && response.ok && relayPreferred) options.hint.markRelaySuccess?.();
       return response;
     } catch (error) {
-      if (!viaRelay && isConnectionFailure(error, init?.signal, now() - started)) options.hint.markDirectFailed();
+      if (!viaRelay && isConnectionFailure(error, requestInit?.signal, now() - started)) options.hint.markDirectFailed();
       // Failed to fetch can also mean the response was lost after processing.
       // A rotating refresh token must NEVER be replayed on that assumption.
       // Password grants retain the existing bounded login retry; they do not
@@ -169,6 +183,9 @@ export function createAccessFetch(
       const directRefused = !viaRelay && errorName(error) === "TypeError" && op.kind === "auth-password";
       if (ttl && !directRefused) guard.mark(key, ttl);
       throw error; // never retried here; the caller decides with its own bounded policy
+    } finally {
+      if (authTimer) clearTimeout(authTimer);
+      init?.signal?.removeEventListener("abort", forwardAbort);
     }
   }) as typeof fetch;
 }
@@ -189,6 +206,7 @@ export function installAccessTransport() {
     supabaseUrl,
     relayOrigin: window.location.origin,
     hint: createAccessRouteHint(storage),
+    preferAccessRelay: true,
   });
   installed = true;
 }

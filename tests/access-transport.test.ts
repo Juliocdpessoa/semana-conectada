@@ -194,6 +194,32 @@ test("concurrent requests are isolated: each user only carries their own token",
 });
 
 // ---------- browser transport ----------
+test("production access routing starts on the fixed relay, without a direct failure or token replay", async () => {
+  const calls: string[] = [];
+  const f=createAccessFetch((async (u:any) => {calls.push(String(u));return json({});}) as typeof fetch,
+    {supabaseUrl: UP,relayOrigin: APP,hint:createAccessRouteHint(memStorage()),preferAccessRelay:true});
+  await f(`${UP}/auth/v1/token?grant_type=refresh_token`,{method:'POST',body:JSON.stringify({refresh_token:'synthetic'})});
+  await f(`${UP}/auth/v1/user`);
+  await f(`${UP}/rest/v1/profiles?select=full_name&id=eq.${UID}`);
+  expect(calls.length).toBe(3);
+  expect(calls.every(u=>u.startsWith(`${APP}${ACCESS_RELAY_PREFIX}/`))).toBe(true);
+  await f(`${UP}/rest/v1/activities?id=eq.${UID}`,{method:'PATCH',body:'{}'});
+  expect(calls[3]).toBe(`${UP}/rest/v1/activities?id=eq.${UID}`);
+  await f(`${UP}/rest/v1/rpc/get_activities_page`,{method:'POST',body:'{}'});
+  expect(calls[4]).toBe(`${UP}/rest/v1/rpc/get_activities_page`);
+});
+test("hung SDK refresh aborts once and an ambiguous token is never sent again", async () => {
+  let calls=0;
+  const f=createAccessFetch((async (_u:any,i:any) => {calls++;return new Promise((_resolve,reject)=>{
+    i.signal.addEventListener('abort',()=>reject(new DOMException('aborted','AbortError')),{once:true});
+  });}) as typeof fetch,
+    {supabaseUrl: UP,relayOrigin: APP,hint:createAccessRouteHint(memStorage()),preferAccessRelay:true,authTimeoutMs:20});
+  const init={method:'POST',body:JSON.stringify({refresh_token:'synthetic-timeout'})};
+  await expect(f(`${UP}/auth/v1/token?grant_type=refresh_token`,init)).rejects.toThrow();
+  const blocked=await f(`${UP}/auth/v1/token?grant_type=refresh_token`,init);
+  expect(blocked.status).toBe(503);
+  expect(calls).toBe(1);
+});
 function browser(direct: (url: string, init?: RequestInit) => Promise<Response>, storage = memStorage()) {
   const calls: Call[] = [];
   const base = (async (u: any, i: any) => { calls.push({ url: String(u), init: i }); return direct(String(u), i); }) as typeof fetch;
@@ -222,7 +248,7 @@ test("a direct connection failure is rethrown once (no hidden retry) and switche
   expect(b.calls.length).toBe(2);
   expect(b.calls[1]!.url).toBe(`${APP}${ACCESS_RELAY_PREFIX}/auth/v1/user`);
   expect(b.calls[1]!.init.credentials).toBe("omit");
-  expect(b.calls[1]!.init.signal).toBe(ctrl.signal);
+  expect(b.calls[1]!.init.signal?.aborted).toBe(false);
   expect(new Headers(b.calls[1]!.init.headers).get("authorization")).toBe(`Bearer ${TOKEN}`);
 });
 
@@ -312,7 +338,7 @@ test("operational list reads are scoped, authenticated and preserve both date bo
   expect(matchAccessOperation("GET", "/rest/v1/overtime_requests", q.replace("lte.2026-11-30","gte.2026-11-30"))).toBeNull();
 });
 
-function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, directWorks = false, relayExtra: object = {}) {
+function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, directWorks = false, relayExtra: object = {}, preferAccessRelay=false) {
   const up = fakeUpstream(upstream);
   const browserCalls: string[] = [];
   const browserInits: RequestInit[] = [];
@@ -324,7 +350,7 @@ function sdkThroughRelay(upstream: (c: Call) => Response | Promise<Response>, di
   }) as typeof fetch;
   const store = new Map<string, string>();
   const hint = createAccessRouteHint(memStorage());
-  const f = createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint });
+  const f = createAccessFetch(base, { supabaseUrl: UP, relayOrigin: APP, hint, preferAccessRelay });
   const sb = createClient(UP, KEY, { global: { fetch: f }, auth: { storage: { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => void store.set(k, v), removeItem: (k) => void store.delete(k) }, autoRefreshToken: false, persistSession: true } });
   return { sb, up, browserCalls, browserInits, store, f, hint };
 }
@@ -571,6 +597,23 @@ test("real SDK refresh: a definite answer is relayed once and saved normally", a
   const { data } = await e.sb.auth.getSession();
   expect(data.session?.refresh_token).toBe("r2");
   expect(tokenCalls).toBe(1);
+});
+
+test("production routing: expired SDK session refreshes without any prior hint or direct request", async () => {
+  let tokenCalls=0;
+  const e=sdkThroughRelay(c=>{
+    if(new URL(c.url).pathname==='/auth/v1/token') {
+      tokenCalls++;
+      return json({access_token:TOKEN+'-renewed',refresh_token:'r2',token_type:'bearer',expires_in:3600,user:{id:UID,aud:'authenticated'}});
+    }
+    return json({},404);
+  },false,{},true);
+  e.store.set(STORAGE_KEY,expiredSession());
+  const {data,error}=await e.sb.auth.getSession();
+  expect(error).toBeNull();
+  expect(data.session?.refresh_token).toBe('r2');
+  expect(tokenCalls).toBe(1);
+  expect(e.browserCalls.every(u=>u.startsWith(APP))).toBe(true);
 });
 
 test("sign-in: accessStep's retry after an ambiguous relay result does not resend the password", async () => {

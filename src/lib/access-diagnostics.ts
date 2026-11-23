@@ -22,7 +22,9 @@ export class AccessLoadError extends Error{
  if(stage==='realtime'&&isRealtimeReason(reason))this.reason=reason;
  }
 }
-export async function accessStep<T extends {error?:unknown}>(stage:AccessStage,fn:(signal:AbortSignal)=>PromiseLike<T>,deadline:number,timeoutMs=8000):Promise<T>{
+// Relay access requests have a 10s upstream deadline; the route must let that
+// response arrive before declaring an independent timeout.
+export async function accessStep<T extends {error?:unknown}>(stage:AccessStage,fn:(signal:AbortSignal)=>PromiseLike<T>,deadline:number,timeoutMs=15000):Promise<T>{
  const start=Date.now();let attempts=0;
  for(let i=0;i<2;i++){
   attempts++;
@@ -35,7 +37,8 @@ export async function accessStep<T extends {error?:unknown}>(stage:AccessStage,f
    throw result.error;
   }catch(error){
    const category=diagnosticCategory(error);
-   if(i===0&&(category==="network"||category==="server")&&deadline-Date.now()>700){
+   // getSession already owns SDK refresh/backoff; never add another cycle here.
+   if(stage!=="session"&&i===0&&(category==="network"||category==="server")&&deadline-Date.now()>700){
     await new Promise(resolve=>setTimeout(resolve,400));continue;
    }
    throw new AccessLoadError(stage,category,attempts,Date.now()-start);

@@ -26,6 +26,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { cn } from "@/lib/utils";
 import { accessStep, AccessLoadError } from "@/lib/access-diagnostics";
 import { setAccessDiagnosticIdentity } from "@/lib/access-diagnostics-client";
+import { singleFlight } from "@/lib/access-single-flight";
 
 export type AppRole =
   | "admin"
@@ -50,13 +51,17 @@ export type SessionInfo = {
   isWorksiteAdmin: boolean;
 };
 
+const readSession = singleFlight(() => supabase.auth.getSession());
+const readIdentity = singleFlight(() => supabase.auth.getUser());
 async function loadSession(): Promise<SessionInfo | null> {
-  const deadline=Date.now()+30000;
-  const {data:sessionState}=await accessStep("session",()=>supabase.auth.getSession(),deadline);
+  const deadline=Date.now()+60000;
+  // The pinned SDK owns a bounded ~30s refresh/backoff cycle. Do not abandon
+  // it at 8s and start another session operation while it is still running.
+  const {data:sessionState}=await accessStep("session",readSession,deadline,35000);
   if(!sessionState.session){setAccessDiagnosticIdentity(undefined);return null;}
   setAccessDiagnosticIdentity(sessionState.session.access_token);
   let userResult;
-  try { userResult=await accessStep("identity",()=>supabase.auth.getUser(),deadline); }
+  try { userResult=await accessStep("identity",readIdentity,deadline,15000); }
   catch(error){if(error instanceof AccessLoadError&&error.category==="auth")return null;throw error;}
   const data=userResult.data;
   if(!data.user)return null;
