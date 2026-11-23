@@ -6,6 +6,8 @@ import type { RealtimeReason } from './realtime-diagnostics';
 type Item={id:string;clientId:string;stage:AccessStage;reason?:RealtimeReason;category:"network"|"timeout"|"auth"|"server"|"missing"|"runtime";route:"login"|"password"|"home"|"activities"|"other";build:typeof DIAGNOSTIC_BUILD|'access-diag-20261119-v1';attempts:number;elapsedMs:number;frames:string[];queuedAt:number;release?:string;visibility?:'visible'|'hidden'|'unknown';online?:boolean};
 let identityToken:string|undefined;
 export function setAccessDiagnosticIdentity(token:string|undefined){identityToken=token;}
+// In-memory only; telemetry must never refresh/read persisted auth storage.
+export function currentTelemetryToken(){return identityToken;}
 const ids=new WeakMap<object,string>();const memory=new Map<string,Item>();const reportAuth=new Map<string,string>();
 const storageKey="nexo:access-diagnostics:v1";let running=false;let clientId:string|undefined;let lastFlush=0;let retriesRemaining=2;let retryTimer:ReturnType<typeof setTimeout>|undefined;
 function scheduleRetry(){if(memory.size&&retriesRemaining>0&&!retryTimer){retriesRemaining--;retryTimer=setTimeout(()=>{retryTimer=undefined;void flushCentralDiagnostics();},Math.max(1000,10000-(Date.now()-lastFlush)));}}

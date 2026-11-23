@@ -1,4 +1,5 @@
-import { recordPerformanceSample } from "./performance.functions";
+import {sendPerformanceSample} from './performance-send';
+import {currentTelemetryToken} from './access-diagnostics-client';
 import { createPerformanceSampler, type PerformanceOperation } from "./performance-policy";
 import type { RealtimeHealthOperation } from './realtime-health';
 const sample = createPerformanceSampler();
@@ -24,14 +25,11 @@ function sendSample(operation:PerformanceOperation|RealtimeHealthOperation,elaps
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3000);
     try {
-      await recordPerformanceSample({
-        data: {
+      await sendPerformanceSample({
           operation,
           durationMs: elapsed,
           success,
-        },
-        signal: controller.signal,
-      });
+      },currentTelemetryToken(),controller.signal);
     } catch {
       /* Telemetry must never break the user's work. */
     } finally {

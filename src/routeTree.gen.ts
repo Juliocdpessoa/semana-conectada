@@ -25,6 +25,7 @@ import { Route as AuthenticatedTransporteProgramadoRouteImport } from './routes/
 import { Route as AuthenticatedAdminDesempenhoRouteImport } from './routes/_authenticated/admin/desempenho'
 import { Route as AuthenticatedAdminUsuariosRouteImport } from './routes/_authenticated/admin/usuarios'
 import { Route as ApiPublicNexoDiagnosticsRouteImport } from './routes/api/public/nexo-diagnostics'
+import { Route as ApiPublicNexoPerformanceRouteImport } from './routes/api/public/nexo-performance'
 import { Route as ApiPublicNexoAccessSplatRouteImport } from './routes/api/public/nexo-access/$'
 
 const IndexRoute = IndexRouteImport.update({
@@ -112,6 +113,12 @@ const ApiPublicNexoDiagnosticsRoute =
     path: '/api/public/nexo-diagnostics',
     getParentRoute: () => rootRouteImport,
   } as any)
+const ApiPublicNexoPerformanceRoute =
+  ApiPublicNexoPerformanceRouteImport.update({
+    id: '/api/public/nexo-performance',
+    path: '/api/public/nexo-performance',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const ApiPublicNexoAccessSplatRoute =
   ApiPublicNexoAccessSplatRouteImport.update({
     id: '/api/public/nexo-access/$',
@@ -135,6 +142,7 @@ export interface FileRoutesByFullPath {
   '/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-diagnostics': typeof ApiPublicNexoDiagnosticsRoute
+  '/api/public/nexo-performance': typeof ApiPublicNexoPerformanceRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
 export interface FileRoutesByTo {
@@ -153,6 +161,7 @@ export interface FileRoutesByTo {
   '/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-diagnostics': typeof ApiPublicNexoDiagnosticsRoute
+  '/api/public/nexo-performance': typeof ApiPublicNexoPerformanceRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
 export interface FileRoutesById {
@@ -173,6 +182,7 @@ export interface FileRoutesById {
   '/_authenticated/admin/desempenho': typeof AuthenticatedAdminDesempenhoRoute
   '/_authenticated/admin/usuarios': typeof AuthenticatedAdminUsuariosRoute
   '/api/public/nexo-diagnostics': typeof ApiPublicNexoDiagnosticsRoute
+  '/api/public/nexo-performance': typeof ApiPublicNexoPerformanceRoute
   '/api/public/nexo-access/$': typeof ApiPublicNexoAccessSplatRoute
 }
 export interface FileRouteTypes {
@@ -193,6 +203,7 @@ export interface FileRouteTypes {
     | '/admin/desempenho'
     | '/admin/usuarios'
     | '/api/public/nexo-diagnostics'
+    | '/api/public/nexo-performance'
     | '/api/public/nexo-access/$'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -211,6 +222,7 @@ export interface FileRouteTypes {
     | '/admin/desempenho'
     | '/admin/usuarios'
     | '/api/public/nexo-diagnostics'
+    | '/api/public/nexo-performance'
     | '/api/public/nexo-access/$'
   id:
     | '__root__'
@@ -230,6 +242,7 @@ export interface FileRouteTypes {
     | '/_authenticated/admin/desempenho'
     | '/_authenticated/admin/usuarios'
     | '/api/public/nexo-diagnostics'
+    | '/api/public/nexo-performance'
     | '/api/public/nexo-access/$'
   fileRoutesById: FileRoutesById
 }
@@ -241,6 +254,7 @@ export interface RootRouteChildren {
   RedefinirSenhaRoute: typeof RedefinirSenhaRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ApiPublicNexoDiagnosticsRoute: typeof ApiPublicNexoDiagnosticsRoute
+  ApiPublicNexoPerformanceRoute: typeof ApiPublicNexoPerformanceRoute
   ApiPublicNexoAccessSplatRoute: typeof ApiPublicNexoAccessSplatRoute
 }
 
@@ -358,6 +372,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicNexoDiagnosticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/public/nexo-performance': {
+      id: '/api/public/nexo-performance'
+      path: '/api/public/nexo-performance'
+      fullPath: '/api/public/nexo-performance'
+      preLoaderRoute: typeof ApiPublicNexoPerformanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/public/nexo-access/$': {
       id: '/api/public/nexo-access/$'
       path: '/api/public/nexo-access/$'
@@ -404,6 +425,7 @@ const rootRouteChildren: RootRouteChildren = {
   RedefinirSenhaRoute: RedefinirSenhaRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   ApiPublicNexoDiagnosticsRoute: ApiPublicNexoDiagnosticsRoute,
+  ApiPublicNexoPerformanceRoute: ApiPublicNexoPerformanceRoute,
   ApiPublicNexoAccessSplatRoute: ApiPublicNexoAccessSplatRoute,
 }
 export const routeTree = rootRouteImport
