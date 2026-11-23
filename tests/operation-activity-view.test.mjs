@@ -26,7 +26,7 @@ test('Planning/Admin writes remain authorized, Consulta/Leader SAP access remain
  assert.equal(access(['operation','consultation']).canImportSap,false);
 });
 test('Import handler and preview modal require write permission, not visibility',()=>{
- assert.match(page,/async function prepareSapImport\(file: File\) \{\s*if \(!canImportSap\) return;/);
+ assert.match(page,/async function prepareSapImport\(file: File\) \{\s*if \(!canImportSap\s*\|\|\s*!activeWeek\.data\) return;/);
  assert.match(page,/if \(!canImportSap \|\| !activeWeek\.data/);
  assert.match(page,/canImportSap && sapImportPreview && activeWeek\.data/);
 });

@@ -16,6 +16,8 @@ import { reportCentralDiagnostic } from '@/lib/access-diagnostics-client';
 import { reportPerformance, reportRealtimeHealth } from '@/lib/performance-client';
 import {createRealtimeHealth} from '@/lib/realtime-health';
 import {getActivityRevision} from '@/lib/realtime-recovery.functions';
+import {importActivitySap} from '@/lib/sap-import.functions';
+import {sapImportUnconfirmedMessage} from '@/lib/sap-import-policy';
 import { performanceOperation } from '@/lib/performance-policy';
 import {
   updateActivity,
@@ -228,6 +230,8 @@ type SapStoredRow = Pick<
 >;
 
 type SapImportPreview = {
+  requestId:string;
+  weekId:string;
   fileName: string;
   rows: SapImportRow[];
   confirmed: number;
@@ -372,7 +376,7 @@ function sapDate(value: unknown, XLSX: any): string | null {
   return iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : null;
 }
 
-async function parseSapWorkbook(file: File): Promise<SapImportPreview> {
+async function parseSapWorkbook(file: File): Promise<Omit<SapImportPreview,'requestId'|'weekId'>> {
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
   const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -1949,10 +1953,11 @@ function WeeklyActivitiesPage() {
   }
 
   async function prepareSapImport(file: File) {
-    if (!canImportSap) return;
+    if (!canImportSap||!activeWeek.data) return;
+    const weekId=activeWeek.data.id;
     try {
       setIsSapImporting(true);
-      setSapImportPreview(await parseSapWorkbook(file));
+      setSapImportPreview({...await parseSapWorkbook(file),requestId:crypto.randomUUID(),weekId});
     } catch (error: any) {
       toast.error(error?.message ?? "Não foi possível ler a planilha SAP.");
       setSapImportPreview(null);
@@ -1962,29 +1967,33 @@ function WeeklyActivitiesPage() {
     }
   }
 
+  const saveSapImport=useServerFn(importActivitySap);
   async function confirmSapImport() {
     if (!canImportSap || !activeWeek.data || !sapImportPreview || isSapImporting) return;
+    if(activeWeek.data.id!==sapImportPreview.weekId){toast.error('A semana selecionada mudou. Selecione novamente a planilha para a semana correta.');return;}
     setIsSapImporting(true);
     try {
-      const { data, error } = await (supabase as any).rpc("import_sap_confirmations", {
-        p_week_id: activeWeek.data.id,
-        p_source_file_name: sapImportPreview.fileName,
-        p_rows: sapImportPreview.rows,
-      });
-      if (error) throw error;
-      const count = Number(data?.count ?? sapImportPreview.rows.length);
+      const result = await saveSapImport({data:{
+        requestId:sapImportPreview.requestId,
+        weekId: sapImportPreview.weekId,
+        fileName: sapImportPreview.fileName,
+        rows: sapImportPreview.rows,
+      }});
+      if (!result.ok) {toast.error(result.error);return;}
+      const count = result.count;
       toast.success(
-        `${count.toLocaleString("pt-BR")} registros SAP importados para ${activeWeek.data.label}.`,
+        result.replayed?`Esta importação SAP já estava salva (${count.toLocaleString('pt-BR')} registros).`:`${count.toLocaleString("pt-BR")} registros SAP importados para ${activeWeek.data.label}.`,
       );
       setSapImportPreview(null);
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["sap-confirmation-overview", activeWeek.data.id] }),
         qc.invalidateQueries({ queryKey: ["sap-confirmation-latest-import", activeWeek.data.id] }),
+        qc.invalidateQueries({ queryKey: ["sap-outside-schedule", activeWeek.data.id] }),
         qc.invalidateQueries({ queryKey: ["sap-earned-progress"] }),
         qc.invalidateQueries({ queryKey: ["activities", activeWeek.data.id] }),
-      ]);
+      ]).catch(()=>toast.info('Importação SAP salva. Clique em Atualizar para recarregar os indicadores.'));
     } catch (error: any) {
-      toast.error(error?.message ?? "Não foi possível importar as confirmações SAP.");
+      toast.error(sapImportUnconfirmedMessage());
     } finally {
       setIsSapImporting(false);
     }
@@ -3461,6 +3470,7 @@ function WeeklyActivitiesPage() {
       {canImportSap && sapImportPreview && activeWeek.data && (
         <Modal
           title="Conferir importação SAP"
+          closeOnBackdropClick={false}
           description={`A carga ficará vinculada à obra atual e à ${activeWeek.data.label}.`}
           size="lg"
           onClose={() => !isSapImporting && setSapImportPreview(null)}
