@@ -8,6 +8,7 @@ import {toast} from "sonner";
 import type {SessionInfo} from "@/routes/_authenticated/route";
 import {continuousKey,fiocruzColumns,parseContinuousGrid,type ContinuousConfig} from "@/lib/continuous-activities";
 import {createRealtimeFallback} from '@/lib/realtime-fallback';
+import {createCoalescedReadRefresh} from '@/lib/coalesced-read-refresh';
 import {createRealtimeHealth} from '@/lib/realtime-health';
 import {reportRealtimeHealth} from '@/lib/performance-client';
 import {createRealtimeDiagnostics} from '@/lib/realtime-diagnostics';
@@ -38,8 +39,13 @@ export function ContinuousActivities({session,cfg,importsOnly=false}:{session:Se
  useEffect(()=>{
   if(importsOnly)return;
   let disposed=false,changedTimer:ReturnType<typeof setTimeout>|undefined;
-  const refresh=()=>Promise.all(['continuous-activities','continuous-options','continuous-status-counts'].map(key=>
-   qc.refetchQueries({queryKey:[key,session.worksiteId,session.userId],type:'active'},{cancelRefetch:false,throwOnError:true})));
+  const readKeys=['continuous-activities','continuous-options','continuous-status-counts'];
+  const canRead=()=>!disposed&&document.visibilityState==='visible'&&navigator.onLine!==false;
+  const reconciler=createCoalescedReadRefresh({canRead,
+   hasPending:()=>readKeys.some(key=>qc.isFetching({queryKey:[key,session.worksiteId,session.userId],type:'active'})>0),
+   read:()=>Promise.all(readKeys.map(key=>qc.refetchQueries({queryKey:[key,session.worksiteId,session.userId],type:'active'},{cancelRefetch:false,throwOnError:true}))),
+  });
+  const refresh=()=>reconciler.request();
   const fallback=createRealtimeFallback({refresh,reconcileMs:60000,canRefresh:()=>document.visibilityState==='visible'&&navigator.onLine!==false});
   const health=createRealtimeHealth(reportRealtimeHealth);
   const diagnostics=createRealtimeDiagnostics(f=>{if(!disposed)reportCentralDiagnostic(new AccessLoadError('realtime',f.category,1,f.elapsedMs,f.reason),'/atividades');});
@@ -49,7 +55,7 @@ export function ContinuousActivities({session,cfg,importsOnly=false}:{session:Se
     changedTimer=setTimeout(()=>{changedTimer=undefined;if(!disposed&&document.visibilityState==='visible'&&navigator.onLine!==false)void refresh().catch(()=>{});},2000);
    }).subscribe((status:string,error:unknown)=>{if(!disposed){fallback.status(status);health.status(status);diagnostics.status(status,error);}});
   const resume=()=>fallback.resume();document.addEventListener('visibilitychange',resume);window.addEventListener('online',resume);
-  return()=>{disposed=true;fallback.dispose();if(changedTimer)clearTimeout(changedTimer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);void db.removeChannel(channel);};
+  return()=>{disposed=true;fallback.dispose();reconciler.dispose();if(changedTimer)clearTimeout(changedTimer);document.removeEventListener('visibilitychange',resume);window.removeEventListener('online',resume);void db.removeChannel(channel);};
  },[importsOnly,qc,session.worksiteId,session.userId]);
  async function save(){setBusy(true);try{const normalized={...draft};for(const f of cfg.fields){if(normalized[f.key]==="")normalized[f.key]=null;if(f.type==="number"&&normalized[f.key]!=null)normalized[f.key]=Number(String(normalized[f.key]).replace(",","."));}
  const {error}=await db.rpc("save_continuous_activity",{p_worksite:session.worksiteId,p_key:continuousKey(normalized),p_data:normalized,p_id:editing?.id??null,p_version:editing?.version??0});if(error)throw error;setEditing(null);setCreating(false);await reload();toast.success("Registro salvo com histórico.");}catch(e:any){toast.error(e.message??"Erro ao salvar");}finally{setBusy(false);}}

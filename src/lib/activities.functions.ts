@@ -194,22 +194,11 @@ export const updateActivity = createServerFn({ method: "POST" })
       return { ok: false as const, error: error.message };
     }
 
-    const { data: updated, error: updatedError } = await supabase
-      .from("activities")
-      .select("id, version, status, justification, observation, reported_by_name, reported_at")
-      .eq("id", data.activityId)
-      .maybeSingle();
-    if (updatedError) return { ok: false as const, error: updatedError.message };
-    if (!updated) {
-      // Conflict: fetch current
-      const { data: current } = await supabase
-        .from("activities")
-        .select("id, version, status, justification, observation, planning_data, reported_by_name")
-        .eq("id", data.activityId)
-        .maybeSingle();
-      return { ok: false as const, conflict: true, current };
-    }
-    return { ok: true as const, updated };
+    // The canonical transaction has acknowledged the write. A separate read
+    // could fail (or observe another user's newer edit) after that commit.
+    // The UI invalidates its reads after success; do not turn readback failure
+    // into a failed write or fabricate a saved snapshot/version here.
+    return { ok: true as const };
   });
 
 const bulkSchema = z.object({
