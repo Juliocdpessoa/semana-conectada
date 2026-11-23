@@ -107,3 +107,26 @@ test('disposing while a revision probe is pending cannot start a late heavy read
  let reads=0,finish;const f=fixture(async()=>{reads++;},()=>0,()=>new Promise(resolve=>finish=resolve));
  await f.advance(5000);f.controller.dispose();finish(true);await flush();assert.equal(reads,0);assert.equal(f.jobs.size,0);
 });
+
+test('failed probes cannot prevent bounded full reconciliation, healthy or disconnected',async()=>{
+ for(const healthy of [false,true]){
+  let reads=0;const f=fixture(async()=>{reads++;},()=>0,async()=>{throw Error('probe unavailable');},60000);
+  if(healthy)f.controller.status('SUBSCRIBED');
+  await f.advance(healthy?60000:5000);assert.equal(reads,1);
+  for(let i=0;i<3;i++){await f.advance(15000);f.controller.resume();await flush();}
+  assert.equal(reads,1);
+  await f.advance(60000);assert.ok(reads>=2&&reads<=3);f.controller.dispose();
+ }
+});
+test('failed probes do not start full reads after disposal or visibility loss',async()=>{
+ for(const dispose of [false,true]){
+  let reads=0,fail;const f=fixture(async()=>{reads++;},()=>0,()=>new Promise((_r,reject)=>fail=reject));
+  await f.advance(5000);if(dispose)f.controller.dispose();else f.visible(false);
+  fail(Error('failed'));await flush();assert.equal(reads,0);f.controller.dispose();
+ }
+});
+test('failed degraded full reads retain a minute cooldown and never overlap',async()=>{
+ let reads=0;const f=fixture(async()=>{reads++;throw Error('offline');},()=>0,async()=>{throw Error('probe');});
+ await f.advance(5000);assert.equal(reads,1);await f.advance(59000);assert.equal(reads,1);
+ await f.advance(60000);assert.equal(reads,2);f.controller.dispose();
+});

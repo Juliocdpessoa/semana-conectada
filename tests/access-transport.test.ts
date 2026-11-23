@@ -13,6 +13,28 @@ const APP = "https://www.nexoprog.com.br";
 const UID = "00000000-0000-0000-0000-000000000001";
 const TOKEN = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJ1MSJ9.signature-user-one";
 
+test('hung operational reads cancel once and select relay only for the next call',async()=>{
+ let calls=0,failed=false,aborted=false;
+ const hint={useRelay:()=>failed,markDirectFailed:()=>{failed=true;}};
+ const transport=createAccessFetch((async(_url,init)=>{calls++;init?.signal?.addEventListener('abort',()=>{aborted=true;});return new Promise(()=>{});}) as typeof fetch,
+  {supabaseUrl:UP,relayOrigin:APP,hint,readTimeoutMs:10});
+ await expect(transport(`${UP}/rest/v1/rpc/get_activities_page`,{method:'POST',body:'{}'})).rejects.toMatchObject({name:'TimeoutError'});
+ expect(calls).toBe(1);expect(aborted).toBe(true);expect(failed).toBe(true);
+});
+test('caller cancellation does not poison operational route preference',async()=>{
+ let failed=false;const caller=new AbortController();
+ const transport=createAccessFetch((async()=>new Promise(()=>{})) as typeof fetch,
+  {supabaseUrl:UP,relayOrigin:APP,hint:{useRelay:()=>false,markDirectFailed:()=>{failed=true;}},readTimeoutMs:1000});
+ const read=transport(`${UP}/rest/v1/rpc/get_activities_page`,{method:'POST',body:'{}',signal:caller.signal});
+ caller.abort();await expect(read).rejects.toMatchObject({name:'AbortError'});expect(failed).toBe(false);
+});
+test('operational deadline does not wrap non-allowlisted writes',async()=>{
+ let signal:AbortSignal|null|undefined;
+ const transport=createAccessFetch((async(_url,init)=>{signal=init?.signal;return json({ok:true});}) as typeof fetch,
+  {supabaseUrl:UP,relayOrigin:APP,hint:{useRelay:()=>false,markDirectFailed:()=>{}},readTimeoutMs:1});
+ await transport(`${UP}/rest/v1/activities`,{method:'PATCH',body:'{}'});expect(signal).toBeUndefined();
+});
+
 function memStorage() {
   const m = new Map<string, string>();
   return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => void m.set(k, v), m };

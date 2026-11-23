@@ -1160,6 +1160,7 @@ function WeeklyActivitiesPage() {
       reconcileMs:60000,
       canRefresh: () => document.visibilityState === "visible" && navigator.onLine !== false,
       hasChanges:async()=>{
+        pendingRevision=undefined;
         const controller=new AbortController();probeController=controller;
         const timer=setTimeout(()=>controller.abort(),6000);
         try{

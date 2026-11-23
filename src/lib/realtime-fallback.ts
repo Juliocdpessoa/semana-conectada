@@ -12,7 +12,7 @@ export function createRealtimeFallback(options:Options){
  const setTimer=options.setTimer??setTimeout,clearTimer=options.clearTimer??clearTimeout;
  const now=options.now??Date.now,jitter=(n:number)=>Math.floor((options.random??Math.random)()*n);
  let timer:ReturnType<typeof setTimeout>|undefined,healthy=false,disposed=false,running=false,disconnected=false;
- let lastStarted:number|undefined,lastFull:number|undefined,failures=0,pendingForce=false;
+ let lastStarted:number|undefined,lastFull:number|undefined,lastProbeFailureRead:number|undefined,failures=0,pendingForce=false;
  const cancel=()=>{if(timer!==undefined)clearTimer(timer);timer=undefined;};
  function schedule(delay?:number){
   if(disposed||(healthy&&!options.reconcileMs)||timer!==undefined||running)return;
@@ -25,8 +25,19 @@ export function createRealtimeFallback(options:Options){
   if(!options.canRefresh()){schedule(60000);return;}
   running=true;lastStarted=now();if(!healthy)options.onFallback?.(true);
   try{
-   const changed=options.hasChanges?await options.hasChanges():true;
+   let changed=true,probeFailed=false;
+   try{changed=options.hasChanges?await options.hasChanges():true;}
+   catch{probeFailed=true;}
    if(disposed||!options.canRefresh())return;
+   // A revision probe is an optimization, not a prerequisite for an authorized
+   // list read. Bound degraded full-read attempts even when the probe stays down.
+   if(probeFailed){
+    failures++;
+    if(lastProbeFailureRead===undefined||now()-lastProbeFailureRead>=60000){
+     lastProbeFailureRead=now();await options.refresh();lastFull=now();
+    }
+    return;
+   }
    // Even when many tasks change, bound heavy fallback reads per visible tab.
    if(force||lastFull===undefined||(changed&&now()-lastFull>=20000)||now()-lastFull>=60000){await options.refresh();lastFull=now();}
    failures=0;

@@ -6,6 +6,7 @@
 // sign-in, refresh, logout) whose outcome was ambiguous is never sent again with
 // the same credentials; repeats get a local "not repeated" answer instead.
 import { ACCESS_RELAY_PREFIX, matchAccessOperation, type AccessOperationKind } from "./access-transport-policy";
+import { fetchReadWithDeadline } from './read-fetch-deadline';
 
 export const ACCESS_ROUTE_HINT_KEY = "nexo:access-route:v1";
 export const ACCESS_ROUTE_HINT_TTL_MS = 6 * 60 * 60 * 1000;
@@ -127,6 +128,8 @@ export function createAccessFetch(
     preferAccessRelay?: boolean;
     /** Bounds SDK auth fetches, which do not receive the route's abort signal. */
     authTimeoutMs?: number;
+    /** Test override; production uses the operation's existing read budget. */
+    readTimeoutMs?: number;
   },
 ): typeof fetch {
   const supabaseOrigin = new URL(options.supabaseUrl).origin;
@@ -159,15 +162,19 @@ export function createAccessFetch(
     else init?.signal?.addEventListener("abort", forwardAbort, { once: true });
     const authTimer = authController ? setTimeout(() => authController.abort(), options.authTimeoutMs ?? 12_000) : undefined;
     const requestInit = authController ? { ...init, signal: authController.signal } : init;
+    const operationalRead=op.kind==='rpc-read'||op.kind==='read-data';
+    const requestFetch:typeof fetch=operationalRead
+      ? (url,readInit)=>fetchReadWithDeadline(base,url,readInit,options.readTimeoutMs??(op.timeoutMs+5000),op.maxResponseBytes)
+      : base;
     try {
       const response = viaRelay
-        ? await base(`${options.relayOrigin}${ACCESS_RELAY_PREFIX}${url.pathname}${url.search}`, {
+        ? await requestFetch(`${options.relayOrigin}${ACCESS_RELAY_PREFIX}${url.pathname}${url.search}`, {
             ...requestInit,
             credentials: "omit",
             cache: "no-store",
             redirect: "error",
           })
-        : await base(input, requestInit);
+        : await requestFetch(input, requestInit);
       if (ttl && (response.status >= 500 || response.headers.get(ACCESS_OUTCOME_HEADER) === "ambiguous"))
         guard.mark(key, ttl);
       // A fixed gate route alone is not evidence operational direct reads fail.
@@ -175,7 +182,8 @@ export function createAccessFetch(
       if (viaRelay && response.ok && relayPreferred) options.hint.markRelaySuccess?.();
       return response;
     } catch (error) {
-      if (!viaRelay && isConnectionFailure(error, requestInit?.signal, now() - started)) options.hint.markDirectFailed();
+      if (!viaRelay && !init?.signal?.aborted && (isConnectionFailure(error, requestInit?.signal, now() - started)||
+          (operationalRead&&errorName(error)==='TimeoutError'))) options.hint.markDirectFailed();
       // Failed to fetch can also mean the response was lost after processing.
       // A rotating refresh token must NEVER be replayed on that assumption.
       // Password grants retain the existing bounded login retry; they do not
