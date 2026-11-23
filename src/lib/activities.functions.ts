@@ -654,67 +654,13 @@ export const setUserApproval = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .validator((data: unknown) => approveSchema.parse(data))
   .handler(async ({ data, context }) => {
-    const { userId } = context;
-    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-    const [{ data: actor }, { data: target, error: targetError }] = await Promise.all([
-      supabaseAdmin
-        .from("profiles")
-        .select("email, worksite_id, approval_status")
-        .eq("id", userId)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("profiles")
-        .select("id, worksite_id")
-        .eq("id", data.targetUserId)
-        .maybeSingle(),
-    ]);
-    if (targetError) return { ok: false as const, error: targetError.message };
-    if (!actor || actor.approval_status !== "approved" || !target) {
-      return { ok: false as const, error: "Usuário ou administrador não encontrado." };
-    }
-    const isGlobalAdmin = actor.email?.toLowerCase() === "julio.pessoa@normatel.com.br";
-    const { data: localAdmin } = isGlobalAdmin ? { data: null } : await (supabaseAdmin as any)
-      .from("worksite_memberships").select("user_id").eq("user_id", userId)
-      .eq("worksite_id", actor.worksite_id).eq("is_worksite_admin", true).maybeSingle();
-    const { data: targetMembership } = await (supabaseAdmin as any)
-      .from("worksite_memberships").select("user_id").eq("user_id", data.targetUserId)
-      .eq("worksite_id", actor.worksite_id).maybeSingle();
-    if (!isGlobalAdmin && (!localAdmin || !targetMembership)) {
-      return { ok: false as const, error: "Você só pode aprovar usuários da sua obra." };
-    }
-    if (!isGlobalAdmin && data.roles?.includes("admin")) {
-      return { ok: false as const, error: "Somente o administrador geral pode conceder o perfil administrador." };
-    }
-    if (data.approvalStatus === "approved" && !data.roles) {
-      const { count: currentRoleCount, error: roleCheckError } = await supabaseAdmin
-        .from("user_roles")
-        .select("id", { count: "exact", head: true })
-        .eq("user_id", data.targetUserId);
-      if (roleCheckError) return { ok: false as const, error: roleCheckError.message };
-      if (!currentRoleCount) {
-        return { ok: false as const, error: "Selecione e salve pelo menos um perfil antes de aprovar o usuário." };
-      }
-    }
-    const { error: pErr } = await supabaseAdmin
-      .from("profiles")
-      .update({
-        approval_status: data.approvalStatus,
-        approved_by: data.approvalStatus === "approved" ? userId : null,
-        approved_at: data.approvalStatus === "approved" ? new Date().toISOString() : null,
-      })
-      .eq("id", data.targetUserId);
-    if (pErr) return { ok: false as const, error: pErr.message };
-    if (data.roles) {
-      const uniqueRoles = [...new Set(data.roles)];
-      const { error: deleteError } = await supabaseAdmin
-        .from("user_roles")
-        .delete()
-        .eq("user_id", data.targetUserId);
-      if (deleteError) return { ok: false as const, error: deleteError.message };
-      const { error: rErr } = await supabaseAdmin
-        .from("user_roles")
-        .insert(uniqueRoles.map((role) => ({ user_id: data.targetUserId, role })));
-      if (rErr) return { ok: false as const, error: rErr.message };
-    }
+    // One caller-authenticated RPC owns authorization and the entire write.
+    // Never split role replacement across service-client HTTP requests.
+    const {data:result,error}=await (context.supabase as any).rpc('set_nexo_user_approval',{
+      p_target_user_id:data.targetUserId,p_approval_status:data.approvalStatus,p_roles:data.roles??null,
+    }).abortSignal(AbortSignal.timeout(15000));
+    if(error)return {ok:false as const,error:['PT400','PT403'].includes(error.code)
+      ? error.message : 'Não foi possível confirmar a alteração. Atualize a lista antes de tentar novamente.'};
+    if(result?.ok!==true)return {ok:false as const,error:'Não foi possível confirmar a alteração. Atualize a lista antes de tentar novamente.'};
     return { ok: true as const };
   });
