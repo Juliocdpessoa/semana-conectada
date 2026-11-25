@@ -26,14 +26,21 @@ export function evolutionWindow(weeks: EvolutionWeek[], page = 0) {
   };
 }
 
-export function evolutionCenters(reports: MonthlyRsWeek[]) {
+export function evolutionSpecialties(reports: MonthlyRsWeek[]) {
+  return [...new Set(reports.flatMap(report => (report.calculation?.rows ?? [])
+    .filter(row => row.includedInRs && (row.available > 0 || row.programmed > 0) && row.specialty?.trim())
+    .map(row => availabilityKey(row.specialty))))].sort((a,b)=>a.localeCompare(b,'pt-BR'));
+}
+
+export function evolutionCenters(reports: MonthlyRsWeek[], specialty = '') {
   return [
     ...new Set(
       reports.flatMap((report) =>
         (report.calculation?.centerRows ?? [])
           .filter(
             (row) =>
-              row.includedInRs && (row.available > 0 || row.programmed > 0) && row.center?.trim(),
+              row.includedInRs && (row.available > 0 || row.programmed > 0) && row.center?.trim() &&
+              (!specialty || availabilityKey(row.specialty ?? '') === availabilityKey(specialty)),
           )
           .map((row) => availabilityKey(row.center!)),
       ),
@@ -41,14 +48,18 @@ export function evolutionCenters(reports: MonthlyRsWeek[]) {
   ].sort((a, b) => a.localeCompare(b, "pt-BR"));
 }
 
-export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[], center = "") {
+export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[], center: string|string[] = "", specialty = '') {
+  const selectedCenters = new Set((Array.isArray(center)?center:[center]).filter(Boolean).map(availabilityKey));
+  const filtered = selectedCenters.size > 0 || Boolean(specialty);
   const byId = new Map(reports.map((report) => [report.week.id, report]));
   return weeks.map((week) => {
     const report = byId.get(week.id);
-    const centerRows = center
-      ? (report?.calculation?.centerRows ?? []).filter(
+    // Specialty-only uses its already capped weekly row, not a new center-level cap.
+    const centerRows = filtered
+      ? (selectedCenters.size ? report?.calculation?.centerRows ?? [] : report?.calculation?.rows ?? []).filter(
           (row) =>
-            row.includedInRs && availabilityKey(row.center ?? "") === availabilityKey(center),
+            row.includedInRs && (!specialty || availabilityKey(row.specialty ?? '') === availabilityKey(specialty)) &&
+            (!selectedCenters.size || selectedCenters.has(availabilityKey(row.center ?? ''))),
         )
       : [];
     const available = centerRows.reduce((sum, row) => sum + row.available, 0);
@@ -72,7 +83,7 @@ export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[]
             immediate: 0,
             eep: 0,
           });
-    const result = center
+    const result = filtered
       ? centerBand && { ...centerBand, rs: centerRs! }
       : report?.calculation?.result;
     const rs =
@@ -86,7 +97,7 @@ export function evolutionPoints(weeks: EvolutionWeek[], reports: MonthlyRsWeek[]
       issues: report?.issues?.length
         ? report.issues
         : rs === null
-          ? [center ? "Centro sem base válida de RS nesta semana" : "Sem apuração válida"]
+          ? [filtered ? "Recorte sem base válida de RS nesta semana" : "Sem apuração válida"]
           : [],
     };
   });

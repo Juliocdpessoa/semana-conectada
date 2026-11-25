@@ -2,6 +2,16 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../src/components/weekly-realization-panel.tsx", import.meta.url), "utf8");
+
+test('evolution filters cascade locally, offer searchable multi selection and keep bounded loading',()=>{
+ const ui=readFileSync(new URL('../src/components/rs-weekly-evolution.tsx',import.meta.url),'utf8');
+ assert.match(ui,/evolutionCenters\(query.data \?\? \[\], specialty\)/);
+ assert.match(ui,/setSpecialty\(event.target.value\);setCentersSelected\(\[\]\)/);
+ assert.match(ui,/<ContinuousMultiFilter label="Centros de trabalho"/);
+ assert.match(ui,/Limpar filtros do gráfico/);
+ assert.match(ui,/queryKey: \["rs-weekly-evolution", userId, worksiteId, ids.join\("\|"\), local\]/);
+ assert.match(ui,/staleTime: 300_000/);
+});
 test("evolution appears after the RS table and before memory and simulator", () => {
   const content = source.slice(source.indexOf("function RsContent("));
   assert.ok(content.indexOf('title="Realização Semanal (RS)"') < content.indexOf("{afterResults}"));

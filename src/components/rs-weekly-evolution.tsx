@@ -15,11 +15,13 @@ import {
 import { ChevronLeft, ChevronRight, RefreshCw } from "lucide-react";
 import { Panel } from "@/components/ui-kit";
 import { RsAlertBadge } from "@/components/rs-alert-badge";
+import { ContinuousMultiFilter } from '@/components/continuous-multi-filter';
 import { rsTransport as supabase } from "@/lib/rs-transport";
 import type { MonthlyRsWeek } from "@/lib/monthly-realization";
 import {
   evolutionColor,
   evolutionCenters,
+  evolutionSpecialties,
   evolutionPoints,
   evolutionWindow,
   type EvolutionWeek,
@@ -43,8 +45,9 @@ export function RsWeeklyEvolution({
   selectedIds: string[];
 }) {
   const [page, setPage] = useState(0);
-  const [center, setCenter] = useState("");
-  useEffect(() => setCenter(""), [userId, worksiteId]);
+  const [centersSelected, setCentersSelected] = useState<string[]>([]);
+  const [specialty, setSpecialty] = useState('');
+  useEffect(() => {setCentersSelected([]);setSpecialty('');}, [userId, worksiteId]);
   const [visible, setVisible] = useState(false);
   const anchor = useRef<HTMLDivElement>(null);
   const scope = weeks
@@ -94,14 +97,15 @@ export function RsWeeklyEvolution({
       return data.weeks as MonthlyRsWeek[];
     },
   });
-  const centers = evolutionCenters(query.data ?? []);
-  const points = evolutionPoints(window.weeks, query.data ?? [], center);
+  const specialties = evolutionSpecialties(query.data ?? []);
+  const centers = evolutionCenters(query.data ?? [], specialty);
+  const points = evolutionPoints(window.weeks, query.data ?? [], centersSelected, specialty);
   const measured = points.filter((point) => point.rs !== null);
   return (
     <div ref={anchor} className="mt-5">
       <Panel
         title="Evolução semanal do RS"
-        description={`Ano e mês dos filtros · ${local || "IARI + ROTINA"} · ${center || "Todos os centros do RS"} · até 12 semanas por página`}
+        description={`Ano e mês dos filtros · ${local || "IARI + ROTINA"} · ${specialty || 'Todas as especialidades'} · ${centersSelected.length?centersSelected.join(', '):"Todos os centros do RS"} · até 12 semanas por página`}
       >
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <p className="text-xs text-muted-foreground">
@@ -110,23 +114,26 @@ export function RsWeeklyEvolution({
           </p>
           <div className="flex flex-wrap items-end gap-2">
             <label className="text-xs">
-              <span className="mb-1 block">Centro de trabalho</span>
+              <span className="mb-1 block">Especialidade</span>
               <select
                 className="input-base h-8 min-w-[12rem]"
-                value={center}
-                onChange={(event) => setCenter(event.target.value)}
+                aria-label="Filtrar especialidade da evolução semanal"
+                value={specialty}
+                onChange={(event) => {setSpecialty(event.target.value);setCentersSelected([]);}}
               >
-                <option value="">Todos os centros do RS</option>
-                {center && !centers.includes(center) && (
-                  <option value={center}>{center} · sem base neste recorte</option>
+                <option value="">Todas as especialidades do RS</option>
+                {specialty && !specialties.includes(specialty) && (
+                  <option value={specialty}>{specialty} · sem base neste recorte</option>
                 )}
-                {centers.map((item) => (
+                {specialties.map((item) => (
                   <option key={item} value={item}>
                     {item}
                   </option>
                 ))}
               </select>
             </label>
+            <ContinuousMultiFilter label="Centros de trabalho" options={centers.map(value=>({value,label:value}))} selected={centersSelected} onChange={setCentersSelected} loading={query.isFetching}/>
+            {(specialty || centersSelected.length>0) && <button type="button" className="btn-outline h-8" onClick={()=>{setSpecialty('');setCentersSelected([]);}}>Limpar filtros do gráfico</button>}
             <button
               className="btn-outline h-8"
               disabled={window.page >= window.pages - 1}

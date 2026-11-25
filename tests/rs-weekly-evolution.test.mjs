@@ -6,6 +6,7 @@ import {
   evolutionColor,
   evolutionLabel,
   evolutionCenters,
+  evolutionSpecialties,
 } from "../src/lib/rs-weekly-evolution.ts";
 const week = (id) => ({
   id,
@@ -13,6 +14,26 @@ const week = (id) => ({
   label: `Semana ${id}`,
   start_date: "2026-10-01",
   end_date: "2026-10-05",
+});
+
+test('specialties cascade centers and preserve capped specialty results and frozen history',()=>{
+ const w=week('48');
+ const row=(specialty,center,available,considered,rs,includedInRs=true)=>({specialty,center,available,considered,rs,includedInRs,programmed:available});
+ const report={week:w,valid:true,isFrozen:true,calculation:{result:{rs:20,factor:-.02},
+  rows:[row('CALD','',200,196,98),row('SOLD','',100,50,50),row('ALP','',100,99,99,false)],
+  centerRows:[row('CALD','CALD',50,25,50),row('CALD','CALD_IARI',150,171,114),row('SOLD','SOLD',100,50,50),row('ALP','ALP',100,99,99,false),row('CALD','ZERO',0,0,null)]}};
+ const before=JSON.stringify(report);
+ assert.deepEqual(evolutionSpecialties([report,report]),['CALD','SOLD']);
+ assert.deepEqual(evolutionCenters([report],'cald'),['CALD','CALD_IARI']);
+ const specialty=evolutionPoints([w],[report],[],'cald')[0];
+ assert.equal(specialty.rs,98);assert.equal(specialty.frozen,true);
+ const combined=evolutionPoints([w],[report],['cald','CALD_IARI','CALD'],'CALD')[0];
+ assert.equal(combined.rs,98); // 196/200; not mean(50,114)=82.
+ assert.equal(combined.factor,0);
+ assert.equal(evolutionPoints([w],[report],['SOLD'],'CALD')[0].rs,null);
+ assert.equal(evolutionPoints([w],[report],[],'MISSING')[0].rs,null);
+ assert.equal(evolutionPoints([w],[report])[0].rs,20);
+ assert.equal(JSON.stringify(report),before);
 });
 test("bounded chronological pages preserve input and reach older history", () => {
   const weeks = Array.from({ length: 26 }, (_, i) => ({
