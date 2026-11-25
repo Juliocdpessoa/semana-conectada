@@ -3,6 +3,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { RefreshCw } from "lucide-react";
 import { PageHeader, Panel } from "@/components/ui-kit";
 import type { PerformanceDashboard } from "@/lib/performance.functions";
+import {occurrenceTriage,performanceTriage} from '@/lib/performance-triage';
 const stages: Record<string, string> = {
   session: "Sessão",
   identity: "Autenticação",
@@ -74,6 +75,7 @@ export function PerformanceDashboardView({
 }) {
   const activityMetrics=data?.metrics.filter(row=>['activities_list','activities_filter'].includes(row.operation))??[];
   const healthMetrics=data?.metrics.filter(row=>row.operation.startsWith('realtime_'))??[];
+  const triage=data?performanceTriage(data):null;
   return (
     <div className="space-y-4">
       <PageHeader
@@ -129,18 +131,38 @@ export function PerformanceDashboardView({
       {query.isPending && <p role="status">Consultando os indicadores…</p>}
       {data && (
         <>
+          {triage && <Panel title="O que merece atenção">
+            <div className="grid gap-3 md:grid-cols-3">
+              <section className={`rounded border p-3 ${triage.readFailures>0||triage.attentionDiagnostics>0||triage.databaseAttention?'border-destructive':'border-border'}`}>
+                <h3 className="text-sm font-semibold">Verificar falhas</h3>
+                <p className="mt-2 text-sm">{triage.readFailures} falhas de consulta amostradas · {triage.attentionDiagnostics} diagnósticos de acesso, aplicativo ou serviço.</p>
+                <p className="mt-2 text-xs text-muted-foreground">{data.database?(triage.databaseAttention?'Banco com sinal de atenção no instante consultado.':'Banco sem bloqueios, consultas API acima de 5 s ou slots inativos no instante consultado.'):'Situação global do banco restrita à administração global.'} As duas contagens podem se referir ao mesmo problema; não devem ser somadas.</p>
+              </section>
+              <section className="rounded border border-border p-3">
+                <h3 className="text-sm font-semibold">Retorno de conexão confirmado</h3>
+                <p className="mt-2 text-lg tabular-nums">{triage.recoveries}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Reinscrições no canal após falha observada. Não confirmam a entrega de cada tarefa nem ausência de intervenção do usuário.</p>
+              </section>
+              <section className="rounded border border-amber-500 p-3">
+                <h3 className="text-sm font-semibold">Impacto não confirmado</h3>
+                <p className="mt-2 text-lg tabular-nums">{triage.unconfirmedRealtime}</p>
+                <p className="mt-2 text-xs text-muted-foreground">Diagnósticos de transporte, timeout ou encerramento. Não indicam por si só queda do aplicativo ou falha persistente.</p>
+              </section>
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground">Desconexões e retornos têm cobertura diferente e não estão vinculados por episódio. Não subtraímos as contagens nem classificamos ausência de retorno como queda persistente. Lentidão dos salvamentos, atraso por tarefa e perda de dados ainda não são medidos aqui.</p>
+          </Panel>}
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric
-              label="Erros recebidos"
+              label="Diagnósticos recebidos"
               value={data.diagnostics.total}
               detail={`No período selecionado · ${data.diagnostics.browsers} navegadores com registro`}
-              attention={data.diagnostics.total > 0}
+              attention={false}
             />
             <Metric
-              label="Falhas de tempo real"
+              label="Eventos de tempo real"
               value={data.diagnostics.realtime}
               detail="Registros de conexão; não equivalem a usuários desconectados agora."
-              attention={data.diagnostics.realtime > 0}
+              attention={false}
             />
             <Metric
               label="Consultas acima de 5 segundos"
@@ -281,6 +303,7 @@ export function PerformanceDashboardView({
                     <th className="p-2">Etapa</th>
                     <th className="p-2">Categoria</th>
                     <th className="p-2">Conexão</th>
+                    <th className="p-2">Interpretação</th>
                     <th className="p-2">Código de atendimento</th>
                   </tr>
                 </thead>
@@ -295,6 +318,7 @@ export function PerformanceDashboardView({
                           ? (reasons[row.realtime_reason] ?? row.realtime_reason)
                           : "—"}
                       </td>
+                      <td className={`p-2 ${occurrenceTriage(row).kind==='attention'?'text-destructive':'text-muted-foreground'}`}>{occurrenceTriage(row).label}</td>
                       <td className="p-2 font-mono">{row.id}</td>
                     </tr>
                   ))}
