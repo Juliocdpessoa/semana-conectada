@@ -133,27 +133,32 @@ export function RsWeeklyEvolution({
               </select>
             </label>
             <ContinuousMultiFilter label="Centros de trabalho" options={centers.map(value=>({value,label:value}))} selected={centersSelected} onChange={setCentersSelected} loading={query.isFetching}/>
-            {(specialty || centersSelected.length>0) && <button type="button" className="btn-outline h-8" onClick={()=>{setSpecialty('');setCentersSelected([]);}}>Limpar filtros do gráfico</button>}
+            {(specialty || centersSelected.length>0) && <button type="button" className="btn-ghost h-9 whitespace-nowrap" onClick={()=>{setSpecialty('');setCentersSelected([]);}}>Limpar filtros do gráfico</button>}
+            <div role="group" aria-label="Navegar pelas semanas do gráfico" className="grid w-full grid-cols-2 gap-2 sm:w-auto">
             <button
-              className="btn-outline h-8"
+              type="button"
+              className="btn-ghost h-9 min-w-28 whitespace-nowrap"
               disabled={window.page >= window.pages - 1}
               onClick={() => setPage(window.page + 1)}
               aria-label="Ver semanas anteriores"
             >
-              <ChevronLeft className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
               Anteriores
             </button>
             <button
-              className="btn-outline h-8"
+              type="button"
+              className="btn-ghost h-9 min-w-28 whitespace-nowrap"
               disabled={window.page === 0}
               onClick={() => setPage(window.page - 1)}
               aria-label="Ver semanas mais recentes"
             >
               Recentes
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-4 w-4 shrink-0" aria-hidden="true" />
             </button>
+            </div>
             <button
-              className="btn-outline h-8"
+              type="button"
+              className="btn-ghost h-9 w-9 shrink-0 px-0"
               disabled={!visible || !ids.length || query.isFetching}
               onClick={() => void query.refetch()}
               aria-label="Atualizar evolução semanal"

@@ -3,6 +3,15 @@ import { test } from "node:test";
 import { readFileSync } from "node:fs";
 const source = readFileSync(new URL("../src/components/weekly-realization-panel.tsx", import.meta.url), "utf8");
 
+test('navigation uses defined inline-flex buttons and equal responsive columns',()=>{
+ const ui=readFileSync(new URL('../src/components/rs-weekly-evolution.tsx',import.meta.url),'utf8');
+ assert.doesNotMatch(ui,/btn-outline/);
+ assert.match(ui,/aria-label="Navegar pelas semanas do gráfico" className="grid w-full grid-cols-2 gap-2 sm:w-auto"/);
+ assert.equal((ui.match(/className="btn-ghost h-9 min-w-28 whitespace-nowrap"/g)??[]).length,2);
+ assert.match(ui,/disabled=\{window.page >= window.pages - 1\}/);
+ assert.match(ui,/disabled=\{window.page === 0\}/);
+});
+
 test('evolution filters cascade locally, offer searchable multi selection and keep bounded loading',()=>{
  const ui=readFileSync(new URL('../src/components/rs-weekly-evolution.tsx',import.meta.url),'utf8');
  assert.match(ui,/evolutionCenters\(query.data \?\? \[\], specialty\)/);
